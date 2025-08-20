@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v4.96</title>
+    <title>哥布林王國v5.00</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1392,6 +1392,22 @@
                                         <div><strong>運氣:</strong> <span x-text="unit.stats.luck"></span></div>
                                         <div class="col-span-2" x-show="unit.stats.charisma > 0"><strong>魅力:</strong> <span x-text="unit.stats.charisma"></span></div>
                                     </div>
+                                    <div class="mt-2 pt-2 border-t border-gray-600 text-sm">
+                                        <p class="font-bold text-amber-200">裝備:</p>
+                                        <div class="space-y-1 pl-2">
+                                            <template x-for="slot in Object.keys(unit.equipment || {})" :key="slot">
+                                                <div>
+                                                    <span class="capitalize" x-text="EQUIPMENT_SLOTS[slot] || slot"></span>:
+                                                    <template x-if="unit.equipment[slot]">
+                                                        <span :style="{ color: unit.equipment[slot].quality.color }" x-text="unit.equipment[slot].name"></span>
+                                                    </template>
+                                                    <template x-if="!unit.equipment[slot]">
+                                                        <span class="text-gray-500">-- 無 --</span>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
                                     <template x-if="unit.visual">
                                         <div class="mt-2 pt-2 border-t border-gray-600 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                                             <div><strong>身高:</strong> <span x-text="unit.visual.height"></span> cm</div>
@@ -1589,7 +1605,6 @@
                         <div class="flex-grow text-left" x-html="modals.narrative.content">
                             </div>
                     </div>
-
                 </div>
 
                 <div class="text-center mt-4">
@@ -1961,6 +1976,22 @@
                                 <strong>魅力:</strong> <span class="font-bold text-lg text-pink-400" x-text="modals.throneScout.unit.stats.charisma"></span>
                             </div>
                         </div>
+                        <div class="mt-2 pt-2 border-t border-gray-600 text-sm">
+                            <p class="font-bold text-amber-200">裝備:</p>
+                            <div class="space-y-1 pl-2">
+                                <template x-for="slot in Object.keys(modals.throneScout.unit.equipment || {})" :key="slot">
+                                    <div>
+                                        <span class="capitalize" x-text="EQUIPMENT_SLOTS[slot] || slot"></span>:
+                                        <template x-if="modals.throneScout.unit.equipment[slot]">
+                                            <span :style="{ color: modals.throneScout.unit.equipment[slot].quality.color }" x-text="modals.throneScout.unit.equipment[slot].name"></span>
+                                        </template>
+                                        <template x-if="!modals.throneScout.unit.equipment[slot]">
+                                            <span class="text-gray-500">-- 無 --</span>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
                     </div>
                 </div>
     
@@ -2027,7 +2058,7 @@
         const GRID_SIZE = 120;   // 【修改】稍微增大網格，讓佈局更鬆散
         // --- 騎士團單位資料 ---
         const KNIGHT_ORDER_UNITS = {
-            '士兵': { ratio: [1, 1, 1, 1], skill: { name: '衝鋒', cd: 9, type: 'aoe_str', multiplier: 0.5, description: '以自身力量0.5倍，對全體哥布林造成範圍傷害。' } },
+            '士兵': { ratio: [2, 3, 2, 3], skill: { name: '衝鋒', cd: 9, type: 'aoe_str', multiplier: 0.5, description: '以自身力量0.5倍，對全體哥布林造成範圍傷害。' } },
             '盾兵': { ratio: [7, 1, 1, 1], skill: { name: '盾牆', cd: 6, type: 'taunt', duration: 3, description: '嘲諷全體哥布林，吸引所有傷害。' } },
             '槍兵': { ratio: [3, 3, 3, 1], skill: { name: '槍陣', cd: 5, type: 'reflect_buff', duration: 99, damagePercent: 2, description: '任何攻擊騎士團的哥布林，都會受到自身最大生命值2%的反噬傷害。' } },
             '弓兵': { ratio: [1, 4, 1, 4], skill: { name: '箭雨', cd: 3, type: 'aoe_agi', multiplier: 1, description: '以自身敏捷1倍，對全體哥布林造成範圍傷害。' } },
@@ -2671,6 +2702,84 @@
         class Human extends Unit {
             constructor(name, stats, profession) {
                 super(name, stats, profession);
+                // 【新增】初始化裝備欄位
+                this.equipment = {
+                    mainHand: null,
+                    offHand: null,
+                    chest: null,
+                };
+            }
+
+            // 【新增】從 Goblin 類別複製過來的函式
+            getEquipmentBonus(stat) {
+                if (!this.equipment) return 0;
+                return Object.values(this.equipment).reduce((sum, item) => {
+                    return sum + (item && item.stats && item.stats[stat] ? item.stats[stat] : 0);
+                }, 0);
+            }
+
+            // 【新增】從 Goblin 類別複製過來的函式
+            getTotalStat(stat, isStarving = false) {
+                if (!this.stats.hasOwnProperty(stat)) return 0;
+                let baseValue = this.stats[stat];
+                let flatBonus = this.getEquipmentBonus(stat);
+                
+                let multiplier = 1.0; // 敵人暫不處理複雜的詞綴乘法
+                
+                let total = Math.floor((baseValue + flatBonus) * multiplier);
+                return isStarving ? Math.floor(total * 0.75) : total;
+            }
+
+            // 【新增】從 Goblin 類別複製過來的函式
+            calculateDamage(isStarving = false) {
+                const mainHand = this.equipment.mainHand;
+                let weaponDamage = 0;
+                if (mainHand) {
+                    const baseDamage = mainHand.stats.damage || 0;
+                    const weaponType = mainHand.baseName;
+                    let mainStatValue = 0;
+                    const hasShield = this.equipment.offHand?.baseName === '盾';
+
+                    switch (weaponType) {
+                        case '劍': case '雙手劍':
+                            mainStatValue = this.getTotalStat('strength', isStarving);
+                            weaponDamage = mainStatValue + baseDamage;
+                            if (weaponType === '雙手劍') weaponDamage = Math.floor(weaponDamage * 1.5);
+                            break;
+                        case '長槍':
+                            mainStatValue = this.getTotalStat('luck', isStarving);
+                            weaponDamage = mainStatValue + baseDamage;
+                            break;
+                        case '弓':
+                            mainStatValue = this.getTotalStat('agility', isStarving);
+                            weaponDamage = mainStatValue + baseDamage;
+                            break;
+                        case '法杖':
+                            mainStatValue = this.getTotalStat('intelligence', isStarving);
+                            weaponDamage = mainStatValue + baseDamage;
+                            break;
+                        default:
+                            mainStatValue = this.getTotalStat('strength', isStarving);
+                            weaponDamage = mainStatValue;
+                    }
+                    if (hasShield && (weaponType === '長槍' || weaponType === '法杖')) {
+                        const oneHandedPenalty = 0.7;
+                        weaponDamage = Math.floor(weaponDamage * oneHandedPenalty);
+                    }
+                } else {
+                    weaponDamage = this.getTotalStat('strength', isStarving);
+                }
+                const shieldBonus = this.equipment.offHand?.stats?.damage || 0;
+                const armorBonus = this.equipment.chest?.stats?.damage || 0;
+                return weaponDamage + shieldBonus + armorBonus;
+            }
+
+            // 【新增】一個簡易版的 updateHp
+            updateHp(isStarving = false) {
+                const oldMaxHp = this.maxHp;
+                this.maxHp = this.calculateMaxHp(isStarving);
+                const hpPercentage = oldMaxHp > 0 ? this.currentHp / oldMaxHp : 1;
+                this.currentHp = Math.round(this.maxHp * hpPercentage);
             }
         }
         
@@ -3492,7 +3601,7 @@
 
                 init() {
                     this.loadApiKey();
-                    this.logMessage('tribe', "哥布林王國v4.96 初始化...");
+                    this.logMessage('tribe', "哥布林王國v5.00 初始化...");
                     this.checkForSaveFile();
                     if (!this.player) {
                         this.generateIntroNarrative();
@@ -4564,7 +4673,7 @@
                     };
                     
                     const knightStatRanges = {
-                        easy: [100, 200], normal: [200, 300], hard: [300, 400], hell: [400, 500]
+                        easy: [80, 150], normal: [150, 240], hard: [240, 350], hell: [350, 450]
                     };
                     const residentStatRanges = {
                         easy: [20, 20], normal: [20, 40], hard: [40, 80], hell: [80, 160]
@@ -4582,6 +4691,7 @@
                             const unit = roll(50) 
                                 ? new FemaleKnightOrderUnit(unitType, totalStatPoints, difficulty)
                                 : new KnightOrderUnit(unitType, totalStatPoints, difficulty);
+                            this.equipEnemy(unit, difficulty);
                             revengeSquad.push(unit);
                         }
                     }
@@ -4592,6 +4702,7 @@
                         const unit = roll(50)
                             ? new FemaleHuman("復仇的居民", distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), '居民', generateVisuals(), difficulty)
                             : new MaleHuman("復仇的居民", distributeStats(totalStatPoints), '居民', difficulty);
+                        this.equipEnemy(unit, difficulty);
                         revengeSquad.push(unit);
                     }
                     
@@ -4602,10 +4713,10 @@
                 generateCity(difficulty) {
                     const config = {
                         // 【修改】更新各難度的居民 (pop) 數量
-                        easy:    { time: 300, zones: ['外城', '內城'], pop: [10, 15], guards: [5, 10], knightStats: [100, 200] },
-                        normal: { time: 240, zones: ['外城', '內城A', '內城B'], pop: [15, 25], guards: [10, 15], knightStats: [200, 300] },
-                        hard:    { time: 180, zones: ['外城', '內城A', '內城B', '內城C'], pop: [25, 30], guards: [15, 20], knightStats: [300, 400] },
-                        hell:    { time: 120, zones: ['外城', '內城A', '內城B', '內城C', '王城'], pop: [35, 40], guards: [20, 25], knightStats: [400, 500] }
+                        easy:    { time: 300, zones: ['外城', '內城'], pop: [10, 15], guards: [5, 10], knightStats: [80, 150] },
+                        normal: { time: 240, zones: ['外城', '內城A', '內城B'], pop: [15, 25], guards: [10, 15], knightStats: [150, 240] },
+                        hard:    { time: 180, zones: ['外城', '內城A', '內城B', '內城C'], pop: [25, 30], guards: [15, 20], knightStats: [240, 350] },
+                        hell:    { time: 120, zones: ['外城', '內城A', '內城B', '內城C', '王城'], pop: [35, 40], guards: [20, 25], knightStats: [350, 450] }
                     };
                     const cityConfig = config[difficulty];
                     const nameConfig = CITY_NAMES[difficulty];
@@ -4670,11 +4781,17 @@
                         const statRange = ENEMY_STAT_RANGES[difficulty].guard;
                         const totalStatPoints = randomInt(statRange[0], statRange[1]);
                         const isFemale = roll(50);
+                        
+                        let guard; // 先宣告一個變數來存放守軍
                         if (isFemale) {
-                            return new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length-1)], distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), '城市守軍', generateVisuals(), difficulty);
+                            guard = new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length-1)], distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), '城市守軍', generateVisuals(), difficulty);
                         } else {
-                            return new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length-1)], distributeStats(totalStatPoints), '城市守軍');
+                            guard = new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length-1)], distributeStats(totalStatPoints), '城市守軍');
                         }
+
+                        this.equipEnemy(guard, difficulty); // 【核心修正】為生成的守軍呼叫裝備函式
+
+                        return guard; // 最後返回這個已經穿好裝備的守軍
                     });
                     
                     let allResidents = Array.from({ length: totalResidents }, () => {
@@ -4756,6 +4873,8 @@
                             finalUnit = roll(50) ? new FemaleKnightOrderUnit(randomKnightType, totalStatPoints, difficulty) : new KnightOrderUnit(randomKnightType, totalStatPoints);
                         }
 
+                        this.equipEnemy(finalUnit, difficulty);
+
                         if (roll(80) && allInnerBuildings.length > 0) {
                             const randomBuilding = allInnerBuildings[randomInt(0, allInnerBuildings.length - 1)];
                             randomBuilding.occupants.push(finalUnit);
@@ -4777,7 +4896,7 @@
                         let castleOccupants = [];
                         
                         // 1. 生成 GDD 中定義的七位騎士團成員 (各兵種一名)
-                        const knightStatRange = cityConfig.knightStats; // 應為 [400, 500]
+                        const knightStatRange = cityConfig.knightStats;
                         const knightTypes = Object.keys(KNIGHT_ORDER_UNITS); // ['士兵', '盾兵', '槍兵', '弓兵', '騎士', '法師', '祭司']
 
                         knightTypes.forEach(unitType => {
@@ -4799,7 +4918,7 @@
                                 agility: 20,
                                 intelligence: 20,
                                 luck: 20,
-                                charisma: randomInt(300, 400)
+                                charisma: randomInt(200, 300)
                             };
                             const princess = new FemaleHuman(
                                 // 為多位公主取不同的名字
@@ -5267,10 +5386,10 @@
                         hell:   { '士兵': 6, '盾兵': 4, '槍兵': 4, '弓兵': 2, '騎士': 2, '法師': 1, '祭司': 1 }
                     };
                     const knightStatRanges = {
-                        easy: [100, 200],
-                        normal: [200, 300],
-                        hard: [300, 400],
-                        hell: [400, 500]
+                        easy: [80, 150],
+                        normal: [150, 240],
+                        hard: [240, 350],
+                        hell: [350, 450]
                     };
 
                     const composition = squadComposition[difficulty];
@@ -5280,12 +5399,14 @@
                         for (const unitType in composition) {
                             for (let i = 0; i < composition[unitType]; i++) {
                                 const totalStatPoints = randomInt(statRange[0], statRange[1]);
-                                // 【新增】50/50 的男女騎士生成判斷
+                                let knight; // <--- 宣告變數
                                 if (roll(50)) {
-                                    knightSquad.push(new FemaleKnightOrderUnit(unitType, totalStatPoints));
+                                    knight = new FemaleKnightOrderUnit(unitType, totalStatPoints);
                                 } else {
-                                    knightSquad.push(new KnightOrderUnit(unitType, totalStatPoints));
+                                    knight = new KnightOrderUnit(unitType, totalStatPoints);
                                 }
+                                this.equipEnemy(knight, difficulty); // <--- 在此處加入呼叫
+                                knightSquad.push(knight);
                             }
                         }
                     }
@@ -5674,7 +5795,155 @@
                         this.logMessage('raid', `你從 ${enemy.name} 身上獲得了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
                     }
                 },
-                createEquipment(materialKey, qualityKey, baseName, specialAffix = null) {
+                // 【最終版本】為敵人穿戴裝備的智慧助手函式
+                equipEnemy(enemy, difficulty) {
+                    if (!enemy || !enemy.equipment) return;
+
+                    const isKnight = Object.keys(KNIGHT_ORDER_UNITS).includes(enemy.profession);
+
+                    // ------------------------------------------------------------------
+                    // I. 騎士團 (Knight Order) 的專屬裝備邏輯
+                    // ------------------------------------------------------------------
+                    if (isKnight) {
+                        const qualityKey = 'epic'; // 騎士團固定穿史詩品質
+
+                        // 輔助函式：根據難度和可選的材質類型，獲取一個隨機材質
+                        const getRandomMaterialKey = (type = null) => {
+                            const materialTiers = {
+                                easy:   { metal: [2, 3], wood: [2, 3] }, // 騎士團最低也從Tier 2開始
+                                normal: { metal: [3, 4], wood: [3, 4] },
+                                hard:   { metal: [4, 5], wood: [4, 5] },
+                                hell:   { metal: [5, 6], wood: [5, 6] },
+                            };
+                            const possibleTiers = materialTiers[difficulty] || materialTiers['easy'];
+                            
+                            const materialType = type || (roll(50) ? 'metal' : 'wood');
+                            const tierRange = possibleTiers[materialType];
+                            const tier = randomInt(tierRange[0], tierRange[1]);
+                            
+                            return Object.keys(EQUIPMENT_MATERIALS).find(key => 
+                                EQUIPMENT_MATERIALS[key].tier === tier && EQUIPMENT_MATERIALS[key].type === materialType
+                            );
+                        };
+
+                        // 輔助函式：建立一件指定裝備
+                        const createAndEquip = (slot, baseName, materialType = null) => {
+                            const materialKey = getRandomMaterialKey(materialType);
+                            if (!materialKey) return;
+                            const item = this.createEquipment(materialKey, qualityKey, baseName, null, true);
+                            enemy.equipment[slot] = item;
+                        };
+
+                        // 1. 所有騎士團成員必穿身體盔甲
+                        createAndEquip('chest', '鎧甲', enemy.profession === '盾兵' ? 'wood' : null);
+
+                        // 2. 根據職業分配武器和副手
+                        switch (enemy.profession) {
+                            case '士兵':
+                                createAndEquip('mainHand', '劍');
+                                if (roll(50)) { // 50%機率雙持
+                                    createAndEquip('offHand', '劍');
+                                } else { // 50%機率劍盾
+                                    createAndEquip('offHand', '盾');
+                                }
+                                break;
+                            case '盾兵':
+                                // 盾兵必拿木盾，身體盔甲在上面已經指定為木材質
+                                createAndEquip('offHand', '盾', 'wood');
+                                break;
+                            case '槍兵':
+                                createAndEquip('mainHand', '長槍');
+                                if (roll(50)) { // 50%機率持盾
+                                    createAndEquip('offHand', '盾');
+                                }
+                                break;
+                            case '法師':
+                                createAndEquip('mainHand', '法杖');
+                                break;
+                            case '弓兵': // 遊戲內代碼為'弓兵'
+                                createAndEquip('mainHand', '弓');
+                                break;
+                            case '祭司':
+                                createAndEquip('mainHand', '法杖');
+                                createAndEquip('offHand', '盾', 'wood'); // 副手必為木盾
+                                break;
+                            case '騎士':
+                                if (roll(50)) { // 50%機率劍盾
+                                    createAndEquip('mainHand', '劍');
+                                } else { // 50%機率槍盾
+                                    createAndEquip('mainHand', '長槍');
+                                }
+                                createAndEquip('offHand', '盾'); // 副手必為盾
+                                break;
+                            default: // 其他未定義的騎士團職業，給予預設裝備
+                                createAndEquip('mainHand', '劍');
+                                createAndEquip('offHand', '盾');
+                                break;
+                        }
+
+                    // ------------------------------------------------------------------
+                    // II. 守軍與居民 (Guard & Resident) 的裝備邏輯
+                    // ------------------------------------------------------------------
+                    } else {
+                        let numPieces = 0;
+                        let qualityKey = 'worn';
+                        // (此處邏輯與上一版相同)
+                        if (enemy.profession === '城市守軍') {
+                            numPieces = randomInt(1, 2);
+                            qualityKey = 'uncommon';
+                        } else if (enemy.profession.includes('居民')) {
+                            if (roll(50)) {
+                                numPieces = 1;
+                                qualityKey = 'worn';
+                            } else {
+                                return;
+                            }
+                        } else {
+                            return;
+                        }
+                        // (後續的通用裝備生成邏輯也與上一版相同)
+                        const materialTiers = {
+                            easy: { metal: [1, 3], wood: [1, 3] },
+                            normal: { metal: [2, 4], wood: [2, 4] },
+                            hard: { metal: [3, 5], wood: [3, 5] },
+                            hell: { metal: [4, 6], wood: [4, 6] },
+                        };
+                        const possibleTiers = materialTiers[difficulty] || materialTiers['easy'];
+                        
+                        let possibleSlots = ['mainHand', 'chest', 'offHand'];
+                        for (let i = 0; i < numPieces; i++) {
+                            if (possibleSlots.length === 0) break;
+                            const slotIndex = randomInt(0, possibleSlots.length - 1);
+                            const slot = possibleSlots.splice(slotIndex, 1)[0];
+                            let baseItem = this.craftableTypes.find(t => t.slot === slot) || this.craftableTypes[0];
+                            if (slot === 'offHand') baseItem = this.craftableTypes.find(t => t.baseName === '盾');
+                            if (!baseItem) continue;
+
+                            const isMetal = roll(50);
+                            const tierRange = isMetal ? possibleTiers.metal : possibleTiers.wood;
+                            const tier = randomInt(tierRange[0], tierRange[1]);
+                            const materialType = isMetal ? 'metal' : 'wood';
+                            const materialKey = Object.keys(EQUIPMENT_MATERIALS).find(key => 
+                                EQUIPMENT_MATERIALS[key].tier === tier && EQUIPMENT_MATERIALS[key].type === materialType
+                            );
+                            if (!materialKey) continue;
+
+                            const newItem = this.createEquipment(materialKey, qualityKey, baseItem.baseName, null, true);
+                            enemy.equipment[slot] = newItem;
+                        }
+                    }
+
+                    // ------------------------------------------------------------------
+                    // III. 最後更新敵人狀態 (通用)
+                    // ------------------------------------------------------------------
+                    if (enemy.updateHp) {
+                        enemy.updateHp(this.isStarving);
+                    } else {
+                        enemy.maxHp = enemy.calculateMaxHp(this.isStarving);
+                        enemy.currentHp = enemy.maxHp;
+                    }
+                },
+                createEquipment(materialKey, qualityKey, baseName, specialAffix = null, forceNoAffix = false) {
                     const material = EQUIPMENT_MATERIALS[materialKey];
                     const quality = EQUIPMENT_QUALITIES[qualityKey];
                     const baseItem = this.craftableTypes.find(t => t.baseName === baseName);
@@ -5688,7 +5957,7 @@
                         newItem.stats[stat] = Math.floor(baseStats[stat] * quality.multiplier);
                     }                    
                     // 2. 如果不是特殊詛咒裝備，就生成標準詞綴
-                    if (!specialAffix) {
+                    if (!specialAffix && !forceNoAffix) {
                         const affixCountRange = quality.affixes;
                         const affixCount = randomInt(affixCountRange[0], affixCountRange[1]);
                         
