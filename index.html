@@ -6153,29 +6153,33 @@
                         this.isNewGame = false;
                         const parsedData = JSON.parse(savedData);
 
-                        // 【新增】防呆：檢查存檔中是否有玩家資料
                         if (!parsedData.player) {
                             throw new Error("存檔中缺少玩家資料！");
                         }
 
-                        // 1. 還原所有夥伴 (【新增】增加 || [] 確保舊存檔沒有此欄位時不報錯)
+                        // 還原夥伴 (此處邏輯正確，作為參考)
                         this.partners = (parsedData.partners || []).map(pData => {
                             const partner = new Goblin(pData.name, pData.stats || {});
-                            return Object.assign(partner, JSON.parse(JSON.stringify(pData)));
+                            return Object.assign(partner, pData);
+                        });
+                        
+                        // 【核心修正】還原俘虜的邏輯
+                        this.captives = (parsedData.captives || []).map(cData => {
+                            // 步驟 1: 建立一個新的 FemaleHuman 物件
+                            const captive = new FemaleHuman(cData.name, cData.stats || {}, cData.profession, cData.visual);
+                            // 步驟 2: 直接將存檔中的純資料 cData 賦值給新物件，移除不必要的 JSON.parse/stringify
+                            return Object.assign(captive, cData); 
                         });
 
-                        // 2. 還原玩家物件
+                        // 還原玩家
                         const loadedPlayerInstance = new Player(parsedData.player.name, parsedData.player.stats || {});
-                        Object.assign(loadedPlayerInstance, JSON.parse(JSON.stringify(parsedData.player)));
-
-                        // 3. 【核心修正】直接賦值，而不是用 Object.assign 合併到 null 物件
+                        Object.assign(loadedPlayerInstance, parsedData.player);
                         this.player = loadedPlayerInstance;
 
-                        // 4. 從已完全還原的 this.partners 中，重建玩家的隊伍 (party)
                         const partnersMap = new Map(this.partners.map(p => [p.id, p]));
                         this.player.party = (parsedData.player.party || [])
                             .map(pData => partnersMap.get(pData.id))
-                            .filter(Boolean); // .filter(Boolean) 可以過濾掉任何找不到的夥伴，增加穩健性
+                            .filter(Boolean);
 
                         // --- 繼續載入其他遊戲數據 ---
                         this.resources = parsedData.resources;
