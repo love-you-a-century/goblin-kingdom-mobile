@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v4.91</title>
+    <title>哥布林王國V4.93</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -502,6 +502,44 @@
                 <button @click="screen = 'tutorial_query'" class="btn btn-primary">繼續</button>
 
             </div> </div>
+    </template>
+
+    <template x-if="screen === 'rebirth'">
+        <div id="rebirth-screen" x-cloak>
+        <div class="max-w-4xl mx-auto game-container relative p-8 rounded-lg pt-10">
+            <h1 class="game-title font-medieval">哥布林王之重生</h1>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="space-y-4">
+                    <input type="text" x-model="rebirth.name" class="w-full bg-gray-900 border-2 border-gray-600 rounded px-3 py-2 text-gray-400" placeholder="哥布林名稱" disabled>
+                    <input type="number" x-model.number="rebirth.height" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="身高">
+                    <input type="number" x-model.number="rebirth.penisSize" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="王的雄風 (公分)">
+                    <textarea x-model="rebirth.appearance" rows="4" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="外貌描述..."></textarea>
+                </div>
+                <div class="space-y-4">
+                    <h2 class="text-xl font-bold text-center text-amber-200">重新分配能力</h2>
+                    <p class="text-center mb-2">
+                        剩餘點數: <span x-text="rebirth.pointsRemaining" :class="rebirth.pointsRemaining < 0 ? 'text-red-400' : 'text-green-400'"></span>
+                        / 總點數: <span x-text="rebirth.totalPoints"></span>
+                    </p>
+                    <p class="text-center text-gray-400 h-6">（每項能力值至少需要 1 點）</p>
+                    <template x-for="stat in Object.keys(rebirth.stats)" :key="stat">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="font-bold capitalize" x-text="STAT_NAMES[stat]"></label>
+                                <div class="flex items-center">
+                                    <button @click="updateRebirthStat(stat, rebirth.stats[stat] - 1)" class="px-3 py-1 bg-gray-700 rounded-l-md">-</button>
+                                    <input type="number" min="1" max="999" x-model.number="rebirth.stats[stat]" @input="updateRebirthStat(stat, $event.target.value)" class="stat-input w-16 text-center bg-gray-800 border-y-2 border-gray-600 py-1">
+                                    <button @click="updateRebirthStat(stat, rebirth.stats[stat] + 1)" class="px-3 py-1 bg-gray-700 rounded-r-md">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="text-center mt-8">
+                <button @click="confirmRebirth()" class="btn btn-primary text-xl">確認重生</button>
+            </div>
+        </div>
     </template>
 
     <template x-if="screen === 'breeding_narrative'">
@@ -2708,6 +2746,69 @@
                     isPlaying: false,
                     playOnScreen: 'tribe', // 預設在部落畫面播放
                 },
+                //用於重生畫面的資料物件
+                rebirth: {
+                    name: '',
+                    height: 0,
+                    penisSize: 0,
+                    appearance: '',
+                    stats: { strength: 1, agility: 1, intelligence: 1, luck: 1 },
+                    totalPoints: 0, // 總點數將在觸發重生時計算
+                    get pointsRemaining() { 
+                        return this.totalPoints - Object.values(this.stats).reduce((a, b) => a + b, 0); 
+                    }
+                },
+                //觸發重生的函式
+                initiateRebirth() {
+                    this.logMessage('tribe', `${this.player.name} 在戰鬥中倒下了... 但哥布林的生命力讓你從死亡邊緣歸來！`, 'system');
+                    
+                    // 1. 計算總能力點數
+                    const total = Object.values(this.player.stats).reduce((a, b) => a + b, 0);
+                    this.rebirth.totalPoints = total;
+
+                    // 2. 載入當前外觀設定
+                    this.rebirth.name = this.player.name;
+                    this.rebirth.height = this.player.height;
+                    this.rebirth.penisSize = this.player.penisSize;
+                    this.rebirth.appearance = this.player.appearance;
+
+                    // 3. 預設將點數設為最低值 1，其餘為待分配
+                    this.rebirth.stats = { strength: 1, agility: 1, intelligence: 1, luck: 1 };
+                    
+                    // 4. 切換至重生畫面
+                    this.screen = 'rebirth';
+                    this.showCustomAlert('你獲得了重塑自身的機會！');
+                },
+
+                //處理重生畫面點數分配的函式
+                updateRebirthStat(stat, value) {
+                    const intValue = parseInt(value);
+                    if (!isNaN(intValue) && intValue >= 1) { // 確保點數至少為 1
+                        this.rebirth.stats[stat] = intValue;
+                    } else {
+                        this.rebirth.stats[stat] = 1; // 如果輸入無效，則重設為 1
+                    }
+                },
+
+                //確認重生設定的函式
+                confirmRebirth() {
+                    if (this.rebirth.pointsRemaining !== 0) {
+                        this.showCustomAlert(`你還有 ${this.rebirth.pointsRemaining} 點能力點尚未分配！`);
+                        return;
+                    }
+
+                    // 更新玩家資料
+                    this.player.height = this.rebirth.height;
+                    this.player.penisSize = this.rebirth.penisSize;
+                    this.player.appearance = this.rebirth.appearance;
+                    this.player.stats = this.rebirth.stats;
+
+                    // 恢復狀態並返回部落
+                    this.player.updateHp(this.isStarving);
+                    this.player.currentHp = this.player.maxHp;
+                    this.screen = 'tribe';
+                    this.logMessage('tribe', '你重塑了肉體與靈魂，以全新的姿態重生！', 'success');
+                },
 
                 executeQuickBreeding() {
                     // --- 包含了所有繁衍的後台遊戲機制 ---
@@ -3372,7 +3473,7 @@
 
                 init() {
                     this.loadApiKey();
-                    this.logMessage('tribe', "哥布林王國v4.91 初始化...");
+                    this.logMessage('tribe', "哥布林王國V4.93 初始化...");
                     this.checkForSaveFile();
                     if (!this.player) {
                         this.generateIntroNarrative();
@@ -5042,6 +5143,7 @@
                     // 判斷是否為玩家戰敗死亡
                     if (wasDefeated && this.player && !this.player.isAlive()) {
                         this.initiateRebirth(); // 觸發重生流程
+                        this.selectedTarget = null; // 【新增】確保清除地圖目標
                         return; // 中斷後續的返回部落邏輯
                     }
 
@@ -6157,33 +6259,66 @@
                             throw new Error("存檔中缺少玩家資料！");
                         }
 
-                        // 還原夥伴 (此處邏輯正確，作為參考)
+                        // 【核心修正】建立一個輔助函式，用於將純資料物件還原為 Equipment 類別實例
+                        const rehydrateEquipment = (itemData) => {
+                            if (!itemData) return null;
+                            // 建立一個新的 Equipment 實例
+                            const newItem = new Equipment(itemData.baseName, itemData.type, itemData.slot, itemData.material, itemData.quality, itemData.specialAffix);
+                            // 將存檔中的所有屬性複製過去
+                            Object.assign(newItem, itemData);
+                            return newItem;
+                        };
+
+                        const safelyAssign = (target, source) => {
+                            if (!source || typeof source !== 'object') return;
+                            for (const key in source) {
+                                if (Object.prototype.hasOwnProperty.call(source, key)) {
+                                    if (typeof target[key] !== 'function') {
+                                        // 對裝備相關的屬性進行特殊處理
+                                        if (key === 'equipment') {
+                                            target.equipment.mainHand = rehydrateEquipment(source.equipment.mainHand);
+                                            target.equipment.offHand = rehydrateEquipment(source.equipment.offHand);
+                                            target.equipment.chest = rehydrateEquipment(source.equipment.chest);
+                                        } else if (key === 'inventory') {
+                                            target.inventory = source.inventory.map(itemData => rehydrateEquipment(itemData));
+                                        } else {
+                                            target[key] = source[key];
+                                        }
+                                    }
+                                }
+                            }
+                        };
+                        
+                        // 還原倉庫物品
+                        this.warehouseInventory = (parsedData.warehouseInventory || []).map(itemData => rehydrateEquipment(itemData));
+
+                        // 還原夥伴
                         this.partners = (parsedData.partners || []).map(pData => {
                             const partner = new Goblin(pData.name, pData.stats || {});
-                            return Object.assign(partner, pData);
+                            safelyAssign(partner, pData);
+                            return partner;
                         });
-                        
-                        // 【核心修正】還原俘虜的邏輯
+
+                        // 還原俘虜
                         this.captives = (parsedData.captives || []).map(cData => {
-                            // 步驟 1: 建立一個新的 FemaleHuman 物件
                             const captive = new FemaleHuman(cData.name, cData.stats || {}, cData.profession, cData.visual);
-                            // 步驟 2: 直接將存檔中的純資料 cData 賦值給新物件，移除不必要的 JSON.parse/stringify
-                            return Object.assign(captive, cData); 
+                            safelyAssign(captive, cData);
+                            return captive;
                         });
 
                         // 還原玩家
                         const loadedPlayerInstance = new Player(parsedData.player.name, parsedData.player.stats || {});
-                        Object.assign(loadedPlayerInstance, parsedData.player);
+                        safelyAssign(loadedPlayerInstance, parsedData.player);
                         this.player = loadedPlayerInstance;
 
+                        // 還原隊伍
                         const partnersMap = new Map(this.partners.map(p => [p.id, p]));
                         this.player.party = (parsedData.player.party || [])
                             .map(pData => partnersMap.get(pData.id))
                             .filter(Boolean);
-
+                        
                         // --- 繼續載入其他遊戲數據 ---
                         this.resources = parsedData.resources;
-                        this.warehouseInventory = parsedData.warehouseInventory || [];
                         
                         const defaultBuildings = {
                             dungeon: { level: 0, name: "地牢" }, warehouse: { level: 0, name: "倉庫" },
