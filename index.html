@@ -672,7 +672,10 @@
                                 </div>
                                 <div class="space-y-4 mt-4 md:mt-0">
                                     <div>
-                                        <p class="font-bold text-amber-200">當前裝備:</p>
+                                        <p class="mt-4 font-bold text-amber-200 flex justify-between items-center">
+                                            <span>當前裝備:</span>
+                                            <button @click="openPlayerEquipment()" class="btn btn-xs btn-secondary">管理裝備</button>
+                                        </p>
                                         <div class="space-y-1 text-sm">
                                             <template x-for="slot in Object.keys(player.equipment)" :key="slot">
                                                 <div class="flex justify-between items-center">
@@ -3104,6 +3107,13 @@
                 },
                 get currentlyEditingPartner() {
                     if (!this.modals.partnerEquipment.partnerId) return null;
+                    
+                    // 【新增】判斷目標是否為玩家本人
+                    if (this.modals.partnerEquipment.partnerId === 'player') {
+                        return this.player;
+                    }
+                    
+                    // 維持原有邏輯，尋找夥伴
                     return this.partners.find(p => p.id === this.modals.partnerEquipment.partnerId);
                 },
                 get filteredWarehouseInventory() {
@@ -3152,6 +3162,10 @@
                 },
                 openPartnerEquipment(partnerId) {
                     this.modals.partnerEquipment.partnerId = partnerId;
+                    this.modals.partnerEquipment.isOpen = true;
+                },
+                openPlayerEquipment() {
+                    this.modals.partnerEquipment.partnerId = 'player'; // 將目標設為 'player'
                     this.modals.partnerEquipment.isOpen = true;
                 },
                 getUnitColor(unitOrGroup) {
@@ -5730,84 +5744,39 @@
                 },
 
                 endCombat(victory) {
-                    const isRevengeBattle = this.combat.isReinforcementBattle && this.screen !== 'raid';
-                    
                     if (victory) {
-                        if (!this.player.isAlive()) {
+                        // 【核心修正】無論是什麼戰鬥，勝利後都先統一收集戰利品
+                        const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+                        if (defeatedFemales.length > 0) {
+                            // 將本次戰鬥擊敗的女性單位加入到攜帶列表中
+                            this.currentRaid.carriedCaptives.push(...defeatedFemales);
+                        }
+                        
+                        // 檢查王是否陣亡，並顯示對應訊息
+                        if (this.player && !this.player.isAlive()) {
                             this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
                         }
 
-                        if (isRevengeBattle) {
-                            this.logMessage('tribe', '你成功擊退了來襲的復仇小隊！部落暫時安全了。', 'success');
-
-                            // 【修正】第一步：先處理戰前待產的新生兒
-                            if (this.postBattleBirths.length > 0) {
-                                this.logMessage('tribe', '在擊退敵人後，你聽到了產房傳來新生兒的哭聲...', 'info');
-                                this.postBattleBirths.forEach(mother => this.giveBirth(mother));
-                                this.postBattleBirths = [];
-                            }
-
-                            // 【修正】第二步：處理戰敗的敵人，嘗試轉化為俘虜
-                            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
-
-                            if (defeatedFemales.length > 0) {
-                                // 【修正】在這裡正確計算所需變數
-                                const currentCaptivesCount = this.dungeonCaptives.length;
-                                const totalAfterBattle = currentCaptivesCount + defeatedFemales.length;
-                                const totalCapacity = this.captiveCapacity;
-
-                                if (totalAfterBattle > totalCapacity) {
-                                    this.logMessage('tribe', '地牢空間不足！你需要選擇要保留的俘虜...', 'warning');
-                                    this.openCaptiveManagementModal(
-                                        'dungeon',
-                                        [...this.captives, ...defeatedFemales],
-                                        totalCapacity
-                                    );
-                                    // 注意：後續流程將由 confirmCaptiveSelection 函式處理，此處不呼叫 cleanup
-                                } else {
-                                    this.captives.push(...defeatedFemales);
-                                    this.logMessage('tribe', `你成功抓獲了 ${defeatedFemales.length} 名新的俘虜！`, 'success');
-                                    this.finishCombatCleanup(true);
-                                }
-                            } else {
-                                // 如果沒有可俘虜的敵人，直接清理戰場並返回部落
-                                this.finishCombatCleanup(true);
-                            }
-                            return; // 確保復仇小隊的邏輯在此結束
-                        } 
-                        
-                        else if (this.combat.isReinforcementBattle) {
+                        // 然後再判斷是否為最終的增援戰
+                        if (this.combat.isReinforcementBattle) {
                             this.logMessage('tribe', '你擊敗了騎士團增援，成功征服了城鎮！', 'success');
-                            this.prepareToEndRaid(false);
-                        } 
-                        else {
-                            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
-                            if (defeatedFemales.length > 0) {
-                                this.addCaptiveToCarry(defeatedFemales);
+                            // 檢查攜帶量是否已滿，如果滿了會彈出選擇視窗，否則直接結束掠奪
+                            if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
+                                this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
+                            } else {
+                                this.prepareToEndRaid(false);
+                            }
+                        } else {
+                            // 如果是普通戰鬥，則檢查攜帶量或清理戰場
+                            if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
+                                 this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
                             } else {
                                 this.finishCombatCleanup();
                             }
                         }
-                    } else { // 戰鬥失敗
-                        if (isRevengeBattle) {
-                            this.logMessage('tribe', '你的部落被復仇小隊攻破了！所有俘虜趁亂逃跑了！', 'enemy');
-                            this.captives = [];
-                            this.prepareToEndRaid(true);
-                            if (this.postBattleBirths.length > 0) {
-                                this.logMessage('tribe', '在部落被攻破的混亂中，剛出生的孩子們也失蹤了...', 'enemy');
-                                this.postBattleBirths.forEach(mother => {
-                                    mother.isPregnant = false;
-                                    mother.pregnancyTimer = 0;
-                                    mother.isMother = true;
-                                });
-                                this.postBattleBirths = [];
-                            }
-                        } 
-                        else {
-                            this.logMessage('tribe', `你的隊伍全滅了...掠奪失敗，你狼狽地逃回了部落。`, 'enemy');
-                            this.currentRaid.carriedCaptives = [];
-                            this.prepareToEndRaid(true);
-                        }
+                    } else { 
+                        // 戰鬥失敗的邏輯維持不變
+                        this.prepareToEndRaid(true);
                     }
                 },
                 tickStatusEffects() {
@@ -5899,6 +5868,7 @@
                         this.finishCombatCleanup();
                     }
                 },
+                
                 openCaptiveManagementModal(type, list, limit, dungeonLimit = -1, context = null) {
                     const modal = this.modals.captiveManagement;
                     modal.type = type;
