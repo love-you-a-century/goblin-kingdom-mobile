@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v4.76</title>
+    <title>哥布林王國v4.91</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -399,10 +399,11 @@
 </head>
 
 <body class="p-4 md:p-6" x-data="game()">
+    <div class="max-w-7xl mx-auto">
 
-    <audio x-ref="audioPlayer" loop></audio>
+        <audio x-ref="audioPlayer" loop></audio>
 
-<template x-if="screen === 'api_key_input'">
+        <template x-if="screen === 'api_key_input'">
         <div id="api-key-screen" x-cloak>
             <div class="max-w-xl mx-auto game-container relative p-8 rounded-lg pt-10 text-center">
                 <h1 class="game-title font-medieval">設定 API 金鑰</h1>
@@ -561,171 +562,191 @@
     <!-- 主遊戲畫面 (部落中心) -->
     <template x-if="screen === 'tribe'">
         <div id="tribe-screen" x-cloak x-init="initializeTribe()">
-        <template x-if="player && screen === 'tribe'">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-1 space-y-6">
-                    <div class="game-container relative p-4 rounded-lg pt-10">
-                        <h2 class="game-title font-medieval">哥布林王檔案</h2>
-                        <div
-                            class="w-full h-48 bg-gray-800 rounded flex items-center justify-center mb-4 text-gray-500">
-                            <template x-if="player.avatarUrl">
-                                <img :src="player.avatarUrl" class="w-full h-full object-cover rounded" alt="Player Avatar">
-                            </template>
-                            <template x-if="!player.avatarUrl">
-                                <span>頭像</span>
-                            </template>
-                        </div>
-                        <p><strong>名稱:</strong> <span class="font-accent" x-text="player.name"></span></p>
-                        <p><strong>天數:</strong> <span x-text="day"></span></p>
-                        <p><strong>能力點:</strong>
-                            <span x-text="player.attributePoints - Object.values(tempStatIncreases).reduce((a, b) => a + b, 0)"></span>
-                        </p>
-                        <p><strong>技能點:</strong> <span x-text="player.skillPoints"></span></p>
-
-                        <p class="mt-2 font-bold text-amber-200" :class="{'text-red-400': isStarving}">總能力值
-                            <span x-show="isStarving">(飢餓中 -25%)</span>:
-                        </p>
-                        <ul class="list-disc list-inside space-y-1 text-sm">
-                            <template x-for="stat in ['strength', 'agility', 'intelligence', 'luck']" :key="stat">
-                                <li class="flex items-center justify-between">
-                                    <div>
-                                        <span class="capitalize" x-text="STAT_NAMES[stat]"></span>:
-                                        <span x-text="player.stats[stat]"></span>
-                                        <span x-show="tempStatIncreases[stat] > 0" class="text-yellow-400 font-bold" x-text="` +${tempStatIncreases[stat]}`"></span>
-                                        <span class="text-green-400" x-show="player.getPartyBonus(stat) > 0" x-text="` (+${player.getPartyBonus(stat)})`"></span>
-                                        <span class="text-purple-400" x-show="player.getAffixEffect(stat).bonus > 0" x-text="` (+${player.getAffixEffect(stat).bonus})`"></span>
-                                        <span class="text-blue-400" x-show="player.getEffectiveEquipmentBonus(stat) > 0" x-text="` (+${player.getEffectiveEquipmentBonus(stat)})`"></span>
-                                        <span class="text-red-400" x-show="isStarving" x-text="` -> ${player.getTotalStat(stat, isStarving)}`"></span>
-                                    </div>
-                                    <button @click="addTempPoint(stat)" x-show="player.attributePoints > 0 && (player.attributePoints - Object.values(tempStatIncreases).reduce((a, b) => a + b, 0)) > 0" class="btn btn-sm btn-primary ml-2 w-8":class="{'glow-pulse': tutorial.active && !tutorial.finishedAttributePoints && player.attributePoints > 0}">+</button>
-                                </li>
-                            </template>
-                        </ul>
-                        <div class="mt-2 flex justify-between items-center">
-                            <p><strong>生命值:</strong>
-                                <span x-text="player.currentHp"></span> / <span x-text="player.calculateMaxHp(isStarving)"></span>
-                                <span class="text-green-400" x-show="player.getPartyHpBonus(isStarving) > 0" x-text="` (+${player.getPartyHpBonus(isStarving)})`"></span>
-                                <span class="text-blue-400" x-show="player.getEquipmentHpBonus() > 0" x-text="` (+${player.getEquipmentHpBonus()})`"></span>
-                            </p>
-                            <div x-show="Object.values(tempStatIncreases).reduce((a, b) => a + b, 0) > 0"
-                                class="space-x-2">
-                                <button @click="confirmAttributePoints()" class="btn btn-sm btn-success">確認</button>
-                                <button @click="cancelAttributePoints()" class="btn btn-sm btn-secondary">取消</button>
+            <template x-if="player && screen === 'tribe'">
+                <div class="max-w-7xl mx-auto">
+                    <div class="space-y-6">
+    
+                        <div class="game-container relative p-4 rounded-lg pt-10">
+                            <h2 class="game-title font-medieval">王之號令</h2>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <button @click="handleRaidButtonClick()" class="btn btn-primary" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 5 }">出擊掠奪</button>
+                                <button @click="handleConstructionClick()" class="btn btn-primary" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 2 }">部落建設</button>
+                                <button @click="openMerchant()" class="btn btn-primary" :disabled="!merchant.isPresent" title="旅行商人來訪時才能進入">
+                                    商人營地 <span x-show="merchant.isPresent" class="text-yellow-300">(來訪中)</span>
+                                </button>
                             </div>
                         </div>
-                        <p class="mt-4 font-bold text-amber-200">當前裝備:</p>
-                        <div class="space-y-1 text-sm">
-                            <template x-for="slot in Object.keys(player.equipment)" :key="slot">
-                                <div class="flex justify-between items-center">
-                                    <span class="capitalize" x-text="EQUIPMENT_SLOTS[slot] || slot"></span>
-                                    <template x-if="player.equipment[slot]">
-                                        <div class="text-right">
-                                            <span :style="{ color: player.equipment[slot].quality.color }" x-text="player.equipment[slot].name"></span>
-                                            <button @click="unequipItem(slot, player)" class="btn btn-xs btn-secondary ml-2">卸下</button>
+    
+                        <div class="game-container relative p-4 rounded-lg pt-10 h-full">
+                            <h2 class="game-title font-medieval">王國總覽</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                                <div>
+                                    <div class="flex gap-x-4">
+                                        <div class="w-1/3 flex-shrink-0">
+                                            <div class="w-full h-48 bg-gray-800 rounded flex items-center justify-center text-gray-500">
+                                                <template x-if="player.avatarUrl">
+                                                    <img :src="player.avatarUrl" class="w-full h-full object-cover rounded" alt="Player Avatar">
+                                                </template>
+                                                <template x-if="!player.avatarUrl">
+                                                    <span>頭像</span>
+                                                </template>
+                                            </div>
                                         </div>
-                                    </template>
-                                    <template x-if="!player.equipment[slot]">
-                                        <span class="text-gray-500">-- 無 --</span>
-                                    </template>
+                                        <div class="w-2/3 space-y-2">
+                                            <p><strong>名稱:</strong> <span class="font-accent" x-text="player.name"></span></p>
+                                            <p class="font-bold text-amber-200" :class="{'text-red-400': isStarving}">總能力值
+                                                <span x-show="isStarving">(飢餓中 -25%)</span>:
+                                            </p>
+                                            <p class="text-sm"><strong>生命值:</strong>
+                                                <span x-text="player.currentHp"></span> / <span x-text="player.calculateMaxHp(isStarving)"></span>
+                                            </p>
+                                            <ul class="list-disc list-inside space-y-1 text-sm pt-1">
+                                                <template x-for="stat in ['strength', 'agility', 'intelligence', 'luck']" :key="stat">
+                                                    <li class="flex items-center justify-between">
+                                                        <div>
+                                                            <span class="capitalize" x-text="STAT_NAMES[stat]"></span>:
+                                                            <span x-text="player.stats[stat]"></span>
+                                                            <span class="text-green-400" x-show="player.getPartyBonus(stat) > 0" x-text="` (+${player.getPartyBonus(stat)})`"></span>
+                                                            <span class="text-purple-400" x-show="player.getAffixEffect(stat).bonus > 0" x-text="` (+${player.getAffixEffect(stat).bonus})`"></span>
+                                                            <span class="text-blue-400" x-show="player.getEffectiveEquipmentBonus(stat) > 0" x-text="` (+${player.getEffectiveEquipmentBonus(stat)})`"></span>
+                                                            <span class="text-red-400" x-show="isStarving" x-text="` -> ${player.getTotalStat(stat, isStarving)}`"></span>
+                                                        </div>
+                                                        <button @click="addTempPoint(stat)" x-show="player.attributePoints > 0 && (player.attributePoints - Object.values(tempStatIncreases).reduce((a, b) => a + b, 0)) > 0" class="btn btn-sm btn-primary ml-2 w-8" :class="{'glow-pulse': tutorial.active && !tutorial.finishedAttributePoints && player.attributePoints > 0}">+</button>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-3 text-sm text-center border-y border-gray-700 py-1 my-2">
+                                        <div>
+                                            <span class="text-gray-400 block text-xs">天數</span>
+                                            <span x-text="day"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-400 block text-xs">能力點</span>
+                                            <span x-text="player.attributePoints - Object.values(tempStatIncreases).reduce((a, b) => a + b, 0)"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-gray-400 block text-xs">技能點</span>
+                                            <span x-text="player.skillPoints"></span>
+                                        </div>
+                                    </div>
                                 </div>
-                            </template>
+                                <div class="space-y-4 mt-4 md:mt-0">
+                                    <div>
+                                        <p class="font-bold text-amber-200">當前裝備:</p>
+                                        <div class="space-y-1 text-sm">
+                                            <template x-for="slot in Object.keys(player.equipment)" :key="slot">
+                                                <div class="flex justify-between items-center">
+                                                    <span class="capitalize" x-text="EQUIPMENT_SLOTS[slot] || slot"></span>
+                                                    <template x-if="player.equipment[slot]">
+                                                        <div class="text-right">
+                                                            <span :style="{ color: player.equipment[slot].quality.color }" x-text="player.equipment[slot].name"></span>
+                                                            <button @click="unequipItem(slot, player)" class="btn btn-xs btn-secondary ml-2">卸下</button>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!player.equipment[slot]">
+                                                        <span class="text-gray-500">-- 無 --</span>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-x-4 pt-4 mt-4 border-t border-gray-700">
+                                        <div>
+                                            <p class="font-bold text-amber-200">部落資源:</p>
+                                            <ul class="list-disc list-inside ml-4 text-sm">
+                                                <li>食物: <span x-text="resources.food"></span> / <span x-text="foodCapacity"></span></li>
+                                                <li>木材: <span x-text="resources.wood"></span> / <span x-text="woodCapacity"></span></li>
+                                                <li>礦石: <span x-text="resources.stone"></span> / <span x-text="stoneCapacity"></span></li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-amber-200">部落人口:</p>
+                                            <ul class="list-disc list-inside ml-4 text-sm">
+                                                <li>夥伴: <span x-text="partners.length"></span> /
+                                                    <span x-text="partnerCapacity"></span>
+                                                </li>
+                                                <li>俘虜: <span x-text="dungeonCaptives.length"></span> /
+                                                    <span x-text="captiveCapacity"></span>
+                                                </li>
+                                                <li>孕母: <span x-text="mothers.length"></span> /
+                                                    <span x-text="maternityCapacity"></span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="game-container relative p-4 rounded-lg pt-10">
-                        <h2 class="game-title font-medieval">部落狀態</h2>
-                        <p><strong>資源:</strong></p>
-                        <ul class="list-disc list-inside ml-4">
-                            <li>食物: <span x-text="resources.food"></span> / <span x-text="foodCapacity"></span></li>
-                            <li>木材: <span x-text="resources.wood"></span> / <span x-text="woodCapacity"></span></li>
-                            <li>礦石: <span x-text="resources.stone"></span> / <span x-text="stoneCapacity"></span></li>
-                        </ul>
-                        <p class="mt-2"><strong>夥伴:</strong> <span x-text="partners.length"></span> /
-                            <span x-text="partnerCapacity"></span>
-                        </p>
-                        <p class="mt-2"><strong>俘虜 (地牢):</strong> <span x-text="dungeonCaptives.length"></span> /
-                            <span x-text="captiveCapacity"></span>
-                        </p>
-                        <p class="mt-2"><strong>孕母 (產房):</strong> <span x-text="mothers.length"></span> /
-                            <span x-text="maternityCapacity"></span>
-                        </p>
+    
+                        <div class="game-container relative p-4 rounded-lg pt-10">
+                            <h2 class="game-title font-medieval">遊戲存檔</h2>
+                            <div class="flex space-x-4">
+                                <button @click="saveGame()" class="btn btn-primary">儲存進度</button>
+                                <button x-show="hasSaveFile" @click="loadGame()" class="btn btn-secondary">讀取進度</button>
+                            </div>
+                        </div>
+    
+                        <div class="game-container relative p-4 rounded-lg pt-10">
+                            <h2 class="game-title font-medieval">部落日誌</h2>
+                            <div class="log-panel" id="tribe" x-init="$watch('logs.tribe', () => { $nextTick(() => { $el.scrollTop = $el.scrollHeight }) })">
+                                <template x-for="entry in logs.tribe" :key="entry.id">
+                                    <div :class="`log-entry ${entry.type}`" x-html="entry.message"></div>
+                                </template>
+                            </div>
+                        </div>
+    
+                        <div class="game-container relative p-4 rounded-lg pt-10">
+                            <h2 class="game-title font-medieval">音樂設定</h2>
+                            <div class="flex items-center space-x-4">
+                                <label class="btn btn-secondary cursor-pointer">
+                                    <span>選擇檔案</span>
+                                    <input type="file" @change="loadMusic($event)" accept="audio/*" class="hidden">
+                                </label>
+                                <button @click="toggleMusic()" class="btn btn-primary w-24" :disabled="!musicSettings.src">
+                                    <span x-text="musicSettings.isPlaying ? '暫停' : '播放'"></span>
+                                </button>
+                                <div>
+                                    <label for="play-scene" class="text-sm mr-2">播放場景:</label>
+                                    <select x-model="musicSettings.playOnScreen" id="play-scene" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2">
+                                        <option value="tribe">部落</option>
+                                        <option value="raid_selection">掠奪選擇</option>
+                                        <option value="raid">掠奪地圖</option>
+                                        <option value="combat">戰鬥</option>
+                                        <option value="throne_room">王座之間</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+    
                     </div>
                 </div>
-                <div class="lg:col-span-2 space-y-6">
-                    <div class="game-container relative p-4 rounded-lg pt-10">
-                        <h2 class="game-title font-medieval">王之號令</h2>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <button @click="handleRaidButtonClick()" class="btn btn-primary" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 4 }">出擊掠奪</button>
-                            <button @click="handleConstructionClick()" class="btn btn-primary" :class="{ 'glow-pulse': tutorial.active && (tutorial.step === 1 || tutorial.step === 5) }">部落建設</button>
-                            <button @click="modals.merchant.isOpen = true" class="btn btn-primary" :disabled="!merchant.isPresent" title="旅行商人來訪時才能進入">
-                                商人營地 <span x-show="merchant.isPresent" class="text-yellow-300">(來訪中)</span>
-                            </button>
-                            </div>
-                    </div>
-                    <div class="game-container relative p-4 rounded-lg pt-10">
-                        <h2 class="game-title font-medieval">遊戲存檔</h2>
-                        <div class="flex space-x-4">
-                            <button @click="saveGame()" class="btn btn-primary">儲存進度</button>
-                            <button x-show="hasSaveFile" @click="loadGame()" class="btn btn-secondary">讀取進度</button>
-                        </div>
-                    </div>
-                    <div class="game-container relative p-4 rounded-lg pt-10">
-                        <h2 class="game-title font-medieval">音樂設定</h2>
-                        <div class="flex items-center space-x-4">
-                            <label class="btn btn-secondary cursor-pointer">
-                                <span>選擇檔案</span>
-                                <input type="file" @change="loadMusic($event)" accept="audio/*" class="hidden">
-                            </label>
-                            
-                            <button @click="toggleMusic()" class="btn btn-primary w-24" :disabled="!musicSettings.src">
-                                <span x-text="musicSettings.isPlaying ? '暫停' : '播放'"></span>
-                            </button>
-                    
+            </template>
+        </div>
+    </template>
+    
+        <!-- 掠奪選擇畫面 -->
+        <template x-if="screen === 'raid_selection'">
+            <div id="raid-selection-screen" x-cloak>
+            <div class="max-w-2xl mx-auto game-container relative p-8 rounded-lg pt-10">
+                <h1 class="game-title font-medieval">選擇掠奪目標</h1>
+                <div class="space-y-4">
+                    <template x-for="raid in raidOptions">
+                        <button @click="startRaid(raid.difficulty)" class="w-full text-left p-4 rounded-lg transition bg-gray-700 hover:bg-gray-600" :disabled="buildings.dungeon.level === 0" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 5 && raid.difficulty === 'easy' }">
                             <div>
-                                <label for="play-scene" class="text-sm mr-2">播放場景:</label>
-                                <select x-model="musicSettings.playOnScreen" id="play-scene" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2">
-                                    <option value="tribe">部落</option>
-                                    <option value="raid_selection">掠奪選擇</option>
-                                    <option value="raid">掠奪地圖</option>
-                                    <option value="combat">戰鬥</option>
-                                    <option value="throne_room">王座之間</option>
-                                </select>
+                                <h3 class="text-xl font-bold" x-text="raid.name"></h3>
+                                <p x-text="raid.description"></p>
                             </div>
-                        </div>
-                    </div>
-                    <div class="game-container relative p-4 rounded-lg pt-10">
-                        <h2 class="game-title font-medieval">部落日誌</h2>
-                        <div class="log-panel" id="tribe" x-init="$watch('logs.tribe', () => { $nextTick(() => { $el.scrollTop = $el.scrollHeight }) })">
-                            <template x-for="entry in logs.tribe" :key="entry.id">
-                                <div :class="`log-entry ${entry.type}`" x-html="entry.message"></div>
-                            </template>
-                        </div>
-                    </div>
+                            <p x-show="buildings.dungeon.level === 0" class="text-red-400 text-sm mt-1">需要先建造地牢才能出擊！</p>
+                        </button>
+                    </template>
+                </div>
+                <div class="text-center mt-6">
+                    <button @click="screen = 'tribe'" class="btn btn-secondary">返回部落</button>
                 </div>
             </div>
         </template>
-    </template>
-
-    <!-- 掠奪選擇畫面 -->
-    <template x-if="screen === 'raid_selection'">
-        <div id="raid-selection-screen" x-cloak>
-        <div class="max-w-2xl mx-auto game-container relative p-8 rounded-lg pt-10">
-            <h1 class="game-title font-medieval">選擇掠奪目標</h1>
-            <div class="space-y-4">
-                <template x-for="raid in raidOptions">
-                    <button @click="startRaid(raid.difficulty)" class="w-full text-left p-4 rounded-lg transition bg-gray-700 hover:bg-gray-600" :disabled="buildings.dungeon.level === 0" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 4 && raid.difficulty === 'easy' }">
-                        <div>
-                            <h3 class="text-xl font-bold" x-text="raid.name"></h3>
-                            <p x-text="raid.description"></p>
-                        </div>
-                        <p x-show="buildings.dungeon.level === 0" class="text-red-400 text-sm mt-1">需要先建造地牢才能出擊！</p>
-                    </button>
-                </template>
-            </div>
-            <div class="text-center mt-6">
-                <button @click="screen = 'tribe'" class="btn btn-secondary">返回部落</button>
-            </div>
-        </div>
-    </template>
 
     <!-- 掠奪畫面 -->
     <template x-if="screen === 'raid'">
@@ -898,11 +919,11 @@
                 <h2 class="game-title font-medieval">部落建設</h2>
                 <div class="pt-10 max-h-[80vh] overflow-y-auto">
                     <div class="flex border-b border-gray-600 mb-4 overflow-x-auto">
-                        <button @click="modals.construction.activeTab = 'dungeon'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'dungeon', 'glow-pulse': tutorial.active && tutorial.step === 2 }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">地牢</button>
+                        <button @click="modals.construction.activeTab = 'dungeon'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'dungeon', 'glow-pulse': tutorial.active && tutorial.step === 3 }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">地牢</button>
                         <button @click="modals.construction.activeTab = 'barracks'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'barracks' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">寢室</button>
                         <button @click="modals.construction.activeTab = 'warehouse'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'warehouse' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">倉庫</button>
                         <button @click="modals.construction.activeTab = 'armory'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'armory' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">兵工廠</button>
-                        <button @click="modals.construction.activeTab = 'maternity'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'maternity', 'glow-pulse': tutorial.active && tutorial.step === 3 }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">產房</button>
+                        <button @click="modals.construction.activeTab = 'maternity'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'maternity', 'glow-pulse': tutorial.active && tutorial.step === 4 }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">產房</button>
                         <button @click="modals.construction.activeTab = 'trainingGround'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'trainingGround' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">訓練場</button>
                         <button @click="modals.construction.activeTab = 'merchantCamp'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'merchantCamp' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">商人營地</button>
                     </div>
@@ -911,7 +932,7 @@
                         <div class="flex border-b border-gray-600 mb-4">
                             <button @click="modals.dungeon.subTab = 'manage'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'manage' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">管理俘虜</button>
                             <button @click="modals.dungeon.subTab = 'breed'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'breed', 'glow-pulse': tutorial.active && tutorial.step === 5 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">繁衍後代</button>
-                            <button @click="modals.dungeon.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'upgrade', 'glow-pulse': tutorial.active && tutorial.step === 2 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
+                            <button @click="modals.dungeon.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'upgrade', 'glow-pulse': tutorial.active && tutorial.step === 3 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
                         </div>
                         <div x-show="modals.dungeon.subTab === 'manage'">
                            <h3 class="text-xl font-bold mb-2">管理俘虜</h3>
@@ -1187,7 +1208,7 @@
                     <div x-show="modals.construction.activeTab === 'maternity'">
                         <div class="flex border-b border-gray-600 mb-4">
                             <button @click="modals.maternity.subTab = 'manage'" :class="{ 'bg-gray-700 text-white': modals.maternity.subTab === 'manage' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">管理孕母</button>
-                            <button @click="modals.maternity.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.maternity.subTab === 'upgrade', 'glow-pulse': tutorial.active && tutorial.step === 3 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
+                            <button @click="modals.maternity.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.maternity.subTab === 'upgrade', 'glow-pulse': tutorial.active && tutorial.step === 4 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
                         </div>
                         <div x-show="modals.maternity.subTab === 'manage'">
                             <h3 class="text-xl font-bold mb-2">管理孕母</h3>
@@ -1229,7 +1250,7 @@
                                         <span x-text="getBuildingUpgradeCost('maternity').wood"></span> 木材,
                                         <span x-text="getBuildingUpgradeCost('maternity').stone"></span> 礦石
                                     </p>
-                                    <button @click="upgradeBuilding('maternity')" class="btn btn-primary mt-2" :disabled="!canAffordBuildingUpgrade('maternity')" :class="{'glow-pulse': tutorial.active && tutorial.step === 3}">
+                                    <button @click="upgradeBuilding('maternity')" class="btn btn-primary mt-2" :disabled="!canAffordBuildingUpgrade('maternity')" :class="{'glow-pulse': tutorial.active && tutorial.step === 4}">
                                         <span x-text="buildings.maternity.level === 0 ? '建造' : '升級'"></span>
                                     </button>
                                 </div>
@@ -1518,7 +1539,7 @@
                     </div>
 
                     <div x-show="modals.narrative.type === 'tutorial'" class="flex items-start gap-4 w-full">
-                        <img src="century_avatar.png" alt="世紀的頭像" class="w-24 h-24 rounded-full border-2 border-pink-400 flex-shrink-0">
+                        <img src="https://i.ibb.co/k2QBgcHP/century-avatar.png" alt="世紀的頭像" class="w-24 h-24 rounded-full border-2 border-pink-400 flex-shrink-0">
                         <div class="flex-grow text-left" x-html="modals.narrative.content">
                             </div>
                     </div>
@@ -1749,10 +1770,10 @@
         <h2 class="game-title font-medieval">旅行商人：世紀</h2>
         <div class="pt-10 max-h-[80vh] overflow-y-auto">
             <div class="flex items-start p-4 mb-6 bg-black bg-opacity-20 rounded-lg border border-pink-500/30">
-                <img src="century_avatar.png" alt="世紀的頭像" class="w-24 h-24 rounded-full border-2 border-pink-400 mr-4 flex-shrink-0">
+                <img src="https://i.ibb.co/k2QBgcHP/century-avatar.png" alt="世紀的頭像" class="w-24 h-24 rounded-full border-2 border-pink-400 mr-4 flex-shrink-0">
                 <div class="flex-grow">
                     <h3 class="text-xl font-bold text-pink-300">旅行商人：世紀</h3>
-                    <p class="mt-2 text-pink-200 italic">「嘿嘿嘿...哥布林王...今天有什麼「好貨」？買點好東西嗎？」</p>
+                    <p class="mt-2 text-pink-200 italic" x-text="merchant.dialogue"></p>
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2627,8 +2648,9 @@
         }
 
         class MaleHuman extends Human {
-            constructor(name, stats, profession) {
+            constructor(name, stats, profession, originDifficulty = 'easy') { // 新增參數
                 super(name, stats, profession);
+                this.originDifficulty = originDifficulty; // 新增屬性
                 this.maxHp = this.calculateMaxHp();
                 this.currentHp = this.maxHp;
             }
@@ -2639,10 +2661,10 @@
         }
 
         class KnightOrderUnit extends MaleHuman {
-            constructor(unitType, totalStatPoints) {
+            constructor(unitType, totalStatPoints, originDifficulty = 'easy') { // 新增參數
                 const unitDetails = KNIGHT_ORDER_UNITS[unitType];
                 const stats = distributeStatsWithRatio(totalStatPoints, unitDetails.ratio);
-                super(unitType, stats, unitType);
+                super(unitType, stats, unitType, originDifficulty); // 將參數傳遞給父類別
                 this.skills = [];
                 if (unitDetails.skill) {
                     this.skills.push({
@@ -2832,6 +2854,7 @@
                 },
                 
                 merchant: { 
+                    dialogue: '', // 【新增此行】用來存放當前對話
                     throneRoomUnits: [],
                     isPresent: false,
                     goods: [],
@@ -3249,32 +3272,55 @@
                     // 【修改】更新判斷條件以適應複選
                     return this.merchant.selectedItemIds.length > 0 && this.merchant.selectedCaptiveIds.length > 0 && this.selectedCaptivesValue >= this.selectedItemsValue;
                 },
+                // 【新增】根據商店狀態更新商人對話的函式
+                updateMerchantDialogue() {
+                    if (this.merchant.goods.length === 0) {
+                        this.merchant.dialogue = "「哎呀...這麼想我嗎？會有下次的」";
+                    } else {
+                        this.merchant.dialogue = "「嘿嘿嘿...哥布林王...今天有什麼「好貨」？買點好東西嗎？」";
+                    }
+                },
+
+                // 【新增】打開商人介面的準備函式
+                openMerchant() {
+                    this.updateMerchantDialogue(); // 先設定好初始對話
+                    this.modals.merchant.isOpen = true; // 再打開介面
+                },
                 executeTrade() {
                     if (!this.canExecuteTrade) {
                         this.showCustomAlert("交易條件不滿足！");
                         return;
                     }
 
-                    // 【修改】處理多件商品
                     const tradedItems = this.selectedItems;
                     const tradedItemIds = new Set(this.merchant.selectedItemIds);
                     const tradedCaptiveIds = new Set(this.merchant.selectedCaptiveIds);
 
-                    // 1. 玩家獲得道具
-                    this.player.inventory.push(...tradedItems);
+                    // 【修正】使用深拷貝複製物品，而不是直接轉移物件參照
+                    const newItemsForPlayer = JSON.parse(JSON.stringify(tradedItems));
+                    this.player.inventory.push(...newItemsForPlayer);
                     this.logMessage('tribe', `你用俘虜換來了 ${tradedItems.length} 件裝備！`, 'success');
 
-                    // 2. 移除被交易的俘虜
                     const tradedCaptives = this.captives.filter(c => tradedCaptiveIds.has(c.id));
                     this.captives = this.captives.filter(c => !tradedCaptiveIds.has(c.id));
                     this.logMessage('tribe', `你失去了 ${tradedCaptives.map(c => c.name).join(', ')} 這 ${tradedCaptives.length} 名俘虜。`, 'info');
 
-                    // 3. 從商人貨架移除已購買的商品
                     this.merchant.goods = this.merchant.goods.filter(g => !tradedItemIds.has(g.id));
-
-                    // 4. 重置選擇
                     this.merchant.selectedItemIds = [];
                     this.merchant.selectedCaptiveIds = [];
+
+                    // 【核心修改】根據交易後的狀態更新對話
+                    if (this.merchant.goods.length === 0) {
+                        // 如果商品被買完了
+                        this.merchant.dialogue = "「真是大手筆，歡迎下次再來」";
+                    } else {
+                        // 如果還有商品
+                        this.merchant.dialogue = "「眼光不錯，這裝備肯定能成為助力」";
+                        // 讓這句「反應式對話」停留 4 秒後，再恢復成預設對話
+                        setTimeout(() => {
+                            this.updateMerchantDialogue();
+                        }, 4000);
+                    }
 
                     // 5. 處理彩蛋計數
                     this.merchant.purchases++;
@@ -3326,7 +3372,7 @@
 
                 init() {
                     this.loadApiKey();
-                    this.logMessage('tribe', "哥布林王國v4.76 初始化...");
+                    this.logMessage('tribe', "哥布林王國v4.91 初始化...");
                     this.checkForSaveFile();
                     if (!this.player) {
                         this.generateIntroNarrative();
@@ -3443,10 +3489,17 @@
                 },
                 
                 initializeTribe() {
-                if (!this.isNewGame) return;
-                this.isNewGame = false;
+                    if (!this.isNewGame) return;
+                    this.isNewGame = false;
 
-                const zeroStats = Object.keys(this.player.stats).filter(stat => ['strength', 'agility', 'intelligence', 'luck'].includes(stat) && this.player.stats[stat] === 0);
+                    const starterSword = this.createEquipment('iron', 'worn', '劍');
+                    const starterArmor = this.createEquipment('iron', 'worn', '鎧甲');
+                    this.player.inventory.push(starterSword);
+                    this.player.inventory.push(starterArmor);
+                    
+                    this.logMessage('tribe', `你在空無一人的破舊部落中醒來，在一個腐朽的箱子裡發現了[${starterSword.name}]和[${starterArmor.name}]。`, 'system');
+
+                    const zeroStats = Object.keys(this.player.stats).filter(stat => ['strength', 'agility', 'intelligence', 'luck'].includes(stat) && this.player.stats[stat] === 0);
                     const zeroStatCount = zeroStats.length;
                     let itemToGenerate = null;
 
@@ -3498,7 +3551,7 @@
                         startTribeActions();
                     }
                     this.breedingChargesLeft = this.totalBreedingCharges;
-                    // 【新增】檢查並觸發任何待處理的教學事件
+
                     if (this.tutorial.pendingTutorial) {
                         this.triggerTutorial(this.tutorial.pendingTutorial);
                     }
@@ -3510,39 +3563,50 @@
                 advanceTutorial(step) {
                     this.tutorial.step = step;
                     switch(step) {
+                        // 【修改】步驟1: 僅作為一次性的裝備提示，確認後直接推進到步驟2
                         case 1:
-                            this.showCustomAlert('王，一個強大的部落需要穩固的根基。首先，讓我們點擊發光的『部落建設』按鈕，來規劃您的部落。');
+                            this.showCustomAlert(
+                                '你在部落中發現了一些基礎裝備！你可以隨時在「部落建設」->「倉庫」->「玩家背包」中找到並穿上它們。',
+                                () => { this.advanceTutorial(2); } // 點擊確認後，立即執行下一步教學
+                            );
                             break;
+                        // 【修改】步驟2: 引導點擊「部落建設」
                         case 2:
+                            this.showCustomAlert('一個強大的部落需要穩固的根基。讓我們點擊發光的『部落建設』按鈕，來規劃您的部落。');
+                            break;
+                        // 【修改】步驟3: 引導建造「地牢」
+                        case 3:
                             this.modals.construction.isOpen = true;
                             this.modals.construction.activeTab = 'dungeon';
                             this.modals.dungeon.subTab = 'upgrade';
                             this.showCustomAlert('做得好！現在請點擊發光的『升級』分頁，並為您的部落打下第一個根基。');
                             break;
-                        case 3:
-                            this.modals.construction.isOpen = true;
+                        // 【修改】步驟4: 引導建造「產房」
+                        case 4:
                             this.modals.construction.activeTab = 'maternity';
                             this.modals.maternity.subTab = 'upgrade';
-                             this.showCustomAlert('地牢已準備就緒！接下來，請點擊發光的『產房』分頁，為迎接新生命做好準備。');
                             break;
-                        case 4:
+                        // 【修改】步驟5: 引導「出擊掠奪」
+                        case 5:
                             this.modals.construction.isOpen = false;
-                            this.showCustomAlert('太棒了！現在我們有了關押俘虜和迎接生命的地方。關閉此視窗，點擊發光的『出擊掠奪』為部落帶來第一批女性吧！');
+                            setTimeout(() => {
+                                this.showCustomAlert('太棒了！所有基礎設施都已就緒。關閉此視窗，點擊發光的『出擊掠奪』為部落帶來第一批女性吧！');
+                            }, 100);
                             break;
-                        case 4.5:
+                        // ... 後續步驟 5.5, 6, 7 維持不變 ...
+                        case 5.5: 
                             this.showCustomAlert('王，知己知彼，百戰不殆。在未知的土地上，首先使用『偵查環境』來探查周遭的危險與機遇吧。');
                             break;
-                        case 5:
-                            this.showCustomAlert('恭喜王！您帶回了部落的第一批戰利品。現在，再次進入『部落建設』，找到『地牢』中的『繁衍後代』功能，為您的部落產下更強大的哥布林戰士吧！');
-                            break;
                         case 6:
+                            this.showCustomAlert('恭喜王！您帶回了部落的第一批戰利品。現在，再次進入「部落建設」，找到「地牢」中的「繁衍後代」功能。您可以根據剩餘次數，選擇一位或多位對象，為您的部落產下更強大的哥布林戰士吧！');
+                            break;
+                        case 7:
                             const modal = this.modals.narrative;
                             modal.isOpen = true;
                             modal.title = "與神秘商人的相遇";
-                            modal.type = "tutorial"; // 標記為教學類型
+                            modal.type = "tutorial"; 
                             modal.isLoading = false;
-                            modal.isAwaitingConfirmation = false; // 確保按鈕會顯示
-                            // 【修改】只傳遞文字內容，而非完整的HTML結構
+                            modal.isAwaitingConfirmation = false;
                             modal.content = `
                                 <p>呵呵...哥布林王...我有很多好東西...。</p>
                                 <p>叫我『世紀』就好，一個四處遊蕩，尋找『有趣』事物的旅行商人，絕對不是什麼可疑的人，嘿...。</p>
@@ -3592,7 +3656,7 @@
                     const modal = this.modals.bailoutConfirm;
                     
                     let questions = ["世紀「你是否承認自己跳過新手教學很呆?」"];
-                    const extraQuestions = ["世紀「真的嗎?」", "世紀「你確定?」", "世紀「我是誰?先回答你是不是呆瓜比較重要」", "世紀「沒有一點遲疑?」", "世紀「最後一次機會囉?」", "世紀「好吧，既然你都說到這個份上了...」", "世紀「我是誰?你之後就知道了。所以你是呆瓜嗎?」"];
+                    const extraQuestions = ["世紀「真的嗎?」", "世紀「你確定?」", "世紀「沒有一點遲疑?」", "世紀「好吧，既然你都說到這個份上了...」", "世紀「最後一次機會囉?」", "世紀「我是誰?先回答你是不是呆瓜比較重要」", "世紀「我是誰?你之後就知道了。所以你是呆瓜嗎?」", "世紀「嘿...你不是第一次對吧?」", "世紀「嘿...騙我的話，我會知道的。你是呆瓜嗎?」"];
                     
                     // 根據求助次數，決定要問幾次問題
                     for (let i = 0; i < this.bailoutCounter; i++) {
@@ -3607,8 +3671,12 @@
 
                 handleConstructionClick() {
                     this.modals.construction.isOpen = true;
-                    if (this.tutorial.active && this.tutorial.step === 1) {
-                        this.advanceTutorial(2);
+
+                    // 【修改】對應新的步驟編號，現在檢查步驟2
+                    if (this.tutorial.active && this.tutorial.step === 2) {
+                        setTimeout(() => {
+                            this.advanceTutorial(3); // 推進到步驟3
+                        }, 100);
                     }
                 },
                 
@@ -3675,20 +3743,21 @@
                         return; // 中斷後續所有普通事件
                     }
 
-                    // 如果沒有戰鬥，才正常處理日常事件
-                    this.day++;
-                    this.logMessage('tribe', `--- 第 ${this.day} 天 ---`, 'system');
-                    
-                    // 正常處理出生
-                    pendingBirths.forEach(mother => this.giveBirth(mother));
-
                     // --- 商人來訪邏輯 ---
                     if (this.merchant.isPresent) {
                         this.merchant.stayDuration--;
                         if (this.merchant.stayDuration <= 0) {
-                            this.merchant.isPresent = false;
-                            this.merchant.goods = [];
                             this.logMessage('tribe', '旅行商人「世紀」已經收拾行囊，離開了你的部落。', 'info');
+                            // 【修正】將整個 merchant 物件恢復到初始狀態
+                            this.merchant = {
+                                dialogue: '',
+                                isPresent: false,
+                                goods: [],
+                                stayDuration: 0,
+                                purchases: this.merchant.purchases, // 保留購買次數以追蹤彩蛋
+                                selectedItemIds: [],
+                                selectedCaptiveIds: [],
+                            };
                         }
                     } else {
                         // 【新的商人觸發規則】
@@ -3712,10 +3781,13 @@
                             }
                         }
                     }
-                    // --- 邏輯結束 ---
-                    
+
+                    // 如果沒有戰鬥，才正常處理日常事件
                     this.day++;
                     this.logMessage('tribe', `--- 第 ${this.day} 天 ---`, 'system');
+                    
+                    // 正常處理出生
+                    pendingBirths.forEach(mother => this.giveBirth(mother));
                     
                     this.resources.food -= this.dailyFoodConsumption;
                     //奶水公式
@@ -3817,11 +3889,15 @@
                     }
 
                     if (this.tutorial.active) {
-                        if (type === 'dungeon' && this.tutorial.step === 2) {
-                            this.advanceTutorial(3);
-                        } else if (type === 'maternity' && this.tutorial.step === 3) {
-                            this.advanceTutorial(4);
-                        }
+                        setTimeout(() => {
+                            // 【修改】對應新的步驟編號
+                            if (type === 'dungeon' && this.tutorial.step === 3 && building.level === 1) {
+                                this.advanceTutorial(4);
+                            } 
+                            else if (type === 'maternity' && this.tutorial.step === 4 && building.level === 1) {
+                                this.advanceTutorial(5);
+                            }
+                        }, 50);
                     }
                 },
                 
@@ -4338,12 +4414,13 @@
                     { difficulty: 'hell', name: '地獄', description: '居民(30-35), 守軍(20-25)' },
                 ],
                 startRaid(difficulty) {
-                    if (this.tutorial.active && this.tutorial.step === 4) {
+                    // 【修改】將步驟判斷從 4 改為 5，並將下一步指向 5.5
+                    if (this.tutorial.active && this.tutorial.step === 5) {
                         if (difficulty !== 'easy') {
                             this.showCustomAlert('王，您的勇氣可嘉。那麼，您自己看著辦吧。引導教學將在部落中等您歸來。');
                             this.tutorial.active = false;
                         } else {
-                            this.advanceTutorial(4.5);
+                            this.advanceTutorial(5.5); // 推進到偵查環境的提示
                         }
                     }
 
@@ -4387,7 +4464,7 @@
                             const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
                             const unit = roll(50) 
                                 ? new FemaleKnightOrderUnit(unitType, totalStatPoints, difficulty)
-                                : new KnightOrderUnit(unitType, totalStatPoints);
+                                : new KnightOrderUnit(unitType, totalStatPoints, difficulty);
                             revengeSquad.push(unit);
                         }
                     }
@@ -4397,7 +4474,7 @@
                         const totalStatPoints = randomInt(residentStatRange[0], residentStatRange[1]);
                         const unit = roll(50)
                             ? new FemaleHuman("復仇的居民", distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), '居民', generateVisuals(), difficulty)
-                            : new MaleHuman("復仇的居民", distributeStats(totalStatPoints), '居民');
+                            : new MaleHuman("復仇的居民", distributeStats(totalStatPoints), '居民', difficulty);
                         revengeSquad.push(unit);
                     }
                     
@@ -4702,8 +4779,10 @@
                         this.logMessage('raid', `環境偵查失敗！(-6 分鐘)`, 'enemy');
                     }
                     this.checkRaidTime();
-                    if (this.tutorial.active && this.tutorial.step === 4.5) {
-                        this.tutorial.step = 0;
+
+                    // 【核心修正】將步驟判斷從 4.5 改為 5.5
+                    if (this.tutorial.active && this.tutorial.step === 5.5) {
+                        this.tutorial.step = 0; // 暫時結束教學，等待玩家自行探索後返回部落觸發下一步
                         this.showCustomAlert('很好，王。現在您可以自由行動了，試著擊敗敵人、擄走女性，或者搜刮資源，然後『脫離城鎮』返回部落吧。');
                     }
                 },
@@ -4960,9 +5039,15 @@
                     }
                 },
                 endRaid(wasDefeated = false) {
+                    // 判斷是否為玩家戰敗死亡
+                    if (wasDefeated && this.player && !this.player.isAlive()) {
+                        this.initiateRebirth(); // 觸發重生流程
+                        return; // 中斷後續的返回部落邏輯
+                    }
+
                     if (this.tutorial.active) {
                         if(this.currentRaid.carriedCaptives.length > 0) {
-                            this.advanceTutorial(5);
+                            this.advanceTutorial(6);
                         } else {
                             this.tutorial.active = false;
                             this.tutorial.step = 0;
@@ -4970,13 +5055,15 @@
                         }
                     }
 
-                    // 【新增】檢查是否戰敗，只有在非戰敗情況下才帶回俘虜
                     if (!wasDefeated) {
                         this.captives.push(...this.currentRaid.carriedCaptives);
                         this.logMessage('tribe', `你帶回了 ${this.currentRaid.carriedCaptives.length} 名俘虜。`, 'player');
                     }
                     
                     this.currentRaid = null;
+                    // 【新增】重置掠奪地圖上被選中的目標
+                    this.selectedTarget = null; 
+                    
                     this.screen = 'tribe';
                     
                     this.player.currentHp = this.player.maxHp;
@@ -5420,6 +5507,17 @@
                             this.logMessage('raid', `你的背包已滿，無法拾取新的裝備！`, 'enemy');
                             return;
                         }
+
+                        // 【核心修正】智能判斷難度來源
+                        let encounterDifficulty = 'easy'; // 設定一個安全的預設值
+                        if (this.currentRaid) {
+                            // 如果是掠奪戰，使用掠奪的難度
+                            encounterDifficulty = this.currentRaid.difficulty;
+                        } else if (enemy.originDifficulty) {
+                            // 如果是非掠奪戰（如復仇小隊），使用敵人自身的難度屬性
+                            encounterDifficulty = enemy.originDifficulty;
+                        }
+
                         const materialTiers = {
                             easy: { metal: [1, 3], wood: [1, 3] },
                             normal: { metal: [2, 4], wood: [2, 4] },
@@ -5433,8 +5531,7 @@
                             'knight': ['epic', 'legendary']
                         };
 
-                        const raidDifficulty = this.currentRaid.difficulty;
-                        const possibleTiers = materialTiers[raidDifficulty];
+                        const possibleTiers = materialTiers[encounterDifficulty]; // 使用修正後的難度變數
                         
                         const isMetal = roll(50);
                         const tierRange = isMetal ? possibleTiers.metal : possibleTiers.wood;
@@ -5452,7 +5549,7 @@
                         const newItem = this.createEquipment(materialKey, qualityKey, randomItemType.baseName);
                         
                         this.player.inventory.push(newItem);
-                        // 【新增】觸發裝備教學
+                        
                         if (this.tutorial.active && !this.tutorial.finishedEquipping) {
                             this.triggerTutorial('firstLoot');
                         }
@@ -5539,37 +5636,44 @@
                         }
 
                         if (isRevengeBattle) {
-                            // --- 【新增】部落防衛戰勝利的邏輯 ---
                             this.logMessage('tribe', '你成功擊退了來襲的復仇小隊！部落暫時安全了。', 'success');
-                            
-                            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
-                            
+
+                            // 【修正】第一步：先處理戰前待產的新生兒
                             if (this.postBattleBirths.length > 0) {
                                 this.logMessage('tribe', '在擊退敵人後，你聽到了產房傳來新生兒的哭聲...', 'info');
                                 this.postBattleBirths.forEach(mother => this.giveBirth(mother));
-                                this.postBattleBirths = []; // 清空待辦清單
+                                this.postBattleBirths = [];
+                            }
+
+                            // 【修正】第二步：處理戰敗的敵人，嘗試轉化為俘虜
+                            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+
+                            if (defeatedFemales.length > 0) {
+                                // 【修正】在這裡正確計算所需變數
+                                const currentCaptivesCount = this.dungeonCaptives.length;
+                                const totalAfterBattle = currentCaptivesCount + defeatedFemales.length;
+                                const totalCapacity = this.captiveCapacity;
 
                                 if (totalAfterBattle > totalCapacity) {
-                                    // 如果總容量不足，打開管理視窗讓玩家選擇
                                     this.logMessage('tribe', '地牢空間不足！你需要選擇要保留的俘虜...', 'warning');
                                     this.openCaptiveManagementModal(
-                                        'dungeon', // 重用 'dungeon' 類型，因為是直接入庫
+                                        'dungeon',
                                         [...this.captives, ...defeatedFemales],
-                                        totalCapacity,
-                                        this.captiveCapacity
+                                        totalCapacity
                                     );
-                                    // 注意：後續流程將由 confirmCaptiveSelection 函式處理
+                                    // 注意：後續流程將由 confirmCaptiveSelection 函式處理，此處不呼叫 cleanup
                                 } else {
-                                    // 容量充足，直接加入
                                     this.captives.push(...defeatedFemales);
                                     this.logMessage('tribe', `你成功抓獲了 ${defeatedFemales.length} 名新的俘虜！`, 'success');
                                     this.finishCombatCleanup(true);
                                 }
                             } else {
-                                // 沒有可俘虜的對象
+                                // 如果沒有可俘虜的敵人，直接清理戰場並返回部落
                                 this.finishCombatCleanup(true);
                             }
+                            return; // 確保復仇小隊的邏輯在此結束
                         } 
+                        
                         else if (this.combat.isReinforcementBattle) {
                             this.logMessage('tribe', '你擊敗了騎士團增援，成功征服了城鎮！', 'success');
                             this.prepareToEndRaid(false);
@@ -5584,20 +5688,16 @@
                         }
                     } else { // 戰鬥失敗
                         if (isRevengeBattle) {
-                            // --- 【新增】部落防衛戰失敗的懲罰 ---
                             this.logMessage('tribe', '你的部落被復仇小隊攻破了！所有俘虜趁亂逃跑了！', 'enemy');
-                            this.captives = []; // 釋放所有俘虜，包括孕母
+                            this.captives = [];
                             this.prepareToEndRaid(true);
                             if (this.postBattleBirths.length > 0) {
-                                // 2. 增加符合情境的日誌訊息
                                 this.logMessage('tribe', '在部落被攻破的混亂中，剛出生的孩子們也失蹤了...', 'enemy');
-                                // 3. 處理這些未能誕生的孩子：我們不清空母親狀態，而是將她們的懷孕狀態重置
                                 this.postBattleBirths.forEach(mother => {
                                     mother.isPregnant = false;
                                     mother.pregnancyTimer = 0;
-                                    mother.isMother = true; // 母親變回孕母狀態，但孩子沒了
+                                    mother.isMother = true;
                                 });
-                                // 4. 同樣清空「待辦清單」
                                 this.postBattleBirths = [];
                             }
                         } 
@@ -5772,12 +5872,61 @@
                     const modal = this.modals.partnerManagement;
                     const selectedSet = new Set(modal.selectedIds);
                     const { mother, newborn } = modal.context;
+
+                    // 【第一步】找出被放棄的夥伴
+                    const discardedPartners = modal.list.filter(p => !selectedSet.has(p.id));
                     
+                    // 【第二步】收集所有被放棄夥伴身上的裝備
+                    const itemsToReturn = discardedPartners.flatMap(p => Object.values(p.equipment).filter(item => item !== null));
+
+                    // 【第三步】檢查空間並處理裝備 (與 releasePartner 函式邏輯相同)
+                    if (itemsToReturn.length > 0) {
+                        const availableSpace = (this.warehouseCapacity - this.warehouseInventory.length) + (this.backpackCapacity - this.player.inventory.length);
+                        
+                        if (itemsToReturn.length > availableSpace) {
+                            // 空間不足，打開處理視窗
+                            this.modals.itemManagement = {
+                                isOpen: true,
+                                title: `處理被放棄夥伴的裝備`,
+                                message: `為新生兒騰出空間前，需先處理被放棄夥伴身上的裝備。請先處理以下物品，直到剩餘數量小於等於 ${availableSpace}。`,
+                                items: [...itemsToReturn],
+                                capacity: availableSpace,
+                                onConfirm: () => {
+                                    // 當玩家在物品管理視窗處理完畢後，再執行最終的夥伴確認
+                                    this.finalizePartnerSelection();
+                                }
+                            };
+                            // 暫時關閉夥伴選擇視窗，讓位給物品管理視窗
+                            modal.isOpen = false;
+                            return; // 中斷函式，等待玩家處理裝備
+                        } else {
+                            // 空間足夠，自動轉移
+                            itemsToReturn.forEach(item => {
+                                if (this.warehouseInventory.length < this.warehouseCapacity) {
+                                    this.warehouseInventory.push(item);
+                                } else {
+                                    this.player.inventory.push(item);
+                                }
+                            });
+                            this.logMessage('tribe', `已將被放棄夥伴的 ${itemsToReturn.length} 件裝備自動移至倉庫/背包。`, 'info');
+                        }
+                    }
+
+                    // 如果不需要處理裝備或已處理完畢，直接執行最終確認
+                    this.finalizePartnerSelection();
+                },
+                // 【新增】用於新生兒決策的最終執行函式
+                finalizePartnerSelection() {
+                    const modal = this.modals.partnerManagement;
+                    const selectedSet = new Set(modal.selectedIds);
+                    const { mother, newborn } = modal.context;
+
                     const keptPartners = modal.list.filter(p => selectedSet.has(p.id));
                     const wasNewbornKept = keptPartners.some(p => p.id === newborn.id);                  
-                    // 更新夥伴列表
+                    
+                    // 更新部落的夥伴總列表
                     this.partners = keptPartners;
-                    // 如果新生兒被保留下來了，完成生產流程
+                    
                     if (wasNewbornKept) {
                         this.player.skillPoints++;
                         this.logMessage('tribe', `你為 ${newborn.name} 在寢室中騰出了空間！你獲得了 1 點技能點。`, 'success');
@@ -5787,13 +5936,18 @@
                     } else {
                         this.logMessage('tribe', `你決定放棄 ${mother.name} 的孩子，為更強的夥伴保留了位置。`, 'info');
                     }                    
-                    // 無論如何，母親的狀態都要更新
+                    
                     mother.isPregnant = false;
                     mother.pregnancyTimer = 0;
                     mother.isMother = true;
                     this.logMessage('tribe', `${mother.name} 現在開始在產房為部落貢獻奶水。`, 'info');
 
                     modal.isOpen = false;
+                    
+                    // 【核心修正】採用更簡潔、更穩定的方式來更新出擊隊伍
+                    const keptPartnerIds = new Set(this.partners.map(p => p.id));
+                    this.player.party = this.player.party.filter(p => keptPartnerIds.has(p.id));
+                    this.player.updateHp(this.isStarving);
                 },
                 // 1. 在函式定義中，加入一個帶有「預設值」的參數
                 finishCombatCleanup(returnToTribe = false) {
@@ -5894,22 +6048,88 @@
                     this.showCustomAlert('遊戲進度已儲存！');
                     this.hasSaveFile = true;
                 },
+                // 【新增】存檔拯救函式，用於修復汙染的舊存檔
+                // 【最終修正】存檔拯救函式，增加強制ID清洗功能
+                salvageSaveData() {
+                    console.log("Running final save data salvage and ID sanitation...");
+                    
+                    const processedItems = new Set(); // 用於追蹤已處理過的物品，避免重複操作
+                    let itemsSanitized = 0;
+
+                    // 建立一個函式，遞迴地處理所有可能包含物品的地方
+                    const sanitizeAndRegenerateIds = (data) => {
+                        // 如果是物品物件 (有 id 和 baseName)
+                        if (data && data.id && data.baseName) {
+                            // 如果這個物品物件的參照我們已經處理過了，就跳過
+                            if (processedItems.has(data)) {
+                                return data;
+                            }
+                            // 為該物品生成一個全新的 ID
+                            data.id = crypto.randomUUID();
+                            processedItems.add(data); // 標記為已處理
+                            itemsSanitized++;
+                            return data;
+                        }
+                        // 如果是陣列，就遞迴處理陣列中的每個元素
+                        if (Array.isArray(data)) {
+                            return data.map(item => sanitizeAndRegenerateIds(item));
+                        }
+                        // 如果是物件，就遞迴處理物件的每個屬性值
+                        if (typeof data === 'object' && data !== null) {
+                            Object.keys(data).forEach(key => {
+                                data[key] = sanitizeAndRegenerateIds(data[key]);
+                            });
+                            return data;
+                        }
+                        // 如果是基本類型，直接返回
+                        return data;
+                    };
+
+                    // 從遊戲資料的根層級開始，對所有物品進行 ID 清洗
+                    this.warehouseInventory = sanitizeAndRegenerateIds(this.warehouseInventory);
+                    this.player = sanitizeAndRegenerateIds(this.player);
+                    this.partners = sanitizeAndRegenerateIds(this.partners);
+
+                    console.log(`ID Sanitation complete: Regenerated IDs for ${itemsSanitized} item instances.`);
+                    if (itemsSanitized > 0) {
+                        this.logMessage('tribe', `系統偵測到並修復了 ${itemsSanitized} 個存檔中的物品ID衝突。`, 'system');
+                    }
+                },
 
                 migrateSaveData() {
-                    const allItems = [
-                        ...this.player.inventory,
-                        ...this.warehouseInventory,
-                        ...Object.values(this.player.equipment),
-                        ...this.partners.flatMap(p => [...(p.inventory || []), ...Object.values(p.equipment)])
-                    ].filter(item => item); // 篩選掉空裝備欄位
+                    // 【修正】使用 Map 來收集所有物品，以確保每個物品的唯一性
+                    const allKnownItems = new Map();
+
+                    // 1. 定義一個輔助函式來安全地添加物品到 Map 中
+                    const addItem = (item) => {
+                        // 確保 item 有效、有 id 且尚未被添加過
+                        if (item && item.id && !allKnownItems.has(item.id)) {
+                            allKnownItems.set(item.id, item);
+                        }
+                    };
+
+                    // 2. 遍歷所有可能的物品來源，並使用輔助函式添加
+                    this.player.inventory.forEach(addItem);
+                    this.warehouseInventory.forEach(addItem);
+                    Object.values(this.player.equipment).forEach(addItem);
+                    
+                    this.partners.forEach(p => {
+                        Object.values(p.equipment).forEach(addItem);
+                        // 確保 p.inventory 存在且為陣列
+                        if (Array.isArray(p.inventory)) {
+                            p.inventory.forEach(addItem);
+                        }
+                    });
+
+                    // 3. 從 Map 中取得獨一無二的物品列表，這將是乾淨無重複的
+                    const allItems = Array.from(allKnownItems.values());
 
                     const migrateItem = (item) => {
-                        // 只處理盾牌，並且只處理沒有 blockChance 屬性的舊盾牌
+                        // (遷移邏輯維持不變)
                         if (item && item.baseName === '盾' && typeof item.stats.blockChance === 'undefined') {
                             const materialTier = item.material.tier;
                             const materialType = item.material.type;
                             
-                            // 從基礎設定中查出該等級盾牌應有的格擋率
                             const correctBlockChance = BASE_EQUIPMENT_STATS[materialType]['盾'][materialTier]?.blockChance;
 
                             if (correctBlockChance) {
@@ -5924,93 +6144,77 @@
 
                 loadGame() {
                     const savedData = localStorage.getItem('goblinKingSaveFile');
-                    if (savedData) {
-                        try {
-                            this.isNewGame = false; 
-                            const parsedData = JSON.parse(savedData);
+                    if (!savedData) {
+                        this.showCustomAlert('找不到存檔文件！');
+                        return;
+                    }
+
+                    try {
+                        this.isNewGame = false;
+                        const parsedData = JSON.parse(savedData);
+
+                        // 【新增】防呆：檢查存檔中是否有玩家資料
+                        if (!parsedData.player) {
+                            throw new Error("存檔中缺少玩家資料！");
+                        }
+
+                        // 1. 還原所有夥伴 (【新增】增加 || [] 確保舊存檔沒有此欄位時不報錯)
+                        this.partners = (parsedData.partners || []).map(pData => {
+                            const partner = new Goblin(pData.name, pData.stats || {});
+                            return Object.assign(partner, JSON.parse(JSON.stringify(pData)));
+                        });
+
+                        // 2. 還原玩家物件
+                        const loadedPlayerInstance = new Player(parsedData.player.name, parsedData.player.stats || {});
+                        Object.assign(loadedPlayerInstance, JSON.parse(JSON.stringify(parsedData.player)));
+
+                        // 3. 【核心修正】直接賦值，而不是用 Object.assign 合併到 null 物件
+                        this.player = loadedPlayerInstance;
+
+                        // 4. 從已完全還原的 this.partners 中，重建玩家的隊伍 (party)
+                        const partnersMap = new Map(this.partners.map(p => [p.id, p]));
+                        this.player.party = (parsedData.player.party || [])
+                            .map(pData => partnersMap.get(pData.id))
+                            .filter(Boolean); // .filter(Boolean) 可以過濾掉任何找不到的夥伴，增加穩健性
+
+                        // --- 繼續載入其他遊戲數據 ---
+                        this.resources = parsedData.resources;
+                        this.warehouseInventory = parsedData.warehouseInventory || [];
+                        
+                        const defaultBuildings = {
+                            dungeon: { level: 0, name: "地牢" }, warehouse: { level: 0, name: "倉庫" },
+                            barracks: { level: 0, name: "寢室" }, armory: { level: 0, name: "兵工廠" },
+                            maternity: { level: 0, name: "產房" }, trainingGround: { level: 0, name: "訓練場" }, 
+                            merchantCamp: { level: 0, name: "商人營地" },
+                        };
+                        this.buildings = { ...defaultBuildings, ...parsedData.buildings };
+
+                        this.day = parsedData.day;
+                        this.narrativeMemory = parsedData.narrativeMemory;
+                        this.tutorial = { ...{ active: false, step: 0, merchantMet: false }, ...parsedData.tutorial };
+                        this.breedingChargesLeft = parsedData.breedingChargesLeft;
+                        this.merchant = { ...this.merchant, ...parsedData.merchant };
+                        
+                        this.player.updateHp(this.isStarving);
+                        this.partners.forEach(p => p.updateHp(this.isStarving));
+
+                        if (parsedData.tempStatIncreases) {
+                            this.tempStatIncreases = parsedData.tempStatIncreases;
+                        } else {
+                            this.cancelAttributePoints();
+                        }
+                        
+                        this.salvageSaveData();
+                        this.migrateSaveData();
                             
-                            const safelyAssign = (target, source) => {
-                                for (const key in source) {
-                                    if (Object.prototype.hasOwnProperty.call(source, key) && Object.prototype.hasOwnProperty.call(target, key)) {
-                                        if (typeof target[key] !== 'function') {
-                                            target[key] = source[key];
-                                        }
-                                    } else if (!Object.prototype.hasOwnProperty.call(target, key)) {
-                                         target[key] = source[key];
-                                    }
-                                }
-                            };
+                        this.screen = 'tribe';
+                        this.showCustomAlert('遊戲進度已讀取！');
 
-                            this.partners = parsedData.partners.map(pData => {
-                                const partner = new Goblin(pData.name, pData.stats);
-                                safelyAssign(partner, pData); 
-                                return partner;
-                            });
-
-                            const loadedPlayer = new Player(parsedData.player.name, parsedData.player.stats);
-                            safelyAssign(loadedPlayer, parsedData.player);
-                            
-                            const partyIds = new Set(parsedData.player.party.map(p => p.id));
-                            loadedPlayer.party = this.partners.filter(p => partyIds.has(p.id));
-
-                            this.player = loadedPlayer;
-
-                            this.captives = parsedData.captives.map(cData => {
-                                const captive = new FemaleHuman(cData.name, cData.stats, cData.profession, cData.visual);
-                                safelyAssign(captive, cData);
-                                return captive;
-                            });
-
-                            this.resources = parsedData.resources;
-                            // 【新增】讀取倉庫物品，若舊存檔沒有此資料則預設為空陣列
-                            this.warehouseInventory = parsedData.warehouseInventory || [];
-                            
-                            const defaultBuildings = {
-                                dungeon: { level: 0, name: "地牢" },
-                                warehouse: { level: 0, name: "倉庫" },
-                                barracks: { level: 0, name: "寢室" },
-                                armory: { level: 0, name: "兵工廠" },
-                                maternity: { level: 0, name: "產房" },
-                                trainingGround: { level: 0, name: "訓練場" }, 
-                                merchantCamp: { level: 0, name: "商人營地" },
-                            };
-                            this.buildings = { ...defaultBuildings, ...parsedData.buildings };
-
-                            this.day = parsedData.day;
-                            this.narrativeMemory = parsedData.narrativeMemory;
-                            this.tutorial = { ...{ active: false, step: 0, merchantMet: false }, ...parsedData.tutorial };
-                            this.breedingChargesLeft = parsedData.breedingChargesLeft;
-                            if (parsedData.merchant) {
-                                // 如果是新格式存檔，則讀取所有商人資訊
-                                this.merchant = { ...this.merchant, ...parsedData.merchant };
-                            } else {
-                                // 如果是舊格式，則只讀取購買次數
-                                this.merchant.purchases = parsedData.merchantPurchases || 0;
-                            }
-                            
-                            this.player.updateHp(this.isStarving);
-                            this.partners.forEach(p => p.updateHp(this.isStarving));
-
-                            if (parsedData.tempStatIncreases) {
-                                this.tempStatIncreases = parsedData.tempStatIncreases;
-                            } else {
-                                // 如果是舊存檔，則清空
-                                this.cancelAttributePoints();
-                            }
-                            // 【新增】在讀取完成後，執行一次存檔遷移檢查
-                            this.migrateSaveData();
-                                
-                            this.screen = 'tribe';
-                            this.showCustomAlert('遊戲進度已讀取！');
-
-                            } catch (e) {
-                                    console.error("讀取存檔失敗:", e);
-                                    this.showCustomAlert('讀取存檔失敗！檔案可能已損毀。');
-                                }
-                            } else {
-                                this.showCustomAlert('找不到存檔文件！');
-                            }
-                        },
+                    } catch (e) {
+                        console.error("讀取存檔失敗:", e);
+                        this.showCustomAlert(`讀取存檔失敗！檔案可能已損毀。錯誤訊息: ${e.message}`);
+                    }
+                },
 
                 checkForSaveFile() {
                     if (localStorage.getItem('goblinKingSaveFile')) {
@@ -6163,25 +6367,20 @@
                     if (itemIndex === -1) return;
 
                     const itemToEquip = sourceArray[itemIndex];
-                    let slot = itemToEquip.slot; // 使用 let 讓 slot 可以被修改
+                    let slot = itemToEquip.slot; 
 
-                    // 【核心修改】智能副手判斷邏輯
                     const mainHandWeapon = targetUnit.equipment.mainHand;
-                    // 如果要裝備的是「劍」，且主手已經有「劍」，且副手是空的
                     if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName === '劍' && !targetUnit.equipment.offHand) {
-                        // 強制將目標欄位改為 'offHand'
                         slot = 'offHand';
                     }
                     
                     if (!slot || !targetUnit.equipment.hasOwnProperty(slot)) return;
 
                     if (slot === 'offHand') {
-                        // 如果主手是嚴格的雙手武器，則副手不能裝備任何東西
                         if (mainHandWeapon && TWO_HANDED_WEAPONS.includes(mainHandWeapon.baseName)) {
                             this.showCustomAlert(`裝備 ${mainHandWeapon.baseName} 時無法使用副手裝備！`);
                             return;
                         }
-                        // 如果要裝備的是劍，但主手不是劍，則阻止
                         if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName !== '劍') {
                             this.showCustomAlert('只有在主手裝備單手劍時，才能在副手裝備另一把劍！');
                             return;
@@ -6204,6 +6403,7 @@
                     
                     if (targetUnit.updateHp) targetUnit.updateHp(this.isStarving);
                     this.logMessage('tribe', `${targetUnit.name} 裝備了 <span style="color:${itemToEquip.quality.color};">[${itemToEquip.name}]</span>。`, 'success');
+                    
                 },
 
                 unequipItem(slot, targetUnit, silent = false) {
@@ -6309,5 +6509,5 @@
             }
         }
     </script>
-</body>
+</div></body>
 </html>
