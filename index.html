@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國V4.93</title>
+    <title>哥布林王國v4.96</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -644,6 +644,7 @@
                                                         <div>
                                                             <span class="capitalize" x-text="STAT_NAMES[stat]"></span>:
                                                             <span x-text="player.stats[stat]"></span>
+                                                            <span class="text-yellow-400 font-bold" x-show="tempStatIncreases[stat] > 0" x-text="` (+${tempStatIncreases[stat]})`"></span>
                                                             <span class="text-green-400" x-show="player.getPartyBonus(stat) > 0" x-text="` (+${player.getPartyBonus(stat)})`"></span>
                                                             <span class="text-purple-400" x-show="player.getAffixEffect(stat).bonus > 0" x-text="` (+${player.getAffixEffect(stat).bonus})`"></span>
                                                             <span class="text-blue-400" x-show="player.getEffectiveEquipmentBonus(stat) > 0" x-text="` (+${player.getEffectiveEquipmentBonus(stat)})`"></span>
@@ -653,6 +654,10 @@
                                                     </li>
                                                 </template>
                                             </ul>
+                                            <div x-show="Object.values(tempStatIncreases).reduce((a, b) => a + b, 0) > 0" class="mt-2 text-right space-x-2">
+                                                <button @click="confirmAttributePoints()" class="btn btn-sm btn-success">確認分配</button>
+                                                <button @click="cancelAttributePoints()" class="btn btn-sm btn-secondary">取消</button>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-3 text-sm text-center border-y border-gray-700 py-1 my-2">
@@ -3487,7 +3492,7 @@
 
                 init() {
                     this.loadApiKey();
-                    this.logMessage('tribe', "哥布林王國V4.93 初始化...");
+                    this.logMessage('tribe', "哥布林王國v4.96 初始化...");
                     this.checkForSaveFile();
                     if (!this.player) {
                         this.generateIntroNarrative();
@@ -3814,7 +3819,87 @@
                         }
                     });
                 },
+                // 請在您的程式碼中新增這個函式
+                continueNextDay() {
+                    // --- 商人來訪邏輯 ---
+                    if (this.merchant.isPresent) {
+                        this.merchant.stayDuration--;
+                        if (this.merchant.stayDuration <= 0) {
+                            this.logMessage('tribe', '旅行商人「世紀」已經收拾行囊，離開了你的部落。', 'info');
+                            this.merchant = {
+                                dialogue: '',
+                                isPresent: false,
+                                goods: [],
+                                stayDuration: 0,
+                                purchases: this.merchant.purchases,
+                                selectedItemIds: [],
+                                selectedCaptiveIds: [],
+                            };
+                        }
+                    } else {
+                        if (this.day === 9 && !this.tutorial.merchantMet) {
+                            this.merchant.isPresent = true;
+                            this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
+                            this.generateMerchantGoods();
+                            this.logMessage('tribe', `一位名叫「世紀」的魅魔商人來到了你的營地！她將停留 ${this.merchant.stayDuration} 天。`, 'success');
+                            this.advanceTutorial(7); // 這裡的教學步驟是7，不是6
+                            this.tutorial.merchantMet = true;
+                        } else if (this.day > 9) {
+                            const arrivalChance = [10, 15, 20, 25, 30][this.buildings.merchantCamp.level || 0] || 10;
+                            if (roll(arrivalChance)) {
+                                this.merchant.isPresent = true;
+                                this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
+                                this.generateMerchantGoods();
+                                this.logMessage('tribe', `一位名叫「世紀」的魅魔商人來到了你的營地！她將停留 ${this.merchant.stayDuration} 天。`, 'success');
+                            }
+                        }
+                    }
 
+                    // --- 日常事件 ---
+                    this.day++;
+                    this.logMessage('tribe', `--- 第 ${this.day} 天 ---`, 'system');
+                    
+                    this.captives.forEach(c => {
+                        if (c.isPregnant) {
+                            c.pregnancyTimer--;
+                            if (c.pregnancyTimer <= 0) {
+                                this.giveBirth(c);
+                            }
+                        }
+                    });
+
+                    const milkProduced = this.mothers.filter(m => !m.isPregnant).reduce((total, mother) => {
+                        return total + Math.floor((mother.stats.charisma || 0) * 1);
+                    }, 0);
+                    if (milkProduced > 0) {
+                        this.resources.food += milkProduced;
+                        this.logMessage('tribe', `產房的孕母們生產了 ${milkProduced} 單位食物。`, 'success');
+                    }
+                    
+                    this.resources.food -= this.dailyFoodConsumption;
+                    if (this.resources.food < 0) {
+                        if (!this.isStarving) {
+                            this.logMessage('tribe', `食物不足！部落成員陷入飢餓狀態，所有能力下降25%！`, 'enemy');
+                            this.isStarving = true;
+                        }
+                        this.resources.food = 0;
+                    } else {
+                        if (this.isStarving) {
+                            this.logMessage('tribe', `食物充足，飢餓狀態解除了。`, 'success');
+                            this.isStarving = false;
+                        }
+                    }
+                    
+                    this.player.updateHp(this.isStarving);
+                    this.partners.forEach(p => {
+                        p.maxHp = p.calculateMaxHp(this.isStarving);
+                        p.currentHp = Math.min(p.currentHp, p.maxHp);
+                    });
+
+                    this.breedingChargesLeft = this.totalBreedingCharges;
+                },
+
+                // 請用以下程式碼替換您原本的 nextDay 函式
                 nextDay() {
                     // --- 事件偵測階段 ---
                     let pendingRevengeInfo = null;
@@ -3840,110 +3925,27 @@
                         }
                     }
 
-                    // 2. 偵測新生兒
+                    // 2. 偵測新生兒 (僅用於傳遞)
                     this.captives.forEach(c => {
                         if (c.isPregnant) {
                             c.pregnancyTimer--;
                             if (c.pregnancyTimer <= 0) {
-                                pendingBirths.push(c); // 將待處理的母親加入列表，先不執行 giveBirth
+                                pendingBirths.push(c);
+                            } else {
+                                // 將還沒到時間的 timer 加回去，避免重複計算
+                                c.pregnancyTimer++; 
                             }
                         }
                     });
 
-                    // --- 事件執行階段 (按優先級) ---
                     if (pendingRevengeInfo) {
-                        // 優先執行戰鬥，並將「待辦的出生事件」作為參數傳遞
                         this.logMessage('tribe', `你從 ${pendingRevengeInfo.difficulty} 城鎮掠來的俘虜似乎引來了追兵...`, 'enemy');
                         this.triggerRevengeSquadBattle(pendingRevengeInfo.difficulty, pendingBirths);
-                        return; // 中斷後續所有普通事件
+                        return; // 中斷後續所有普通事件，交由戰鬥結束後處理
                     }
 
-                    // --- 商人來訪邏輯 ---
-                    if (this.merchant.isPresent) {
-                        this.merchant.stayDuration--;
-                        if (this.merchant.stayDuration <= 0) {
-                            this.logMessage('tribe', '旅行商人「世紀」已經收拾行囊，離開了你的部落。', 'info');
-                            // 【修正】將整個 merchant 物件恢復到初始狀態
-                            this.merchant = {
-                                dialogue: '',
-                                isPresent: false,
-                                goods: [],
-                                stayDuration: 0,
-                                purchases: this.merchant.purchases, // 保留購買次數以追蹤彩蛋
-                                selectedItemIds: [],
-                                selectedCaptiveIds: [],
-                            };
-                        }
-                    } else {
-                        // 【新的商人觸發規則】
-                        // day 為 9 時，代表第 10 天即將開始
-                        if (this.day === 9 && !this.tutorial.merchantMet) {
-                            // 第 10 天必定觸發
-                            this.merchant.isPresent = true;
-                            this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
-                            this.generateMerchantGoods();
-                            this.logMessage('tribe', `一位名叫「世紀」的魅魔商人來到了你的營地！她將停留 ${this.merchant.stayDuration} 天。`, 'success');
-                            this.advanceTutorial(6); // 觸發商人教學
-                            this.tutorial.merchantMet = true; // 標記教學已觸發，避免重複
-                        } else if (this.day > 9) {
-                            // 10 天後，恢復原有的隨機觸發機制
-                            const arrivalChance = [10, 15, 20, 25, 30][this.buildings.merchantCamp.level || 0] || 10;
-                            if (roll(arrivalChance)) {
-                                this.merchant.isPresent = true;
-                                this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
-                                this.generateMerchantGoods();
-                                this.logMessage('tribe', `一位名叫「世紀」的魅魔商人來到了你的營地！她將停留 ${this.merchant.stayDuration} 天。`, 'success');
-                            }
-                        }
-                    }
-
-                    // 如果沒有戰鬥，才正常處理日常事件
-                    this.day++;
-                    this.logMessage('tribe', `--- 第 ${this.day} 天 ---`, 'system');
-                    
-                    // 正常處理出生
-                    pendingBirths.forEach(mother => this.giveBirth(mother));
-                    
-                    this.resources.food -= this.dailyFoodConsumption;
-                    //奶水公式
-                    const milkProduced = this.mothers.filter(m => !m.isPregnant).reduce((total, mother) => {
-                        return total + Math.floor((mother.stats.charisma || 0) * 1);
-                    }, 0);
-                    if (milkProduced > 0) {
-                        this.resources.food += milkProduced;
-                        this.logMessage('tribe', `產房的孕母們生產了 ${milkProduced} 單位食物。`, 'success');
-                    }
-                    
-                    if (this.resources.food < 0) {
-                        if (!this.isStarving) {
-                            this.logMessage('tribe', `食物不足！部落成員陷入飢餓狀態，所有能力下降25%！`, 'enemy');
-                            this.isStarving = true;
-                        }
-                        this.resources.food = 0;
-                    } else {
-                        if (this.isStarving) {
-                            this.logMessage('tribe', `食物充足，飢餓狀態解除了。`, 'success');
-                            this.isStarving = false;
-                        }
-                    }
-                    
-                    this.player.updateHp(this.isStarving);
-                    this.partners.forEach(p => {
-                        p.maxHp = p.calculateMaxHp(this.isStarving);
-                        p.currentHp = Math.min(p.currentHp, p.maxHp);
-                    });
-
-
-                    this.captives.forEach(c => {
-                        if (c.isPregnant) {
-                            c.pregnancyTimer--;
-                            if (c.pregnancyTimer <= 0) {
-                                this.giveBirth(c);
-                            }
-                        }
-                    });
-
-                    this.breedingChargesLeft = this.totalBreedingCharges;
+                    // 如果沒有復仇事件，則執行正常的日常流程
+                    this.continueNextDay();
                 },
                 
                 getBuildingUpgradeCost(type) {
@@ -5743,42 +5745,80 @@
                     });
                 },
 
+                // 請用以下程式碼替換您原本的 endCombat 函式
                 endCombat(victory) {
+                    // --- 新增：處理非掠奪戰鬥（如復仇小隊）---
+                    if (!this.currentRaid) {
+                        if (victory) {
+                            this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
+
+                            // 處理俘虜
+                            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+                            if (defeatedFemales.length > 0) {
+                                if ((this.dungeonCaptives.length + defeatedFemales.length) > this.captiveCapacity) {
+                                    this.logMessage('tribe', '地牢空間不足，你需要決定俘虜的去留...', 'warning');
+                                    this.pendingDecisions.push({
+                                        type: 'dungeon',
+                                        list: [...this.dungeonCaptives, ...defeatedFemales],
+                                        limit: this.captiveCapacity,
+                                        context: { postBattleBirths: this.postBattleBirths }
+                                    });
+                                } else {
+                                    this.captives.push(...defeatedFemales);
+                                    this.logMessage('tribe', `你俘虜了 ${defeatedFemales.length} 名戰敗的敵人。`, 'info');
+                                }
+                            }
+
+                            // 恢復狀態
+                            this.player.currentHp = this.player.maxHp;
+                            this.partners.forEach(p => p.currentHp = p.maxHp);
+                            
+                            // 處理戰鬥前暫停的出生事件
+                            (this.postBattleBirths || []).forEach(mother => this.giveBirth(mother));
+                            this.postBattleBirths = [];
+
+                            // 清理戰鬥狀態並返回部落畫面
+                            this.finishCombatCleanup(true);
+
+                            // **核心修正**：呼叫新函式，繼續當天的剩餘流程
+                            this.continueNextDay();
+                        } else {
+                            // 戰敗邏輯不變，直接觸發重生
+                            this.prepareToEndRaid(true);
+                        }
+                        return; // 結束函式，不再執行後續的掠奪邏輯
+                    }
+
+                    // --- 原有的掠奪戰鬥處理邏輯（維持不變）---
                     if (victory) {
-                        // 【核心修正】無論是什麼戰鬥，勝利後都先統一收集戰利品
                         const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
                         if (defeatedFemales.length > 0) {
-                            // 將本次戰鬥擊敗的女性單位加入到攜帶列表中
                             this.currentRaid.carriedCaptives.push(...defeatedFemales);
                         }
                         
-                        // 檢查王是否陣亡，並顯示對應訊息
                         if (this.player && !this.player.isAlive()) {
                             this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
                         }
 
-                        // 然後再判斷是否為最終的增援戰
                         if (this.combat.isReinforcementBattle) {
                             this.logMessage('tribe', '你擊敗了騎士團增援，成功征服了城鎮！', 'success');
-                            // 檢查攜帶量是否已滿，如果滿了會彈出選擇視窗，否則直接結束掠奪
                             if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
                                 this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
                             } else {
                                 this.prepareToEndRaid(false);
                             }
                         } else {
-                            // 如果是普通戰鬥，則檢查攜帶量或清理戰場
                             if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
-                                 this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
+                                this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
                             } else {
                                 this.finishCombatCleanup();
                             }
                         }
                     } else { 
-                        // 戰鬥失敗的邏輯維持不變
                         this.prepareToEndRaid(true);
                     }
                 },
+
                 tickStatusEffects() {
                     const allUnitsForRegen = [...this.combat.allies, ...this.combat.enemies];
                     allUnitsForRegen.forEach(unit => {
