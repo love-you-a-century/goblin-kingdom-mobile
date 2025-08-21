@@ -6578,11 +6578,16 @@
                             return partner;
                         });
 
-                        // 還原俘虜
-                        this.captives = (parsedData.captives || []).map(cData => {
-                            const captive = new FemaleHuman(cData.name, cData.stats || {}, cData.profession, cData.visual);
-                            safelyAssign(captive, cData);
-                            return captive;
+                        // 修復舊存檔中孕母狀態丟失的問題
+                        this.captives.forEach(c => {
+                            // 如果一個俘虜：不是懷孕狀態，懷孕計時器為0或不存在，且身上沒有 isMother 標記
+                            if (!c.isPregnant && (!c.pregnancyTimer || c.pregnancyTimer <= 0) && typeof c.isMother === 'undefined') {
+                                // 我們可以合理推斷她是在舊版本中已經生產完畢的母親
+                                const wasInMaternityInOldSave = parsedData.mothers?.some(m => m.id === c.id);
+                                if (wasInMaternityInOldSave) { // 雙重檢查，確保她確實曾是孕母
+                                    c.isMother = true;
+                                }
+                            }
                         });
 
                         // 還原玩家
