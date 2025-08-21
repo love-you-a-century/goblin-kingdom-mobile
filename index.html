@@ -2857,6 +2857,8 @@
             return {
                 pendingDecisions: [],
                 bailoutCounter: 0, // 【新增此行】用來計算玩家求助的次數
+                raidTimeExpired: false, // 【新增此行】用來標記時間是否在戰鬥中耗盡
+                isRetreatingWhenTimeExpired: false, // 【新增此行】記錄時間耗盡時是否正在脫離
                 bailoutOfferedButRefused: false, // 【新增此行】記錄玩家是否拒絕過求助
                 screen: 'api_key_input', // 【修改】將初始畫面改為 API 輸入介面
                 userApiKey: '',          // 【新增】用來儲存玩家輸入的金鑰
@@ -5220,22 +5222,19 @@
                 handleRetreatAction() {
                     if (!this.currentRaid) return;
 
-                    // 如果玩家在最外層（外城），則執行脫離城鎮的最終結算
                     if (this.currentRaid.currentZoneIndex === 0) {
                         
-                        // 【新增的俘虜時間成本計算】
-                        const baseCost = 5; // 基礎花費 5 分鐘
-                        const captiveCost = (this.currentRaid.carriedCaptives.length || 0) * 5; // 每個俘虜額外花費 5 分鐘
+                        const baseCost = 5;
+                        const captiveCost = (this.currentRaid.carriedCaptives.length || 0) * 5;
                         const totalCost = baseCost + captiveCost;
                         
                         this.currentRaid.timeRemaining -= totalCost;
                         
                         this.logMessage('raid', `你帶著 ${this.currentRaid.carriedCaptives.length} 名俘虜脫離城鎮，花費了 ${totalCost} 分鐘。`, 'player');
                         
-                        // 扣除時間後，立即檢查是否會觸發騎士團
+                        this.isRetreatingWhenTimeExpired = true; // 【新增此行】在檢查時間前，標記為正在脫離
                         this.checkRaidTime(); 
                         
-                        // 只有在沒有觸發騎士團戰鬥的情況下，才返回部落
                         if (this.currentRaid && this.currentRaid.timeRemaining > 0) {
                             this.prepareToEndRaid();
                         }
@@ -5325,10 +5324,12 @@
                 },
 
                 checkRaidTime() {
-                    if (this.currentRaid && this.currentRaid.timeRemaining <= 0 && !this.combat.isReinforcementBattle) {
-                        // 防止在戰鬥中重複觸發
-                        if(this.screen !== 'combat'){
-                             this.triggerReinforcementBattle();
+                    if (this.currentRaid && this.currentRaid.timeRemaining <= 0) {
+                        if (this.screen === 'combat') {
+                            this.raidTimeExpired = true; // 在戰鬥中時間歸零，僅設定標記
+                        } else if (!this.combat.isReinforcementBattle) {
+                            // 不在戰鬥中，且還未觸發過增援戰，則立即觸發
+                            this.triggerReinforcementBattle();
                         }
                     }
                 },
@@ -6016,8 +6017,19 @@
                     });
                 },
 
-                // 請用以下程式碼替換您原本的 endCombat 函式
                 endCombat(victory) {
+                    // 【新增此區塊】在所有邏輯開始前，檢查時間耗盡標記
+                    if (this.currentRaid && this.raidTimeExpired) {
+                        this.raidTimeExpired = false; // 重置標記
+                        if (victory) {
+                            // 如果玩家贏了當前戰鬥，立即觸發增援戰
+                            this.triggerReinforcementBattle();
+                        } else {
+                            // 如果玩家輸了當前戰鬥，直接結束掠奪
+                            this.prepareToEndRaid(true);
+                        }
+                        return; // 中斷後續的 endCombat 程式碼，防止邏輯衝突
+                    }
                     // --- 新增：處理非掠奪戰鬥（如復仇小隊）---
                     if (!this.currentRaid) {
                         if (victory) {
@@ -6062,23 +6074,34 @@
 
                     // --- 原有的掠奪戰鬥處理邏輯（維持不變）---
                     if (victory) {
+                        // --- 這一段處理戰利品和訊息的邏輯不變 ---
                         const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
                         if (defeatedFemales.length > 0) {
                             this.currentRaid.carriedCaptives.push(...defeatedFemales);
                         }
-                        
                         if (this.player && !this.player.isAlive()) {
                             this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
                         }
 
+                        // --- 核心修改從這裡開始 ---
                         if (this.combat.isReinforcementBattle) {
-                            this.logMessage('tribe', '你擊敗了騎士團增援，成功征服了城鎮！', 'success');
-                            if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
-                                this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
-                            } else {
+                            // 【新增判斷式】檢查增援戰是如何觸發的
+                            if (this.isRetreatingWhenTimeExpired) {
+                                // 如果是在「脫離時」觸發的，維持舊邏輯，返回部落
+                                this.logMessage('tribe', '你擊敗了前來阻截的騎士團，成功帶著戰利品返回部落！', 'success');
                                 this.prepareToEndRaid(false);
+                            } else {
+                                // 如果是在「城鎮中」觸發的，執行新邏輯
+                                this.currentRaid.timeRemaining = Infinity; // 將時間設為無限，停止倒數
+                                this.logMessage('raid', '你擊敗了騎士團的增援部隊！時間壓力消失了，你可以繼續探索這座城鎮。', 'success');
+                                // 清理戰鬥狀態，並返回掠奪地圖，而不是部落
+                                this.finishCombatCleanup(); 
                             }
+                            // 無論結果如何，都要將旗標重置，以免影響下一次判斷
+                            this.isRetreatingWhenTimeExpired = false;
+                            
                         } else {
+                            // 普通戰鬥的勝利邏輯不變
                             if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
                                 this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
                             } else {
@@ -6086,6 +6109,7 @@
                             }
                         }
                     } else { 
+                        // 戰敗邏輯不變
                         this.prepareToEndRaid(true);
                     }
                 },
@@ -6526,6 +6550,13 @@
                 },
 
                 loadGame() {
+                     //【新增此區塊】在讀取任何資料前，先清空所有日誌
+                        this.logs = {
+                        tribe: [],
+                        raid: [],
+                        combat: []
+                    };
+
                     const savedData = localStorage.getItem('goblinKingSaveFile');
                     if (!savedData) {
                         this.showCustomAlert('找不到存檔文件！');
