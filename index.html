@@ -1293,6 +1293,7 @@
                                 <div>
                                     <p class="text-sm">
                                         <span x-text="buildings.maternity.level === 0 ? '建造花費:' : `升級至 ${buildings.maternity.level + 1} 級花費:`"></span>
+                                        <span x-text="getBuildingUpgradeCost('maternity').food"></span> 食物,
                                         <span x-text="getBuildingUpgradeCost('maternity').wood"></span> 木材,
                                         <span x-text="getBuildingUpgradeCost('maternity').stone"></span> 礦石
                                     </p>
@@ -1351,6 +1352,7 @@
                             <div>
                                 <p class="text-sm">
                                     <span x-text="buildings.merchantCamp.level === 0 ? '建造花費:' : `升級至 ${buildings.merchantCamp.level + 1} 級花費:`"></span>
+                                    <span x-text="getBuildingUpgradeCost('merchantCamp').food"></span> 食物,
                                     <span x-text="getBuildingUpgradeCost('merchantCamp').wood"></span> 木材,
                                     <span x-text="getBuildingUpgradeCost('merchantCamp').stone"></span> 礦石
                                 </p>
