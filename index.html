@@ -612,6 +612,7 @@
                                 <button @click="openMerchant()" class="btn btn-primary" :disabled="!merchant.isPresent" title="旅行商人來訪時才能進入">
                                     商人營地 <span x-show="merchant.isPresent" class="text-yellow-300">(來訪中)</span>
                                 </button>
+                                <button @click="openDispatchCenter()" class="btn btn-primary">派遣</button>
                             </div>
                         </div>
     
@@ -959,6 +960,72 @@
 
     <!-- MODALS -->
     <template x-if="player">
+
+        <div class="modal" x-show="modals.dispatch.isOpen" x-cloak>
+            <div class="modal-content !max-w-4xl game-container relative p-6 rounded-lg">
+                <h2 class="game-title font-medieval">派遣中心</h2>
+                <div class="pt-10 max-h-[80vh] overflow-y-auto">
+
+                    <div class="flex border-b border-gray-600 mb-4">
+                        <button @click="modals.dispatch.activeTab = 'food'" :class="{ 'bg-gray-700 text-white': modals.dispatch.activeTab === 'food' }" class="flex-1 py-2 px-4 rounded-t-lg">狩獵食物</button>
+                        <button @click="modals.dispatch.activeTab = 'wood'" :class="{ 'bg-gray-700 text-white': modals.dispatch.activeTab === 'wood' }" class="flex-1 py-2 px-4 rounded-t-lg">採集木材</button>
+                        <button @click="modals.dispatch.activeTab = 'stone'" :class="{ 'bg-gray-700 text-white': modals.dispatch.activeTab === 'stone' }" class="flex-1 py-2 px-4 rounded-t-lg">開採礦石</button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-xl font-bold mb-2 text-amber-200">閒置的夥伴</h3>
+                            <div class="space-y-2 h-96 overflow-y-auto pr-2">
+                                <template x-for="p in idlePartners" :key="p.id">
+                                    <div @click="dispatchPartner(p.id)"
+                                        @mouseenter="previewDispatchYield(p)" 
+                                        @mouseleave="clearDispatchPreview()"
+                                        class="p-3 border border-gray-600 rounded cursor-pointer hover:bg-gray-700">
+                                        <p class="font-bold text-amber-200" x-text="p.name"></p>
+                                        <p class="text-xs text-gray-400" x-text="`總屬性: ${p.getTotalStat('strength') + p.getTotalStat('agility') + p.getTotalStat('intelligence') + p.getTotalStat('luck')}`"></p>
+                                    </div>
+                                </template>
+                                <p x-show="idlePartners.length === 0" class="text-center text-gray-400">沒有可派遣的閒置夥伴。</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-xl font-bold mb-2 text-amber-200" x-text="`派遣於 [${{food: '狩獵場', wood: '伐木場', stone: '礦場'}[modals.dispatch.activeTab]}] 的夥伴`"></h3>
+                                <div class="space-y-2 h-40 overflow-y-auto pr-2">
+                                    <template x-for="p in dispatchedPartners" :key="p.id">
+                                        <div @click="recallPartner(p.id)"
+                                            class="p-3 border border-gray-600 rounded cursor-pointer hover:bg-gray-700/50">
+                                            <p class="font-bold" x-text="p.name"></p>
+                                        </div>
+                                    </template>
+                                    <p x-show="dispatchedPartners.length === 0" class="text-center text-gray-400">目前無人派遣於此。</p>
+                                </div>
+                            </div>
+                            <div class="p-4 bg-black bg-opacity-20 rounded-lg border border-gray-700 min-h-[160px]">
+                                <h3 class="text-lg font-bold text-yellow-300">產量預覽</h3>
+                                <template x-if="dispatchPreview">
+                                    <div class="mt-2 space-y-1">
+                                        <p class="font-bold text-amber-200" x-text="dispatchPreview.name"></p>
+                                        <p class="text-green-400">食物產量/日: <span x-text="dispatchPreview.foodYield"></span></p>
+                                        <p class="text-yellow-600">木材產量/日: <span x-text="dispatchPreview.woodYield"></span></p>
+                                        <p class="text-gray-400">礦石產量/日: <span x-text="dispatchPreview.stoneYield"></span></p>
+                                        <p class="text-red-400 mt-2">自身食物消耗/日: <span x-text="dispatchPreview.consumption"></span></p>
+                                    </div>
+                                </template>
+                                <template x-if="!dispatchPreview">
+                                    <p class="text-gray-500 mt-4">請將滑鼠移至左方夥伴上方以查看產量。</p>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-right mt-6">
+                        <button @click="modals.dispatch.isOpen = false" class="btn btn-secondary">關閉</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="modal" x-show="modals.construction.isOpen" x-cloak >
             <div class="modal-content game-container relative p-6 rounded-lg">
@@ -2123,7 +2190,9 @@
             legendary: { name: '傳說', color: '#f97316', multiplier: 2.4, affixes: [3, 3] },
         };
 
+        // 【修改】加入新的 food 材料類型與對應的材料
         const EQUIPMENT_MATERIALS = {
+            // Metal (維持不變)
             iron:   { name: '鐵', tier: 1, type: 'metal', cost: 10 },
             copper: { name: '銅', tier: 2, type: 'metal', cost: 20 },
             steel:  { name: '鋼', tier: 3, type: 'metal', cost: 40 },
@@ -2131,13 +2200,29 @@
             gold:   { name: '黃金', tier: 5, type: 'metal', cost: 160 },
             mithril:{ name: '秘銀', tier: 6, type: 'metal', cost: 320 },
             orichalcum: { name: '殞鐵', tier: 7, type: 'metal', cost: 640 },
+            // Wood (維持不變)
             pine:   { name: '松木', tier: 1, type: 'wood', cost: 10 },
             ash:    { name: '白蠟木', tier: 2, type: 'wood', cost: 20 },
             mahogany:{ name: '桃花心木', tier: 3, type: 'wood', cost: 40 },
-            rosewood:{ name: '紫檀木', tier: 4, type: 'wood', cost: 80 },
+            rosewood:{ name: '紫檀木', tier: 4, 'type': 'wood', cost: 80 },
             ebony:  { name: '烏木', tier: 5, type: 'wood', cost: 160 },
             ironwood:{ name: '鐵木', tier: 6, type: 'wood', cost: 320 },
             godwood: { name: '神木', tier: 7, type: 'wood', cost: 640 },
+            // 【新增】Food 材料
+            plant_fiber: { name: '植物纖維', tier: 1, type: 'food', cost: 10 },
+            coarse_linen: { name: '粗製麻布', tier: 2, type: 'food', cost: 20 },
+            reinforced_fabric: { name: '強化織物', tier: 3, type: 'food', cost: 40 },
+            laminated_cloth: { name: '層壓布料', tier: 4, type: 'food', cost: 80 },
+            alchemical_fiber: { name: '鍊金纖維', tier: 5, type: 'food', cost: 160 },
+            master_canvas: { name: '百鍊帆布', tier: 6, type: 'food', cost: 320 },
+            behemoth_sinew: { name: '巨獸韌筋布', tier: 7, type: 'food', cost: 640 },
+            small_hide: { name: '小型獸皮', tier: 1, type: 'food', cost: 10 },
+            hardened_leather: { name: '硬化皮革', tier: 2, type: 'food', cost: 20 },
+            thick_fur: { name: '厚實毛皮', tier: 3, type: 'food', cost: 40 },
+            double_leather: { name: '雙層皮甲', tier: 4, type: 'food', cost: 80 },
+            tanned_leather: { name: '鞣製革', tier: 5, type: 'food', cost: 160 },
+            master_leather: { name: '百鍊皮革', tier: 6, type: 'food', cost: 320 },
+            behemoth_hide: { name: '巨獸硬皮', tier: 7, type: 'food', cost: 640 },
         };
 
         // --- 詞綴系統 ---
@@ -2180,6 +2265,26 @@
                 '法杖': { 1: { damage: 6, hp: 12 }, 2: { damage: 11, hp: 18 }, 3: { damage: 20, hp: 30 }, 4: { damage: 37, hp: 48 }, 5: { damage: 66, hp: 90 }, 6: { damage: 119, hp: 162 }, 7: { damage: 214, hp: 294 } },
                 '盾':   { 1: { hp: 36, blockChance: 3 }, 2: { hp: 66, blockChance: 4 }, 3: { hp: 114, blockChance: 5 }, 4: { hp: 204, blockChance: 6 }, 5: { hp: 366, blockChance: 7 }, 6: { hp: 660, blockChance: 8 }, 7: { hp: 1188, blockChance: 10 } },
                 '鎧甲': { 1: { hp: 52 }, 2: { hp: 90 }, 3: { hp: 158 }, 4: { hp: 278 }, 5: { hp: 492 }, 6: { hp: 882 }, 7: { hp: 1584 } }
+            },
+            food: {
+                '布服': {
+                    1: { hp: 5,  all_stats_multiplier: 1.05 }, // +5%
+                    2: { hp: 9,  all_stats_multiplier: 1.08 }, // +8%
+                    3: { hp: 16, all_stats_multiplier: 1.11 }, // +11%
+                    4: { hp: 28, all_stats_multiplier: 1.14 }, // +14%
+                    5: { hp: 50, all_stats_multiplier: 1.17 }, // +17%
+                    6: { hp: 90, all_stats_multiplier: 1.20 }, // +20%
+                    7: { hp: 160,all_stats_multiplier: 1.25 }, // +25%
+                },
+                '皮甲': {
+                    1: { hp: 15, all_stats_multiplier: 1.03 }, // +3%
+                    2: { hp: 27, all_stats_multiplier: 1.05 }, // +5%
+                    3: { hp: 48, all_stats_multiplier: 1.07 }, // +7%
+                    4: { hp: 85, all_stats_multiplier: 1.09 }, // +9%
+                    5: { hp: 150,all_stats_multiplier: 1.11 }, // +11%
+                    6: { hp: 270,all_stats_multiplier: 1.13 }, // +13%
+                    7: { hp: 480,all_stats_multiplier: 1.15 }, // +15%
+                }
             }
         };
 
@@ -2365,6 +2470,11 @@
                 let flatBonus = this.getEquipmentBonus(stat);
                 
                 let multiplier = 1.0;
+                // 【新增】套用布服/皮甲的百分比加成
+                if (this.equipment.chest && this.equipment.chest.stats.all_stats_multiplier) {
+                    multiplier *= this.equipment.chest.stats.all_stats_multiplier;
+                }
+
                 Object.values(this.equipment).forEach(item => {
                     if (!item) return;
                     item.affixes.forEach(affix => {
@@ -2567,16 +2677,17 @@
                     return 0;
                 }
 
-                // 1. 基礎值 = 自身原始值 + 夥伴加成
                 let baseValue = this.stats[stat] + this.getPartyBonus(stat);
-
-                // 2. 固定加成值 = 裝備基礎屬性 + 特殊詛咒裝備效果
-                let flatBonus = this.getEquipmentBonus(stat); // 此處只應獲取裝備白字
+                let flatBonus = this.getEquipmentBonus(stat);
                 flatBonus += this.getAffixEffect(stat).bonus;
                 flatBonus -= this.getAffixPenalty();
 
-                // 3. 百分比乘積 = 所有標準詞綴的乘法效果疊乘
                 let multiplier = 1.0;
+                // 【新增】套用布服/皮甲的百分比加成
+                if (this.equipment.chest && this.equipment.chest.stats.all_stats_multiplier) {
+                    multiplier *= this.equipment.chest.stats.all_stats_multiplier;
+                }
+                
                 Object.values(this.equipment).forEach(item => {
                     if (!item) return;
                     item.affixes.forEach(affix => {
@@ -2591,12 +2702,9 @@
                     });
                 });
                 
-                // 4. 計算最終總值
                 let total = Math.floor((baseValue + flatBonus) * multiplier);
-                
                 total = Math.max(0, total);
                 
-                // 5. 最後套用飢餓懲罰
                 return isStarving ? Math.floor(total * 0.75) : total;
             }
             getBaseMaxHp(isStarving = false) {
@@ -2858,6 +2966,12 @@
                 pendingDecisions: [],
                 bailoutCounter: 0, // 【新增此行】用來計算玩家求助的次數
                 bailoutOfferedButRefused: false, // 【新增此行】記錄玩家是否拒絕過求助
+                dispatch: { 
+                    food: [], 
+                    wood: [], 
+                    stone: [] 
+                },
+                dispatchPreview: null,
                 screen: 'api_key_input', // 【修改】將初始畫面改為 API 輸入介面
                 userApiKey: '',          // 【新增】用來儲存玩家輸入的金鑰
                 musicSettings: {
@@ -3047,6 +3161,7 @@
                     merchantCamp: { level: 0, name: "商人營地" },
                 },
                 modals: {
+                    dispatch: { isOpen: false, activeTab: 'food' },
                     construction: { isOpen: false, activeTab: 'dungeon' },
                     dungeon: { subTab: 'manage', selectedBreedIds: [] },
                     barracks: { subTab: 'manage', selectedPartyIds: [] },
@@ -3220,6 +3335,65 @@
                     if (!this.player) return 0;
                     const rawStatSum = this.player.stats.strength + this.player.stats.agility + this.player.stats.intelligence + this.player.stats.luck;
                     return Math.floor(rawStatSum / 4);
+                },
+                get idlePartners() {
+                    const dispatchedIds = new Set([...this.dispatch.food, ...this.dispatch.wood, ...this.dispatch.stone]);
+                    return this.partners.filter(p => !dispatchedIds.has(p.id));
+                },
+                get dispatchedPartners() {
+                    const dispatchedIds = this.dispatch[this.modals.dispatch.activeTab] || [];
+                    return dispatchedIds.map(id => this.partners.find(p => p.id === id)).filter(Boolean);
+                },
+                //派遣系統核心函式
+                openDispatchCenter() {
+                    this.modals.dispatch.isOpen = true;
+                },
+                isDispatched(partnerId) {
+                    return this.dispatch.food.includes(partnerId) || this.dispatch.wood.includes(partnerId) || this.dispatch.stone.includes(partnerId);
+                },
+                dispatchPartner(partnerId) {
+                    if (this.isDispatched(partnerId)) return;
+                    const type = this.modals.dispatch.activeTab;
+                    this.dispatch[type].push(partnerId);
+                },
+                recallPartner(partnerId) {
+                    const type = this.modals.dispatch.activeTab;
+                    const index = this.dispatch[type].indexOf(partnerId);
+                    if (index > -1) {
+                        this.dispatch[type].splice(index, 1);
+                    }
+                },
+                calculateFoodYield(partner) {
+                    const totalStats = partner.getTotalStat('strength') + partner.getTotalStat('agility') + partner.getTotalStat('intelligence') + partner.getTotalStat('luck');
+                    const totalDamage = partner.calculateDamage();
+                    const totalHp = partner.calculateMaxHp();
+                    const score = totalStats + (totalDamage * 2) + (totalHp / 5);
+                    return Math.floor(score / 20);
+                },
+                calculateWoodYield(partner) {
+                    const totalStats = partner.getTotalStat('strength') + partner.getTotalStat('agility') + partner.getTotalStat('intelligence') + partner.getTotalStat('luck');
+                    const totalHp = partner.calculateMaxHp();
+                    const score = totalStats + (totalHp / 5);
+                    return Math.floor(score / 30);
+                },
+                calculateStoneYield(partner) {
+                    const totalStats = partner.getTotalStat('strength') + partner.getTotalStat('agility') + partner.getTotalStat('intelligence') + partner.getTotalStat('luck');
+                    const totalHp = partner.calculateMaxHp();
+                    const score = totalStats + (totalHp / 5);
+                    return Math.floor(score / 30);
+                },
+                previewDispatchYield(partner) {
+                    const statSum = partner.stats.strength + partner.stats.agility + partner.stats.intelligence + partner.stats.luck;
+                    this.dispatchPreview = {
+                        name: partner.name,
+                        foodYield: this.calculateFoodYield(partner),
+                        woodYield: this.calculateWoodYield(partner),
+                        stoneYield: this.calculateStoneYield(partner),
+                        consumption: Math.floor(statSum / 10)
+                    };
+                },
+                clearDispatchPreview() {
+                    this.dispatchPreview = null;
                 },
                 get currentlyEditingPartner() {
                     if (!this.modals.partnerEquipment.partnerId) return null;
@@ -3930,8 +4104,33 @@
                         }
                     });
                 },
-                // 請在您的程式碼中新增這個函式
                 continueNextDay() {
+                    //處理派遣資源生產
+                    let foodGained = 0;
+                    let woodGained = 0;
+                    let stoneGained = 0;
+                    
+                    const dispatchedFood = this.dispatch.food.map(id => this.partners.find(p => p.id === id)).filter(Boolean);
+                    dispatchedFood.forEach(p => foodGained += this.calculateFoodYield(p));
+
+                    const dispatchedWood = this.dispatch.wood.map(id => this.partners.find(p => p.id === id)).filter(Boolean);
+                    dispatchedWood.forEach(p => woodGained += this.calculateWoodYield(p));
+
+                    const dispatchedStone = this.dispatch.stone.map(id => this.partners.find(p => p.id === id)).filter(Boolean);
+                    dispatchedStone.forEach(p => stoneGained += this.calculateStoneYield(p));
+
+                    if (foodGained > 0) {
+                        this.resources.food = Math.min(this.foodCapacity, this.resources.food + foodGained);
+                        this.logMessage('tribe', `狩獵隊帶回了 ${foodGained} 單位食物。`, 'success');
+                    }
+                    if (woodGained > 0) {
+                        this.resources.wood = Math.min(this.woodCapacity, this.resources.wood + woodGained);
+                        this.logMessage('tribe', `伐木隊帶回了 ${woodGained} 單位木材。`, 'success');
+                    }
+                    if (stoneGained > 0) {
+                        this.resources.stone = Math.min(this.stoneCapacity, this.resources.stone + stoneGained);
+                        this.logMessage('tribe', `採礦隊帶回了 ${stoneGained} 單位礦石。`, 'success');
+                    }
                     // --- 商人來訪邏輯 ---
                     if (this.merchant.isPresent) {
                         this.merchant.stayDuration--;
@@ -4603,11 +4802,19 @@
                     this.merchant.goods = goods;
                 },
                 confirmPartySelection() {
-                    this.player.party = this.partners.filter(p => this.modals.barracks.selectedPartyIds.includes(p.id));
+                    const selectedParty = this.modals.barracks.selectedPartyIds
+                        .map(id => this.partners.find(p => p.id === id))
+                        .filter(p => p && !this.isDispatched(p.id));
+                    
+                    const dispatchedSelectionCount = this.modals.barracks.selectedPartyIds.length - selectedParty.length;
+                    if (dispatchedSelectionCount > 0) {
+                        this.showCustomAlert(`有 ${dispatchedSelectionCount} 名夥伴已被派遣，無法加入出擊隊伍。`);
+                    }
+
+                    this.player.party = selectedParty;
                     this.player.updateHp(this.isStarving);
                     this.logMessage('tribe', `你更新了出擊隊伍，現在有 ${this.player.party.length} 名夥伴與你同行。`, 'info');
 
-                    // 【新增】顯示一個提示框，告知玩家操作成功，增加操作回饋
                     this.showCustomAlert('出擊隊伍已更新！');
                 },
                                 
@@ -5253,26 +5460,21 @@
                 },
                 prepareToEndRaid(wasDefeated = false) {
                     if (wasDefeated) {
-                        this.endRaid(true); // 如果是戰敗，直接跳到結束流程
+                        this.endRaid(true);
                         return;
                     }
                     
                     const newCaptives = this.currentRaid.carriedCaptives;
-                    const currentDungeonCaptives = this.dungeonCaptives;
-
-                    // 【修改】新的觸發條件：當地牢的現有人 + 新抓的人 > 地牢容量時
-                    if (currentDungeonCaptives.length + newCaptives.length > this.captiveCapacity) {
-                        
+                    
+                    // 【修正點】從 this.dungeonCaptives 改為 this.captives
+                    if (this.captives.length + newCaptives.length > this.captiveCapacity) {
                         this.logMessage('tribe', '你帶回的俘虜過多，地牢無法容納！你需要從現有和新增的俘虜中決定去留...', 'warning');
-
-                        // 【修改】只將「原地牢俘虜」和「新抓的俘虜」放入選擇列表
                         this.openCaptiveManagementModal(
-                            'raid_return', // 使用一個新的類型來區分這個特殊情境
-                            [...currentDungeonCaptives, ...newCaptives],
-                            this.captiveCapacity // 上限為地牢的容量
+                            'raid_return',
+                            [...this.captives, ...newCaptives], //【修正點】使用完整的 captives 列表
+                            this.captiveCapacity
                         );
                     } else {
-                        // 容量充足，直接結束掠奪
                         this.endRaid(false);
                     }
                 },
@@ -6023,14 +6225,13 @@
                         if (victory) {
                             this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
 
-                            // 處理俘虜
                             const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
                             if (defeatedFemales.length > 0) {
-                                if ((this.dungeonCaptives.length + defeatedFemales.length) > this.captiveCapacity) {
+                                if ((this.captives.length + defeatedFemales.length) > this.captiveCapacity) { //【修正點】使用 this.captives.length
                                     this.logMessage('tribe', '地牢空間不足，你需要決定俘虜的去留...', 'warning');
                                     this.pendingDecisions.push({
                                         type: 'dungeon',
-                                        list: [...this.dungeonCaptives, ...defeatedFemales],
+                                        list: [...this.captives, ...defeatedFemales], //【修正點】從 this.captives 取代 this.dungeonCaptives
                                         limit: this.captiveCapacity,
                                         context: { postBattleBirths: this.postBattleBirths }
                                     });
@@ -6040,24 +6241,18 @@
                                 }
                             }
 
-                            // 恢復狀態
                             this.player.currentHp = this.player.maxHp;
                             this.partners.forEach(p => p.currentHp = p.maxHp);
                             
-                            // 處理戰鬥前暫停的出生事件
                             (this.postBattleBirths || []).forEach(mother => this.giveBirth(mother));
                             this.postBattleBirths = [];
 
-                            // 清理戰鬥狀態並返回部落畫面
                             this.finishCombatCleanup(true);
-
-                            // **核心修正**：呼叫新函式，繼續當天的剩餘流程
                             this.continueNextDay();
                         } else {
-                            // 戰敗邏輯不變，直接觸發重生
                             this.prepareToEndRaid(true);
                         }
-                        return; // 結束函式，不再執行後續的掠奪邏輯
+                        return;
                     }
 
                     // --- 原有的掠奪戰鬥處理邏輯（維持不變）---
@@ -6540,12 +6735,9 @@
                             throw new Error("存檔中缺少玩家資料！");
                         }
 
-                        // 【核心修正】建立一個輔助函式，用於將純資料物件還原為 Equipment 類別實例
                         const rehydrateEquipment = (itemData) => {
                             if (!itemData) return null;
-                            // 建立一個新的 Equipment 實例
                             const newItem = new Equipment(itemData.baseName, itemData.type, itemData.slot, itemData.material, itemData.quality, itemData.specialAffix);
-                            // 將存檔中的所有屬性複製過去
                             Object.assign(newItem, itemData);
                             return newItem;
                         };
@@ -6555,7 +6747,6 @@
                             for (const key in source) {
                                 if (Object.prototype.hasOwnProperty.call(source, key)) {
                                     if (typeof target[key] !== 'function') {
-                                        // 對裝備相關的屬性進行特殊處理
                                         if (key === 'equipment') {
                                             target.equipment.mainHand = rehydrateEquipment(source.equipment.mainHand);
                                             target.equipment.offHand = rehydrateEquipment(source.equipment.offHand);
@@ -6570,40 +6761,39 @@
                             }
                         };
                         
-                        // 還原倉庫物品
                         this.warehouseInventory = (parsedData.warehouseInventory || []).map(itemData => rehydrateEquipment(itemData));
 
-                        // 還原夥伴
                         this.partners = (parsedData.partners || []).map(pData => {
                             const partner = new Goblin(pData.name, pData.stats || {});
                             safelyAssign(partner, pData);
                             return partner;
                         });
 
-                        // 修復舊存檔中孕母狀態丟失的問題
-                        this.captives.forEach(c => {
-                            // 如果一個俘虜：不是懷孕狀態，懷孕計時器為0或不存在，且身上沒有 isMother 標記
-                            if (!c.isPregnant && (!c.pregnancyTimer || c.pregnancyTimer <= 0) && typeof c.isMother === 'undefined') {
-                                // 我們可以合理推斷她是在舊版本中已經生產完畢的母親
-                                const wasInMaternityInOldSave = parsedData.mothers?.some(m => m.id === c.id);
-                                if (wasInMaternityInOldSave) { // 雙重檢查，確保她確實曾是孕母
-                                    c.isMother = true;
-                                }
+                        // 【 Bug 修復：新增完整的俘虜還原邏輯 】
+                        this.captives = (parsedData.captives || []).map(cData => {
+                            let captive;
+                            // 判斷是否為騎士團成員，以使用正確的類別來還原
+                            if (Object.keys(KNIGHT_ORDER_UNITS).includes(cData.profession)) {
+                                captive = new FemaleKnightOrderUnit(cData.profession, 0, cData.originDifficulty || 'easy');
+                            } else {
+                                // 其他所有女性俘虜（居民、公主、魅魔等）都使用 FemaleHuman 類別
+                                captive = new FemaleHuman(cData.name, cData.stats || {}, cData.profession, cData.visual, cData.originDifficulty || 'easy');
                             }
+                            // 安全地將存檔中的所有屬性（isPregnant, pregnancyTimer, isMother...）複製到新建立的物件上
+                            safelyAssign(captive, cData);
+                            return captive;
                         });
 
-                        // 還原玩家
+
                         const loadedPlayerInstance = new Player(parsedData.player.name, parsedData.player.stats || {});
                         safelyAssign(loadedPlayerInstance, parsedData.player);
                         this.player = loadedPlayerInstance;
 
-                        // 還原隊伍
                         const partnersMap = new Map(this.partners.map(p => [p.id, p]));
                         this.player.party = (parsedData.player.party || [])
                             .map(pData => partnersMap.get(pData.id))
                             .filter(Boolean);
                         
-                        // --- 繼續載入其他遊戲數據 ---
                         this.resources = parsedData.resources;
                         
                         const defaultBuildings = {
@@ -6655,6 +6845,8 @@
                     { baseName: '法杖', type: 'weapon', slot: 'mainHand' },
                     { baseName: '盾', type: 'weapon', slot: 'offHand' },
                     { baseName: '鎧甲', type: 'armor', slot: 'chest' },
+                    { baseName: '布服', type: 'armor', slot: 'chest' },
+                    { baseName: '皮甲', type: 'armor', slot: 'chest' },
                 ],
                 get availableMaterials() {
                     if (this.buildings.armory.level === 0) return [];
@@ -6670,9 +6862,18 @@
                         return { amount: 0, type: '' };
                     }
                     const material = EQUIPMENT_MATERIALS[materialKey];
+                    // 【修改】根據材料類型回傳正確的資源文字
+                    let resourceType = '';
+                    if (material.type === 'metal') {
+                        resourceType = '礦石';
+                    } else if (material.type === 'wood') {
+                        resourceType = '木材';
+                    } else if (material.type === 'food') {
+                        resourceType = '食物';
+                    }
                     return {
                         amount: material.cost,
-                        type: material.type === 'metal' ? '礦石' : '木材'
+                        type: resourceType
                     };
                 },
                 get canAffordCraft() {
@@ -6683,6 +6884,10 @@
                     if (cost.type === '木材') {
                         return this.resources.wood >= cost.amount;
                     }
+                    // 【新增】判斷食物是否足夠
+                    if (cost.type === '食物') {
+                        return this.resources.food >= cost.amount;
+                    }
                     return false;
                 },
                 craftItem() {
@@ -6690,26 +6895,43 @@
                         this.showCustomAlert('資源不足！');
                         return;
                     }
-                    // 【修正】將 equipmentCapacity 改為正確的 backpackCapacity，以正確檢查背包容量
                     if (this.player.inventory.length >= this.backpackCapacity) {
                         this.showCustomAlert('你的背包已滿，無法製作新裝備！');
                         return;
                     }
                     const cost = this.getCraftingCost();
+                    // 【修改】根據成本類型扣除對應資源
                     if (cost.type === '礦石') {
                         this.resources.stone -= cost.amount;
-                    } else {
+                    } else if (cost.type === '木材') {
                         this.resources.wood -= cost.amount;
+                    } else if (cost.type === '食物') {
+                        this.resources.food -= cost.amount;
+                    }
+
+                    const selectedType = this.craftableTypes.find(t => t.baseName === this.modals.armory.craftingType);
+                    const selectedMaterial = EQUIPMENT_MATERIALS[this.modals.armory.craftingMaterial];
+
+                    // 【新增】檢查製作類型和材料是否匹配
+                    if ((selectedType.baseName === '布服' || selectedType.baseName === '皮甲') && selectedMaterial.type !== 'food') {
+                         this.showCustomAlert('製作布服或皮甲只能使用食物類材料！');
+                         if (cost.type === '礦石') this.resources.stone += cost.amount;
+                         else if (cost.type === '木材') this.resources.wood += cost.amount;
+                         return;
+                    }
+                    if (selectedType.baseName !== '布服' && selectedType.baseName !== '皮甲' && selectedMaterial.type === 'food') {
+                         this.showCustomAlert('食物類材料只能用於製作布服或皮甲！');
+                         this.resources.food += cost.amount;
+                         return;
                     }
 
                     const roll = randomInt(1, 100);
                     let qualityKey = 'worn';
-                    if (roll <= 5) qualityKey = 'legendary';      // GDD 13.5 機率為 5%
-                    else if (roll <= 15) qualityKey = 'epic';     // GDD 13.5 機率為 10%
-                    else if (roll <= 32) qualityKey = 'rare';     // GDD 13.5 機率為 17%
-                    else if (roll <= 58) qualityKey = 'uncommon'; // GDD 13.5 機率為 26%
-                    else if (roll <= 93) qualityKey = 'common';   // GDD 13.5 機率為 35%
-                                                                // 剩下 7% 為 worn
+                    if (roll <= 5) qualityKey = 'legendary';
+                    else if (roll <= 15) qualityKey = 'epic';
+                    else if (roll <= 32) qualityKey = 'rare';
+                    else if (roll <= 58) qualityKey = 'uncommon';
+                    else if (roll <= 93) qualityKey = 'common';
 
                     const newItem = this.createEquipment(
                         this.modals.armory.craftingMaterial,
@@ -6719,8 +6941,6 @@
 
                     this.player.inventory.push(newItem);
                     this.logMessage('tribe', `你成功製作了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
-
-                    // 【新增】顯示一個包含詳細結果的提示框，給予玩家即時回饋
                     this.showCustomAlert(`製作成功！\n你獲得了 [${newItem.name}]`);
                 },
                 decomposeItem(itemId) {
