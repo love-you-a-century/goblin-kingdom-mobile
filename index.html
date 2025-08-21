@@ -2720,15 +2720,15 @@
                 }, 0);
             }
 
-            // 【新增】從 Goblin 類別複製過來的函式
             getTotalStat(stat, isStarving = false) {
-                if (!this.stats.hasOwnProperty(stat)) return 0;
-                let baseValue = this.stats[stat];
+                // 【核心修正】如果 this.stats 中沒有該屬性，或屬性值為 undefined/null，則將 baseValue 安全地設為 0
+                let baseValue = this.stats[stat] || 0; 
                 let flatBonus = this.getEquipmentBonus(stat);
                 
                 let multiplier = 1.0; // 敵人暫不處理複雜的詞綴乘法
                 
-                let total = Math.floor((baseValue + flatBonus) * multiplier);
+                // 確保進行運算的都是有效數字
+                let total = Math.floor(((baseValue || 0) + (flatBonus || 0)) * multiplier);
                 return isStarving ? Math.floor(total * 0.75) : total;
             }
 
