@@ -1,0 +1,382 @@
+         /* 【新增此段】地圖響應式樣式 */
+        .map-container-responsive {
+            width: 100%;
+            max-width: 480px; /* 【修改】地圖最大不會超過 480px */
+            aspect-ratio: 480 / 700; /* 【修改】維持新的直式長寬比 */
+            position: relative;
+            margin: 0 auto; /* 置中 */
+        }
+        .map-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 480px; /* 【修改】畫布的邏輯尺寸更新 */
+            height: 700px; /* 【修改】畫布的邏輯尺寸更新 */
+            transform-origin: top left; /* 設定縮放的基準點為左上角 */
+        }
+        :root {
+            --primary-bg: #2d3748;
+            --secondary-bg: #1a202c;
+            --border-color: #4a5568;
+            --text-primary: #cbd5e0;
+            --text-secondary: #a0aec0;
+            --accent-color: #8C6D46;
+            --accent-hover: #A98458;
+            --accent-text: #F0E6D2;
+            --danger-color: #e53e3e;
+            --success-color: #48bb78;
+            --warning-color: #f6e05e;
+            --crit-color: #f6e05e;
+            --skill-color: #f687b3;
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: var(--secondary-bg);
+            color: var(--text-primary);
+        }
+
+        .font-medieval {
+            font-family: 'MedievalSharp', cursive;
+        }
+
+        .game-container {
+            border: 4px solid var(--border-color);
+            background: linear-gradient(145deg, #3a475b, #2d3748); /* 新增漸層背景 */
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0,0,0,0.3); /* 新增內陰影增加深度 */
+            border-image: url('https://i.imgur.com/g23zL5V.png') 10 stretch; /* 新增圖片邊框，創造雕刻感 */
+        }
+
+        .game-title-wrapper {
+            position: relative;
+        }
+
+        .game-title {
+            font-family: 'MedievalSharp', cursive; /* 將所有標題改為中世紀字體 */
+            background-color: var(--primary-bg);
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            display: inline-block;
+            padding: 0 0.5rem;
+            position: absolute;
+            top: -1.2rem;
+            left: 1rem;
+            z-index: 1;
+        }
+
+        .modal-content h2.game-title {
+            font-family: 'MedievalSharp', cursive;
+        }
+
+        .font-accent {
+            font-family: 'MedievalSharp', cursive;
+            color: var(--warning-color); /* 給予一個醒目的顏色 */
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 700;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 0.875rem;
+        }
+
+        .btn-xs {
+            padding: 2px 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: var(--accent-text);
+            border: 2px solid #5A4429;
+            box-shadow: 0 2px 0 #5A4429; /* 加上底部陰影 */
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 0 #5A4429; /* 滑鼠懸浮時陰影加深 */
+        }
+
+        .btn-secondary {
+            background-color: #4a5568;
+            color: var(--accent-text);
+            border-color: #2d3748;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: #718096;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+            border-color: #c53030;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+            color: white;
+            border-color: #38a169;
+        }
+
+        .btn:disabled {
+            background-color: #575757;
+            color: #9e9e9e;
+            cursor: not-allowed;
+            border-color: #444;
+        }
+
+        .modal {
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            max-height: 90vh;
+            width: 100%;
+            max-width: 600px;
+            animation: fadeIn 0.3s ease-out; /* 新增淡入動畫 */
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .log-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        .log-panel::-webkit-scrollbar-track {
+            background: #2d3748;
+            border-radius: 4px;
+        }
+        .log-panel::-webkit-scrollbar-thumb {
+            background: var(--accent-color);
+            border-radius: 4px;
+        }
+        .log-panel::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-hover);
+        }
+
+        .log-panel {
+            background-color: rgba(0, 0, 0, 0.4); /* 背景加深 */
+            border-radius: 8px;
+            padding: 12px;
+            height: 200px;
+            overflow-y: scroll;
+            font-family: monospace;
+            font-size: 0.875rem;
+            border: 2px solid #1a202c; /* 邊框加深 */
+            box-shadow: inset 0 0 8px rgba(0,0,0,0.5); /* 加上內陰影 */
+        }
+
+        .log-entry {
+            padding-bottom: 4px;
+            border-bottom: 1px dashed var(--border-color);
+            margin-bottom: 4px;
+        }
+
+        .log-entry.player {
+            color: #63b3ed;
+        }
+
+        .log-entry.enemy {
+            color: #f56565;
+        }
+
+        .log-entry.system {
+            color: #f6e05e;
+        }
+
+        .log-entry.info {
+            color: #90cdf4;
+        }
+
+        .log-entry.success {
+            color: var(--success-color);
+        }
+
+        .log-entry.crit {
+            color: var(--crit-color);
+            font-weight: bold;
+        }
+
+        .log-entry.skill {
+            color: var(--skill-color);
+            font-weight: bold;
+        }
+
+        .stat-input::-webkit-outer-spin-button,
+        .stat-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .stat-input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+
+        .glow-pulse {
+            animation: glow 2s infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                box-shadow: 0 0 5px #f6e05e, 0 0 10px #f6e05e;
+            }
+
+            to {
+                box-shadow: 0 0 15px #f6e05e, 0 0 25px #f6e05e;
+            }
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--accent-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(2px); /* 按下時的下沉效果 */
+            box-shadow: none; /* 按下時陰影消失 */
+        }
+        /* --- 新增的場景樣式 (2D版本) --- */
+        .scene-container {
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1 / 1;
+            position: relative;
+            background: radial-gradient(circle, #2d3748 50%, #1a202c 100%);
+            overflow: hidden;
+            border-radius: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .arena-floor {
+            position: relative;
+            width: 85%;
+            height: 85%;
+            background: #2a3442;
+            border-radius: 50%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(0,0,0,0.5);
+            border: 2px solid #1e2530;
+        }
+
+        /* 使用偽元素繪製六芒星 */
+        .arena-floor::before, .arena-floor::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-left: 120px solid transparent;
+            border-right: 120px solid transparent;
+            transform-origin: center;
+        }
+        .arena-floor::before {
+            border-bottom: 208px solid rgba(246, 224, 94, 0.1);
+            transform: translate(-50%, -66.66%);
+        }
+        .arena-floor::after {
+            border-top: 208px solid rgba(246, 224, 94, 0.1);
+            transform: translate(-50%, -33.33%);
+        }
+        
+        /* 石柱 */
+        .pillar {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            background: linear-gradient(45deg, #333, #555);
+            border: 2px solid #222;
+            border-radius: 50%;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+
+        /* 單位 (點) */
+        .unit {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px 3px currentColor, inset 0 0 5px rgba(255,255,255,0.3);
+            transform: translate(-50%, -50%); /* 讓 top/left 定位點在中心 */
+            cursor: pointer; /* 新增鼠標指針 */
+            transition: transform 0.2s ease; /* 新增懸停動畫 */
+        }
+        .unit:hover {
+            transform: translate(-50%, -50%) scale(1.5); /* 懸停時放大 */
+        }
+        .player { background-color: var(--player-color); color: var(--player-color); cursor: default; }
+        .knight { background-color: var(--knight-color); color: var(--knight-color); }
+        .princess { background-color: var(--princess-color); color: var(--princess-color); }
+        
+        /* 王座 */
+        .throne {
+            position: absolute;
+            width: 50px;
+            height: 40px;
+            background-color: #4a3a2a;
+            border: 2px solid #2a1a0a;
+            border-radius: 10px;
+            transform: translate(-50%, -50%);
+        }
+
+        /* 光塵特效 */
+        .dust-particle {
+            position: absolute;
+            background-color: rgba(255, 255, 220, 0.4);
+            border-radius: 50%;
+            animation: float 20s infinite linear;
+            pointer-events: none; /* 讓粒子不影響點擊 */
+        }
+        @keyframes float {
+            0% { transform: translate(0, 0); opacity: 0; }
+            25% { opacity: 1; }
+            50% { transform: translate(var(--tx), var(--ty)); }
+            75% { opacity: 1; }
+            100% { transform: translate(0, 0); opacity: 0; }
+        }
