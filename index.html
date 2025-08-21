@@ -598,7 +598,17 @@
                                                 <div>
                                                     <p class="font-bold" x-text="p.name"></p>
                                                     <p class="text-xs text-gray-400">力:<span x-text="p.stats.strength"></span> 敏:<span x-text="p.stats.agility"></span> 智:<span x-text="p.stats.intelligence"></span> 運:<span x-text="p.stats.luck"></span></p>
-                                                </div>
+
+                                                    <p class="text-sm text-green-400 mt-1" x-show="modals.dispatch.activeTab === 'hunting'">
+                                                        預計產量: <strong x-text="getGoblinYield(p, 'hunting')"></strong> 食物
+                                                    </p>
+                                                    <p class="text-sm text-yellow-500 mt-1" x-show="modals.dispatch.activeTab === 'logging'">
+                                                        預計產量: <strong x-text="getGoblinYield(p, 'logging')"></strong> 木材
+                                                    </p>
+                                                    <p class="text-sm text-gray-400 mt-1" x-show="modals.dispatch.activeTab === 'mining'">
+                                                        預計產量: <strong x-text="getGoblinYield(p, 'mining')"></strong> 礦石
+                                                    </p>
+                                                    </div>
                                                 <button @click="assignToDispatch(p.id, task)" class="btn btn-sm btn-success">指派</button>
                                             </div>
                                         </template>
