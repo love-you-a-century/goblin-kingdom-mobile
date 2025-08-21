@@ -4151,35 +4151,37 @@ const gameLogic = {
     removeFromDispatch(partnerId, task) {
         this.dispatch[task] = this.dispatch[task].filter(id => id !== partnerId);
     },
+    
+    getGoblinYield(goblin, task) {
+        // 這就是我們的「單一哥布林產量計算機」
+        if (!goblin) return 0;
+        // 先計算基礎四圍總和
+        const totalStats = goblin.stats.strength + goblin.stats.agility + goblin.stats.intelligence + goblin.stats.luck;
+
+        switch (task) {
+            case 'hunting': {
+                // 打獵的產量 = (四圍總和 * 0.5) + (傷害 * 0.25)
+                const damage = goblin.calculateDamage(this.isStarving);
+                return Math.floor(totalStats * 0.5 + damage * 0.25);
+            }
+            case 'logging':
+            case 'mining': {
+                // 伐木和採礦的產量 = (四圍總和 * 0.2)
+                return Math.floor(totalStats * 0.2);
+            }
+            default:
+                return 0;
+        }
+    },
     calculateDispatchYields() {
-        let foodGained = 0;
-        let woodGained = 0;
-        let stoneGained = 0;
+        // 升級後的「每日結算」函式，現在它會使用上面的計算機
+        const huntingGoblins = this.getDispatchedPartners('hunting');
+        const loggingGoblins = this.getDispatchedPartners('logging');
+        const miningGoblins = this.getDispatchedPartners('mining');
 
-        // 計算打獵收益
-        this.getDispatchedPartners('hunting').forEach(goblin => {
-            const totalStats = goblin.stats.strength + goblin.stats.agility + goblin.stats.intelligence + goblin.stats.luck;
-            const damage = goblin.calculateDamage(this.isStarving);
-            // 食物獲取量與全能力和傷害掛勾
-            const yieldAmount = Math.floor(totalStats * 0.5 + damage * 0.25);
-            foodGained += yieldAmount;
-        });
-
-        // 計算伐木收益
-        this.getDispatchedPartners('logging').forEach(goblin => {
-            const totalStats = goblin.stats.strength + goblin.stats.agility + goblin.stats.intelligence + goblin.stats.luck;
-            // 木材獲取量只與全能力掛勾
-            const yieldAmount = Math.floor(totalStats * 0.2);
-            woodGained += yieldAmount;
-        });
-
-        // 計算採礦收益
-        this.getDispatchedPartners('mining').forEach(goblin => {
-            const totalStats = goblin.stats.strength + goblin.stats.agility + goblin.stats.intelligence + goblin.stats.luck;
-            // 礦石獲取量只與全能力掛勾
-            const yieldAmount = Math.floor(totalStats * 0.2);
-            stoneGained += yieldAmount;
-        });
+        const foodGained = huntingGoblins.reduce((sum, goblin) => sum + this.getGoblinYield(goblin, 'hunting'), 0);
+        const woodGained = loggingGoblins.reduce((sum, goblin) => sum + this.getGoblinYield(goblin, 'logging'), 0);
+        const stoneGained = miningGoblins.reduce((sum, goblin) => sum + this.getGoblinYield(goblin, 'mining'), 0);
 
         if (foodGained > 0) {
             this.resources.food = Math.min(this.foodCapacity, this.resources.food + foodGained);
@@ -4193,5 +4195,5 @@ const gameLogic = {
             this.resources.stone = Math.min(this.stoneCapacity, this.resources.stone + stoneGained);
             this.logMessage('tribe', `採礦隊帶回了 ${stoneGained} 單位礦石。`, 'success');
         }
-    },
+    },  
 };
