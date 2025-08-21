@@ -3598,6 +3598,7 @@ const gameLogic = {
             resources: this.resources,
             buildings: this.buildings,
             day: this.day,
+            dispatch: this.dispatch, 
             narrativeMemory: this.narrativeMemory,
             tutorial: this.tutorial,
             breedingChargesLeft: this.breedingChargesLeft,
@@ -3794,6 +3795,7 @@ const gameLogic = {
             this.buildings = { ...defaultBuildings, ...parsedData.buildings };
 
             this.day = parsedData.day;
+            this.dispatch = parsedData.dispatch || { hunting: [], logging: [], mining: [] }; 
             this.narrativeMemory = parsedData.narrativeMemory;
             this.tutorial = { ...{ active: false, step: 0, merchantMet: false }, ...parsedData.tutorial };
             this.breedingChargesLeft = parsedData.breedingChargesLeft;
