@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.00</title>
+    <title>哥布林王國v5.02</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,44 +21,67 @@
         <audio x-ref="audioPlayer" loop></audio>
 
         <template x-if="screen === 'api_key_input'">
-        <div id="api-key-screen" x-cloak>
-            <div class="max-w-xl mx-auto game-container relative p-8 rounded-lg pt-10 text-center">
-                <h1 class="game-title font-medieval">設定 API 金鑰</h1>
-                <p class="text-left text-gray-300 mb-4">
-                    本遊戲的 AI 敘事功能（如序幕、誕生、繁衍故事）由 Google Gemini Pro 提供技術支援。為了使用這些功能，您需要一組自己的 API 金鑰。
-                </p>
-                <p class="text-left text-gray-300 mb-4">
-                    您可以點擊下方連結免費取得。取得後，請將金鑰貼入輸入框中。
-                </p>
-                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400 hover:underline mb-4 inline-block">
-                    前往 Google AI Studio 取得免費 API 金鑰
-                </a>
+            <div id="api-key-screen" x-cloak>
+                <div class="max-w-xl mx-auto game-container relative p-8 rounded-lg pt-10 text-center">
+                    <h1 class="game-title font-medieval">設定 API 金鑰</h1>
+                    <p class="text-left text-gray-300 mb-4">
+                        本遊戲的 AI 敘事功能（如序幕、誕生、繁衍故事）由 Google Gemini Pro 提供技術支援。為了使用這些功能，您需要一組自己的 API 金鑰。
+                    </p>
+                    <p class="text-left text-gray-300 mb-4">
+                        您可以點擊下方連結免費取得。取得後，請將金鑰貼入輸入框中。
+                    </p>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400 hover:underline mb-4 inline-block">
+                        前往 Google AI Studio 取得免費 API 金鑰
+                    </a>
 
-                <input type="text" x-model="userApiKey" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 mb-6" placeholder="請在此貼上您的 API 金鑰...">
+                    <input type="text" x-model="userApiKey" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 mb-6" placeholder="請在此貼上您的 API 金鑰...">
 
-                <div class="flex justify-center space-x-4">
-                    <button @click="submitApiKey()" class="btn btn-primary">儲存金鑰並開始遊戲</button>
-                    <button @click="proceedToGame()" class="btn btn-secondary">跳過，直接開始</button>
+                    <div class="flex justify-center space-x-4">
+                        <button @click="submitApiKey()" class="btn btn-primary">儲存金鑰並開始遊戲</button>
+                        <button @click="proceedToGame()" class="btn btn-secondary">跳過，直接開始</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-4">（金鑰將只會儲存在您的瀏覽器本機，不會上傳到任何伺服器。）</p>
                 </div>
-                <p class="text-xs text-gray-500 mt-4">（金鑰將只會儲存在您的瀏覽器本機，不會上傳到任何伺服器。）</p>
             </div>
-        </div>
-    </template>
+        </template>
+
     <!-- 遊戲開場敘事畫面 -->
      <div> <template x-if="screen === 'intro'">
         <div id="intro-screen" x-cloak>
         <div class="max-w-3xl mx-auto game-container relative p-8 rounded-lg flex flex-col items-center pt-10">
             <h1 class="game-title font-medieval">序幕</h1>
             <div class="min-h-[300px] w-full flex items-center justify-center p-4 bg-black bg-opacity-20 rounded mb-4">
-                <div x-show="modals.narrative.isAwaitingConfirmation" class="text-center">
-                    <p class="mb-4">是否要使用 AI 生成遊戲序幕故事？</p>
-                    <button @click="generateIntroNarrative()" class="btn btn-primary">是，生成序幕</button>
-                </div>
-                <div x-show="modals.narrative.isLoading" class="loader"></div>
-                <p x-show="!modals.narrative.isLoading && !modals.narrative.isAwaitingConfirmation" x-html="modals.narrative.content"
-                    class="text-lg leading-relaxed"></p>
+                <p class="text-lg leading-relaxed">
+                    (陰沉的天空下著濛濛細雨，冰冷的泥土沾滿全身)<br>
+                    <br>
+                    我，一個在現代都市中，忽然結束生命的人，卻在睜開雙眼時，發現自己身處一個截然不同的世界。沒有高樓大廈，沒有霓虹燈火，只有一個荒蕪一人的部落。<br>
+                    當我試圖撐起身體，映入眼簾的，是一雙粗糙的綠色手掌。<br>
+                    <br>
+                    「不，這不是我的手...」我開始低頭審視著自己<br>
+                    <br>
+                    鏡面般的水窪倒映出一個面目猙獰長著尖耳、獠牙的生物——哥布林。<br>
+                    <br>
+                    「最弱小的魔物？」一個在冒險者眼中等同於經驗值的存在。<br>
+                    <br>
+                    恐懼與絕望再次襲來，但在這荒涼的世界裡，沒有時間自怨自艾，一股原始的求生本能取代了所有負面情緒。<br>
+                    我知道，在這個充滿敵意的世界，必須拋棄過去的一切，從零開始。<br>
+                    沒有同伴，沒有退路，必須獨自面對。<br>
+                    掠奪、繁衍，用最原始的方式在這片土地上掙扎求生，建立只屬於自己的哥布林王國。<br>
+                    <br>
+                    <br>
+                    ====故事不是從勇者屠龍開始，而是從一隻哥布林====<br>
+                    <br>
+                    <br>
+                    <br>
+                    <br>
+                    <br>
+                    <br>
+                    <br>
+                    <br>
+                    ？？？？「祝zj6...u.3的...死j;6回ejo ...」<br>
+                </p>
             </div>
-            <button @click="screen = 'creation'" class="btn btn-primary">跳過</button>
+            <button @click="screen = 'creation'" class="btn btn-primary">開始遊戲</button>
         </div>
     </div> </template>
 
@@ -96,7 +119,7 @@
             </div>
             <div class="text-center mt-8 space-x-4">
                 <button @click="createCharacter()" class="btn btn-primary text-xl">創建我的哥布林王</button>
-                <button x-show="hasSaveFile" @click="loadGame()" class="btn btn-secondary text-xl">讀取遊戲</button>
+                <button x-show="hasSaveFile" @click="loadGame()" class="btn btn-secondary text-xl">讀取進度</button>
             </div>
         </div>
     </template>
@@ -349,6 +372,11 @@
                             <div class="flex space-x-4">
                                 <button @click="saveGame()" class="btn btn-primary">儲存進度</button>
                                 <button x-show="hasSaveFile" @click="loadGame()" class="btn btn-secondary">讀取進度</button>
+                                <button @click="exportGame()" class="btn btn-secondary">輸出存檔</button>
+                            </div>
+                            <div class="mt-4">
+                                <textarea x-model="importSaveData" rows="4" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="請將備份的遊戲存檔貼到這裡..."></textarea>
+                                <button @click="importGame()" class="btn btn-primary w-full mt-2">匯入存檔</button>
                             </div>
                         </div>
     
