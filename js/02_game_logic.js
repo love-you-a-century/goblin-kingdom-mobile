@@ -740,28 +740,15 @@ const gameLogic = {
             this.userApiKey = savedKey;
         }
     },
-    prepareIntroNarrative() {
-        const modal = this.modals.narrative;
-        modal.isAwaitingConfirmation = true;
-        modal.isLoading = false;
-        modal.content = '';
-        this.screen = 'intro';
-    },
     proceedToGame() {
-        this.screen = 'creation'; // 直接跳到創角
-        // 如果玩家是第一次玩（沒有存檔），則準備序章故事
-        if (!this.player) {
-            this.prepareIntroNarrative();
-        }
+        // 確保畫面永遠先進入序幕
+        this.screen = 'intro';
     },
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.00 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.02 初始化...");
         this.checkForSaveFile();
-        if (!this.player) {
-            this.generateIntroNarrative();
-        }
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
             if (newScreen === 'tribe' && this.pendingDecisions.length > 0) {
@@ -3589,6 +3576,62 @@ const gameLogic = {
             }
         }
     },
+
+    importSaveData: '', // 新增一個屬性來儲存匯入的文字
+
+    exportGame() {
+        const saveData = localStorage.getItem('goblinKingSaveFile');
+        if (!saveData) {
+            this.showCustomAlert('沒有找到存檔，請先儲存遊戲。');
+            return;
+        }
+
+        // 使用 Clipboard API 進行自動複製
+        navigator.clipboard.writeText(saveData)
+            .then(() => {
+                this.showCustomAlert('遊戲存檔已複製到剪貼簿！請貼到安全的地方保存。');
+            })
+            .catch(err => {
+                console.error('自動複製失敗:', err);
+                // 如果自動複製失敗，回退到傳統的彈出視窗方式
+                this.showCustomAlert('自動複製失敗，請手動複製以下文字並妥善保存：<br><br>' + saveData);
+            });
+    },
+
+    // 匯入存檔方法
+    importGame() {
+        if (!this.importSaveData) {
+            this.showCustomAlert('請先貼上有效的存檔代碼！');
+            return;
+        }
+
+        try {
+            // 嘗試解析玩家貼上的 JSON 字串
+            const parsedData = JSON.parse(this.importSaveData);
+
+            // 檢查存檔資料的有效性，確保它是遊戲的存檔格式
+            if (parsedData && parsedData.player && parsedData.day) {
+                // 將解析後的資料存回 Local Storage
+                localStorage.setItem('goblinKingSaveFile', this.importSaveData);
+                this.showCustomAlert('存檔匯入成功！遊戲將自動重新載入...');
+
+                // 清空輸入框並重新載入遊戲，以應用新存檔
+                this.importSaveData = '';
+                setTimeout(() => {
+                    window.location.reload(); // 重新載入頁面
+                }, 1500);
+
+            } else {
+                // 如果解析失敗或資料格式不對，給予提示
+                this.showCustomAlert('無效的存檔代碼，請檢查格式是否正確！');
+            }
+        } catch (e) {
+            // 如果 JSON.parse 出錯，說明格式有問題
+            console.error('匯入存檔失敗:', e);
+            this.showCustomAlert('存檔代碼格式錯誤！請確認是完整的 JSON 字串。');
+        }
+    },
+
     saveGame() {
         const saveData = {
             player: this.player,
