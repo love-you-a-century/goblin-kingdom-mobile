@@ -54,14 +54,63 @@
                 this.skills = [];
                 this.statusEffects = [];
             }
+            getPartyBonus(stat) {
+                // 基礎單位沒有隊伍加成
+                return 0;
+            }
+            getEquipmentBonus(stat) {
+                // 基礎單位暫不計算裝備，除非之後為其添加邏輯
+                return 0;
+            }
+            getAffixEffect(stat) {
+                // 基礎單位沒有特殊詞綴效果
+                return { bonus: 0 };
+            }
+            getAffixPenalty() {
+                // 基礎單位沒有特殊詞綴懲罰
+                return 0;
+            }
+
             isAlive() { return this.currentHp > 0; }
             calculateMaxHp() { return 0; }
             
             getTotalStat(stat, isStarving = false) {
                 if (stat === 'hp') return this.calculateMaxHp(isStarving);
-                if (!this.stats.hasOwnProperty(stat)) return 0;
-                let total = this.stats[stat] || 0;
-                return total;
+                if (!this.stats.hasOwnProperty(stat) || !['strength', 'agility', 'intelligence', 'luck'].includes(stat)) {
+                    return 0;
+                }
+
+                // 1. 基礎值 = 自身原始值 + 夥伴加成
+                let baseValue = this.stats[stat] + this.getPartyBonus(stat);
+
+                // 2. 固定加成值 = 裝備基礎屬性 + 特殊詛咒裝備效果 (正負)
+                let flatBonus = this.getEquipmentBonus(stat);
+                flatBonus += this.getAffixEffect(stat).bonus;
+                flatBonus -= this.getAffixPenalty(); 
+
+                // 3. 百分比乘積
+                let multiplier = 1.0;
+                Object.values(this.equipment).forEach(item => {
+                    if (!item) return;
+                    item.affixes.forEach(affix => {
+                        if (affix.type !== 'stat') return;
+                        affix.effects.forEach(effect => {
+                            if (effect.stat === stat || effect.stat === 'all') {
+                                if (effect.type === 'multiplier') {
+                                    multiplier *= effect.value;
+                                }
+                            }
+                        });
+                    });
+                });
+                
+                // 4. 計算最終總值
+                let total = Math.floor((baseValue + flatBonus) * multiplier);
+                
+                total = Math.max(0, total);
+                
+                // 5. 最後套用飢餓懲罰
+                return isStarving ? Math.floor(total * 0.75) : total;
             }
 
             tickCooldowns() {
@@ -96,29 +145,7 @@
                     return sum + (item && item.stats && item.stats[stat] ? item.stats[stat] : 0);
                 }, 0);
             }
-            getTotalStat(stat, isStarving = false) {
-                if (!this.stats.hasOwnProperty(stat)) return 0;
-                let baseValue = this.stats[stat];
-                let flatBonus = this.getEquipmentBonus(stat);
-                
-                let multiplier = 1.0;
-                Object.values(this.equipment).forEach(item => {
-                    if (!item) return;
-                    item.affixes.forEach(affix => {
-                        if (affix.type !== 'stat') return;
-                        affix.effects.forEach(effect => {
-                            if (effect.stat === stat || effect.stat === 'all') {
-                                if (effect.type === 'multiplier') {
-                                    multiplier *= effect.value;
-                                }
-                            }
-                        });
-                    });
-                });
-                
-                let total = Math.floor((baseValue + flatBonus) * multiplier);
-                return isStarving ? Math.floor(total * 0.75) : total;
-            }
+
             calculateMaxHp(isStarving = false) {
                 const totalStr = this.getTotalStat('strength', isStarving);
                 const totalAgi = this.getTotalStat('agility', isStarving);
@@ -190,23 +217,25 @@
 
        class Player extends Goblin {
             constructor(name, stats, appearance, height, penisSize) {
-                super(name, stats);
-                this.appearance = appearance;
-                this.height = height;
-                this.penisSize = penisSize;
-                this.skillPoints = 0;
-                this.attributePoints = 0;
-                this.party = [];
-                this.avatarUrl = null;
-                this.inventory = [];
-                this.equipment = {
-                    mainHand: null,
-                    offHand: null,
-                    chest: null,
-                };
-                this.maxHp = this.calculateMaxHp();
-                this.currentHp = this.maxHp;
-            }
+            super(name, stats);
+            this.appearance = appearance;
+            this.height = height;
+            this.penisSize = penisSize;
+            this.skillPoints = 0;
+            this.attributePoints = 0;
+            this.party = [];
+            this.avatarUrl = null;
+            this.inventory = [];
+            this.equipment = {
+                mainHand: null,
+                offHand: null,
+                chest: null,
+            };
+            this.maxHp = 1;     // 給一個暫時的預設值，避免出錯
+            this.currentHp = 1;   // 給一個暫時的預設值
+        }
+
+
             getPartyBonus(stat) {
                 if (!this.party || !stat || stat === 'hp' || stat === 'damage') return 0;
                 const totalBonus = this.party.reduce((sum, p) => sum + (p.stats[stat] || 0), 0);
@@ -230,12 +259,10 @@
                 
                 const totalStat = this.getTotalStat(stat, this.isStarving);
                 
-                // 計算出所有非裝備來源的屬性總和
                 let baseValue = this.stats[stat] + this.getPartyBonus(stat);
                 baseValue += this.getAffixEffect(stat).bonus;
-                baseValue -= this.getAffixPenalty();
+                baseValue -= this.getAffixPenalty(); // Subtract the penalty here
                 
-                // 從最終總屬性中減去非裝備屬性，得出的就是裝備提供的等效加成值
                 const effectiveBonus = totalStat - baseValue;
 
                 return Math.round(effectiveBonus);
@@ -244,60 +271,169 @@
             getAffixEffect(stat) {
                 const bonus = { bonus: 0 };
                 if (!this.equipment) return bonus;
+
+                // 重新計算基礎值為0的屬性，這是判斷詛咒生效的關鍵
                 const zeroStats = Object.keys(this.stats).filter(s => ['strength', 'agility', 'intelligence', 'luck'].includes(s) && this.stats[s] === 0);
 
-                const checkAffix = (item, affixName, requiredStat, bonusValue) => {
-                    if (item && item.specialAffix === affixName && this.stats[requiredStat] === 0) {
-                        if (stat === requiredStat) {
-                            bonus.bonus += bonusValue;
-                        }
-                    }
-                };
-                
-                checkAffix(this.equipment.mainHand, 'strength_curse', 'strength', 10);
-                checkAffix(this.equipment.mainHand, 'agility_curse', 'agility', 10);
-                checkAffix(this.equipment.mainHand, 'intelligence_curse', 'intelligence', 10);
-                checkAffix(this.equipment.mainHand, 'luck_curse', 'luck', 10);
+                // 遍歷所有已裝備的物品
+                Object.values(this.equipment).forEach(item => {
+                    if (!item || !item.specialAffix) return;
 
-                if (this.equipment.offHand && this.equipment.offHand.specialAffix === 'gundam_curse' && zeroStats.length === 2) {
-                    if (zeroStats.includes(stat)) {
-                        bonus.bonus += 8;
+                    switch (item.specialAffix) {
+                        // 詛咒單一屬性的裝備
+                        case 'strength_curse':
+                            if (zeroStats.includes('strength')) {
+                                if (stat === 'strength') bonus.bonus += 10;
+                            }
+                            break;
+                        case 'agility_curse':
+                            if (zeroStats.includes('agility')) {
+                                if (stat === 'agility') bonus.bonus += 10;
+                            }
+                            break;
+                        case 'intelligence_curse':
+                            if (zeroStats.includes('intelligence')) {
+                                if (stat === 'intelligence') bonus.bonus += 10;
+                            }
+                            break;
+                        case 'luck_curse':
+                            if (zeroStats.includes('luck')) {
+                                if (stat === 'luck') bonus.bonus += 10;
+                            }
+                            break;
+                        // 肛蛋詛咒
+                        case 'gundam_curse':
+                            if (zeroStats.length === 2) {
+                                if (zeroStats.includes(stat)) {
+                                    bonus.bonus += 8;
+                                }
+                            }
+                            break;
+                        // 變身詛咒
+                        case 'henshin_curse':
+                            if (zeroStats.length === 3) {
+                                if (zeroStats.includes(stat)) {
+                                    bonus.bonus += 5;
+                                }
+                            }
+                            break;
                     }
-                }
+                });
 
-                if (this.equipment.chest && this.equipment.chest.specialAffix === 'henshin_curse' && zeroStats.length === 3) {
-                     if (zeroStats.includes(stat)) {
-                        bonus.bonus += 5;
-                    }
-                }
                 return bonus;
             }
             // 【新增此方法】
             getAffixPenalty() {
                 let penalty = 0;
                 if (!this.equipment) return penalty;
+
                 const zeroStats = Object.keys(this.stats).filter(s => ['strength', 'agility', 'intelligence', 'luck'].includes(s) && this.stats[s] === 0);
-
-                const checkPenalty = (item, affixName, requiredStat, penaltyValue) => {
-                    if (item && item.specialAffix === affixName && this.stats[requiredStat] !== 0) {
-                        penalty += penaltyValue;
-                    }
-                };
-
-                checkPenalty(this.equipment.mainHand, 'strength_curse', 'strength', 10);
-                checkPenalty(this.equipment.mainHand, 'agility_curse', 'agility', 10);
-                checkPenalty(this.equipment.mainHand, 'intelligence_curse', 'intelligence', 10);
-                checkPenalty(this.equipment.mainHand, 'luck_curse', 'luck', 10);
                 
-                if (this.equipment.offHand && this.equipment.offHand.specialAffix === 'gundam_curse' && zeroStats.length !== 2) {
-                    penalty += 8;
-                }
-                if (this.equipment.chest && this.equipment.chest.specialAffix === 'henshin_curse' && zeroStats.length !== 3) {
-                    penalty += 5;
-                }
+                // --- 偵錯碼 開始 ---
+                console.log('[偵錯] 開始計算詛咒懲罰...');
+                console.log('[偵錯] 基礎屬性為0的項目:', zeroStats);
+                console.log('[偵錯] 基礎屬性為0的數量:', zeroStats.length);
+                // --- 偵錯碼 結束 ---
+
+                Object.values(this.equipment).forEach(item => {
+                    if (!item || !item.specialAffix) return;
+
+                    // --- 偵錯碼 開始 ---
+                    console.log(`[偵錯] 正在檢查裝備: ${item.name}, 特殊詞綴: ${item.specialAffix}`);
+                    // --- 偵錯碼 結束 ---
+
+                    switch (item.specialAffix) {
+                        case 'strength_curse':
+                            if (!zeroStats.includes('strength')) penalty += 10;
+                            break;
+                        case 'agility_curse':
+                            if (!zeroStats.includes('agility')) penalty += 10;
+                            break;
+                        case 'intelligence_curse':
+                            if (!zeroStats.includes('intelligence')) penalty += 10;
+                            break;
+                        case 'luck_curse':
+                            if (!zeroStats.includes('luck')) penalty += 10;
+                            break;
+                        case 'gundam_curse':
+                            if (zeroStats.length !== 2) penalty += 8;
+                            break;
+                        case 'henshin_curse':
+                            if (zeroStats.length !== 3) {
+                                penalty += 5;
+                                // --- 偵錯碼 開始 ---
+                                console.log('[偵錯] "變身" 懲罰條件觸發！(0屬性數量不是3)');
+                                // --- 偵錯碼 結束 ---
+                            }
+                            break;
+                    }
+                });
+
+                // --- 偵錯碼 開始 ---
+                console.log('[偵錯] 最終計算出的懲罰值為:', penalty);
+                // --- 偵錯碼 結束 ---
                 
                 return penalty;
             }
+
+            getSpecialAffixModifier(stat) {
+                const modifier = { bonus: 0, penalty: 0 };
+                if (!this.equipment) return modifier;
+
+                const zeroStats = Object.keys(this.stats).filter(s => ['strength', 'agility', 'intelligence', 'luck'].includes(s) && this.stats[s] === 0);
+
+                Object.values(this.equipment).forEach(item => {
+                    if (!item || !item.specialAffix) return;
+
+                    switch (item.specialAffix) {
+                        case 'strength_curse':
+                            if (zeroStats.includes('strength')) {
+                                if (stat === 'strength') modifier.bonus += 10;
+                            } else {
+                                modifier.penalty += 10;
+                            }
+                            break;
+                        case 'agility_curse':
+                            if (zeroStats.includes('agility')) {
+                                if (stat === 'agility') modifier.bonus += 10;
+                            } else {
+                                modifier.penalty += 10;
+                            }
+                            break;
+                        case 'intelligence_curse':
+                            if (zeroStats.includes('intelligence')) {
+                                if (stat === 'intelligence') modifier.bonus += 10;
+                            } else {
+                                modifier.penalty += 10;
+                            }
+                            break;
+                        case 'luck_curse':
+                            if (zeroStats.includes('luck')) {
+                                if (stat === 'luck') modifier.bonus += 10;
+                            } else {
+                                modifier.penalty += 10;
+                            }
+                            break;
+                        case 'gundam_curse':
+                            if (zeroStats.length === 2) {
+                                if (zeroStats.includes(stat)) modifier.bonus += 8;
+                            } else {
+                                modifier.penalty += 8;
+                            }
+                            break;
+                        case 'henshin_curse':
+                            if (zeroStats.length === 3) {
+                                if (zeroStats.includes(stat)) modifier.bonus += 5;
+                            } else {
+                                modifier.penalty += 5;
+                            }
+                            break;
+                    }
+                });
+
+                return modifier;
+            }
+
             getTotalStat(stat, isStarving = false) {
                 if (stat === 'hp') return this.calculateMaxHp(isStarving);
                 if (!this.stats.hasOwnProperty(stat) || !['strength', 'agility', 'intelligence', 'luck'].includes(stat)) {
@@ -307,13 +443,28 @@
                 // 1. 基礎值 = 自身原始值 + 夥伴加成
                 let baseValue = this.stats[stat] + this.getPartyBonus(stat);
 
-                // 2. 固定加成值 = 裝備基礎屬性 + 特殊詛咒裝備效果
-                let flatBonus = this.getEquipmentBonus(stat); // 此處只應獲取裝備白字
-                flatBonus += this.getAffixEffect(stat).bonus;
-                flatBonus -= this.getAffixPenalty();
+                // 2. 固定加成值 = 裝備基礎屬性 + 詞綴固定加成 + 特殊詛咒裝備效果 (正負)
+                let flatBonus = this.getEquipmentBonus(stat);
+
+                // --- 修正：加入標準詞綴的固定加成 ---
+                Object.values(this.equipment).forEach(item => {
+                    if (!item) return;
+                    item.affixes.forEach(affix => {
+                        if (affix.type !== 'stat') return;
+                        affix.effects.forEach(effect => {
+                            if ((effect.stat === stat || effect.stat === 'all') && effect.type !== 'multiplier') {
+                                flatBonus += effect.value;
+                            }
+                        });
+                    });
+                });
+
+                // 加入特殊詛咒裝備效果
+                const specialAffixMod = this.getSpecialAffixModifier(stat);
+                flatBonus += specialAffixMod.bonus - specialAffixMod.penalty;
 
                 // 3. 百分比乘積 = 所有標準詞綴的乘法效果疊乘
-                let multiplier = 1.0;
+                let multiplier = 1.0; // <--- 確保這一行存在
                 Object.values(this.equipment).forEach(item => {
                     if (!item) return;
                     item.affixes.forEach(affix => {
@@ -336,6 +487,7 @@
                 // 5. 最後套用飢餓懲罰
                 return isStarving ? Math.floor(total * 0.75) : total;
             }
+
             getBaseMaxHp(isStarving = false) {
                 let total = (this.stats.strength || 0) + (this.stats.agility || 0) + (this.stats.intelligence || 0) + (this.stats.luck || 0);
                 if(isStarving) total = Math.floor(total * 0.75);
@@ -354,16 +506,31 @@
                 return this.getEquipmentBonus('hp');
             }
             calculateMaxHp(isStarving = false) {
-                // 【修正】使用 getTotalStat 來獲取包含所有加成的最終能力值
                 const totalStr = this.getTotalStat('strength', isStarving);
                 const totalAgi = this.getTotalStat('agility', isStarving);
                 const totalInt = this.getTotalStat('intelligence', isStarving);
                 const totalLuc = this.getTotalStat('luck', isStarving);
 
-                // 【修正】生命值公式改為：(所有最終能力值總和 * 6) + 裝備直接提供的HP
                 let maxHp = (totalStr + totalAgi + totalInt + totalLuc) * 6 + this.getEquipmentHpBonus();
                 
-                // 雙手劍懲罰
+                // --- START OF ADDED CODE ---
+                // Apply HP multipliers from standard affixes
+                let hpMultiplier = 1.0;
+                Object.values(this.equipment).forEach(item => {
+                    if (!item) return;
+                    item.affixes.forEach(affix => {
+                        if (affix.type !== 'stat') return;
+                        affix.effects.forEach(effect => {
+                            if (effect.stat === 'hp' && effect.type === 'multiplier') {
+                                hpMultiplier *= effect.value;
+                            }
+                        });
+                    });
+                });
+
+                maxHp = Math.floor(maxHp * hpMultiplier);
+                // --- END OF ADDED CODE ---
+
                 if (this.equipment && this.equipment.mainHand && this.equipment.mainHand.baseName === '雙手劍') {
                     maxHp = Math.floor(maxHp * 0.85);
                 }
@@ -458,14 +625,8 @@
             }
 
             getTotalStat(stat, isStarving = false) {
-                // 【核心修正】如果 this.stats 中沒有該屬性，或屬性值為 undefined/null，則將 baseValue 安全地設為 0
-                let baseValue = this.stats[stat] || 0; 
-                let flatBonus = this.getEquipmentBonus(stat);
-                
-                let multiplier = 1.0; // 敵人暫不處理複雜的詞綴乘法
-                
-                // 確保進行運算的都是有效數字
-                let total = Math.floor(((baseValue || 0) + (flatBonus || 0)) * multiplier);
+                if (!this.stats.hasOwnProperty(stat)) return 0;
+                const total = this.stats[stat] || 0;
                 return isStarving ? Math.floor(total * 0.75) : total;
             }
 

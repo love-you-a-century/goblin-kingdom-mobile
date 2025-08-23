@@ -1545,7 +1545,7 @@ const gameLogic = {
         newPartner.currentHp = newPartner.maxHp;
 
         // 檢查寢室容量
-        if (this.partners.length < this.partnerCapacity) {
+        if ((this.partners.length + 1) <= this.partnerCapacity) {
             // 容量充足，直接加入
             this.partners.push(newPartner);
             mother.isPregnant = false;
@@ -1799,6 +1799,7 @@ const gameLogic = {
             return;
         }
         this.currentRaid = this.generateCity(difficulty);
+        this.currentRaid.reinforcementsDefeated = false;
         this.screen = 'raid';
         this.logMessage('raid', `你帶領隊伍前往 ${this.currentRaid.locationName} 進行掠奪！`, 'player');
     },
@@ -2467,8 +2468,7 @@ const gameLogic = {
         if (this.currentRaid && this.currentRaid.timeRemaining <= 0) {
             if (this.screen === 'combat') {
                 this.raidTimeExpired = true; // 在戰鬥中時間歸零，僅設定標記
-            } else if (!this.combat.isReinforcementBattle) {
-                // 不在戰鬥中，且還未觸發過增援戰，則立即觸發
+            } else if (!this.currentRaid.reinforcementsDefeated) {
                 this.triggerReinforcementBattle();
             }
         }
@@ -3231,6 +3231,7 @@ const gameLogic = {
                     this.logMessage('tribe', '你擊敗了前來阻截的騎士團，成功帶著戰利品返回部落！', 'success');
                     this.prepareToEndRaid(false);
                 } else {
+                    this.currentRaid.reinforcementsDefeated = true;
                     // 如果是在「城鎮中」觸發的，執行新邏輯
                     this.currentRaid.timeRemaining = Infinity; // 將時間設為無限，停止倒數
                     this.logMessage('raid', '你擊敗了騎士團的增援部隊！時間壓力消失了，你可以繼續探索這座城鎮。', 'success');
@@ -4192,27 +4193,44 @@ const gameLogic = {
         });
         // 加入到新隊伍
         this.dispatch[task].push(partnerId);
+
+        // 檢查並將夥伴從出擊隊伍中移除
+        if (this.player && this.player.party) {
+            const initialPartySize = this.player.party.length;
+            this.player.party = this.player.party.filter(p => p.id !== partnerId);
+            
+            // 如果隊伍成員真的有變動，則更新玩家的生命值 (因為夥伴加成會改變)
+            if (this.player.party.length !== initialPartySize) {
+                this.player.updateHp(this.isStarving);
+            }
+        }
     },
     removeFromDispatch(partnerId, task) {
         this.dispatch[task] = this.dispatch[task].filter(id => id !== partnerId);
     },
     
     getGoblinYield(goblin, task) {
-        // 這就是我們的「單一哥布林產量計算機」
         if (!goblin) return 0;
-        // 先計算基礎四圍總和
-        const totalStats = goblin.stats.strength + goblin.stats.agility + goblin.stats.intelligence + goblin.stats.luck;
+
+        // 使用 getTotalStat 來計算包含裝備加成的總四圍
+        const totalStats = goblin.getTotalStat('strength', this.isStarving) +
+                        goblin.getTotalStat('agility', this.isStarving) +
+                        goblin.getTotalStat('intelligence', this.isStarving) +
+                        goblin.getTotalStat('luck', this.isStarving);
+        
+        // 統一獲取裝備血量加成
+        const equipmentHp = goblin.getEquipmentBonus('hp');
 
         switch (task) {
             case 'hunting': {
-                // 打獵的產量 = (四圍總和 * 0.5) + (傷害 * 0.25)
+                // 打獵的產量 = (總四圍 * 0.2) + (總傷害 * 0.2) + (裝備血量 * 0.05)
                 const damage = goblin.calculateDamage(this.isStarving);
-                return Math.floor(totalStats * 0.5 + damage * 0.25);
+                return Math.floor(totalStats * 0.2 + damage * 0.2 + equipmentHp * 0.05);
             }
             case 'logging':
             case 'mining': {
-                // 伐木和採礦的產量 = (四圍總和 * 0.2)
-                return Math.floor(totalStats * 0.2);
+                // 伐木和採礦的產量 = (總四圍 * 0.2) + (裝備血量 * 0.05)
+                return Math.floor(totalStats * 0.2 + equipmentHp * 0.05);
             }
             default:
                 return 0;
