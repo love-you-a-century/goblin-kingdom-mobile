@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.05</title>
+    <title>哥布林王國v5.06</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -614,7 +614,7 @@
             </div>
             <div class="mt-4 text-center space-x-4">
                 <button @click="executePlayerAction('attack')" class="btn btn-primary" :disabled="!player || !player.isAlive() || combat.isProcessing || combat.playerActionTaken">普通攻擊</button>
-                <button @click="executePlayerAction('escape')" class="btn btn-secondary" :disabled="!player || !player.isAlive() || combat.isProcessing || combat.playerActionTaken || combat.isReinforcementBattle">潛行脫離</button>
+                <button @click="executePlayerAction('escape')" class="btn btn-secondary" :disabled="!player || !player.isAlive() || combat.isProcessing || combat.playerActionTaken || combat.isReinforcementBattle || combat.isUnescapable">潛行脫離</button>
             </div>
         </div>
     </template>
