@@ -372,8 +372,17 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </div>                      
     
+                        <div class="game-container relative p-4 rounded-lg pt-10">
+                            <h2 class="game-title font-medieval">部落日誌</h2>
+                            <div class="log-panel" id="tribe" x-init="$watch('logs.tribe', () => { $nextTick(() => { $el.scrollTop = $el.scrollHeight }) })">
+                                <template x-for="entry in logs.tribe" :key="entry.id">
+                                    <div :class="`log-entry ${entry.type}`" x-html="entry.message"></div>
+                                </template>
+                            </div>
+                        </div>
+
                         <div class="game-container relative p-4 rounded-lg pt-10">
                             <h2 class="game-title font-medieval">遊戲存檔</h2>
                             <div class="flex space-x-4">
@@ -386,14 +395,14 @@
                                 <button @click="importGame()" class="btn btn-primary w-full mt-2">匯入存檔</button>
                             </div>
                         </div>
-    
+
                         <div class="game-container relative p-4 rounded-lg pt-10">
-                            <h2 class="game-title font-medieval">部落日誌</h2>
-                            <div class="log-panel" id="tribe" x-init="$watch('logs.tribe', () => { $nextTick(() => { $el.scrollTop = $el.scrollHeight }) })">
-                                <template x-for="entry in logs.tribe" :key="entry.id">
-                                    <div :class="`log-entry ${entry.type}`" x-html="entry.message"></div>
-                                </template>
+                            <h2 class="game-title font-medieval">DLC 解鎖</h2>
+                            <div class="flex space-x-2">
+                                <input type="text" x-ref="dlc_code_input" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="請輸入 DLC 解鎖碼...">
+                                <button @click="unlockDlc()" class="btn btn-primary">解鎖</button>
                             </div>
+                            <p x-show="dlc.hells_knights" class="text-green-400 mt-2">「王國騎士團」DLC 已成功啟用！</p>
                         </div>
     
                         <div class="game-container relative p-4 rounded-lg pt-10">
@@ -432,7 +441,7 @@
                 <h1 class="game-title font-medieval">選擇掠奪目標</h1>
                 <div class="space-y-4">
                     <template x-for="raid in raidOptions">
-                        <button @click="startRaid(raid.difficulty)" class="w-full text-left p-4 rounded-lg transition bg-gray-700 hover:bg-gray-600" :disabled="buildings.dungeon.level === 0" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 5 && raid.difficulty === 'easy' }">
+                        <button x-show="raid.difficulty !== 'hell' || dlc.hells_knights" @click="startRaid(raid.difficulty)" class="w-full text-left p-4 rounded-lg transition bg-gray-700 hover:bg-gray-600" :disabled="buildings.dungeon.level === 0" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 5 && raid.difficulty === 'easy' }">    
                             <div>
                                 <h3 class="text-xl font-bold" x-text="raid.name"></h3>
                                 <p x-text="raid.description"></p>
