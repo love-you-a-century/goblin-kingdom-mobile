@@ -752,7 +752,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.08 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.09 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -2077,7 +2077,13 @@ const gameLogic = {
             // 2. [修正] 根據 GDD 6.5 與 10.3 產生 1 至 3 位公主
             const numPrincesses = randomInt(1, 3); // [修正] 公主數量為1-3人
 
+            // 1. 建立一個可修改的、隨機打亂的女性名字複製列表
+            const availableNames = [...FEMALE_NAMES].sort(() => 0.5 - Math.random());
+
             for (let i = 0; i < numPrincesses; i++) {
+                // 2. 從複製列表中「抽出」一個名字，確保不重複
+                const princessName = availableNames.pop() || `公主 #${i + 1}`;
+
                 const princessStats = {
                     strength: 20,
                     agility: 20,
@@ -2085,9 +2091,9 @@ const gameLogic = {
                     luck: 20,
                     charisma: randomInt(200, 300)
                 };
+                
                 const princess = new FemaleHuman(
-                    // 為多位公主取不同的名字
-                    FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length-1)],
+                    princessName, // 3. 使用我們抽出的獨一無二的名字
                     princessStats, 
                     '公主', 
                     generateVisuals()
