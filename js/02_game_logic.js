@@ -760,7 +760,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.06 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.07 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1084,8 +1084,8 @@ const gameLogic = {
             }
         });
     },
-    // 請在您的程式碼中新增這個函式
-    continueNextDay() {
+
+    processDailyUpkeep() {
         // --- 商人來訪邏輯 ---
         if (this.merchant.isPresent) {
             this.merchant.stayDuration--;
@@ -1107,7 +1107,7 @@ const gameLogic = {
                 this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
                 this.generateMerchantGoods();
                 this.logMessage('tribe', `一位名叫「世紀」的魅魔商人來到了你的營地！她將停留 ${this.merchant.stayDuration} 天。`, 'success');
-                this.advanceTutorial(7); // 這裡的教學步驟是7，不是6
+                this.advanceTutorial(7);
                 this.tutorial.merchantMet = true;
             } else if (this.day > 9) {
                 const arrivalChance = [10, 15, 20, 25, 30][this.buildings.merchantCamp.level || 0] || 10;
@@ -1124,6 +1124,7 @@ const gameLogic = {
         this.day++;
         this.logMessage('tribe', `--- 第 ${this.day} 天 ---`, 'system');
         
+        // 修正後的懷孕與生產邏輯
         this.captives.forEach(c => {
             if (c.isPregnant) {
                 c.pregnancyTimer--;
@@ -1161,23 +1162,21 @@ const gameLogic = {
             p.currentHp = Math.min(p.currentHp, p.maxHp);
         });
 
-        this.calculateDispatchYields(); // 【新增】計算派遣收益
+        this.calculateDispatchYields();
         this.breedingChargesLeft = this.totalBreedingCharges;
     },
 
-    // 請用以下程式碼替換您原本的 nextDay 函式
     nextDay() {
         // --- 事件偵測階段 ---
         let pendingRevengeInfo = null;
-        let pendingBirths = [];
-
-        // 1. 偵測復仇小隊
         const captivesByDifficulty = {};
         this.captives.forEach(c => {
-            if (!captivesByDifficulty[c.originDifficulty]) {
-                captivesByDifficulty[c.originDifficulty] = 0;
+            if (c.originDifficulty) {
+                if (!captivesByDifficulty[c.originDifficulty]) {
+                    captivesByDifficulty[c.originDifficulty] = 0;
+                }
+                captivesByDifficulty[c.originDifficulty]++;
             }
-            captivesByDifficulty[c.originDifficulty]++;
         });
 
         for (const difficulty in captivesByDifficulty) {
@@ -1191,20 +1190,9 @@ const gameLogic = {
             }
         }
 
-        // 2. 偵測新生兒 (僅用於傳遞)
-        this.captives.forEach(c => {
-            if (c.isPregnant) {
-                c.pregnancyTimer--;
-                if (c.pregnancyTimer <= 0) {
-                    pendingBirths.push(c);
-                } else {
-                    // 將還沒到時間的 timer 加回去，避免重複計算
-                    c.pregnancyTimer++; 
-                }
-            }
-        });
-
+        // --- 流程控制 ---
         if (pendingRevengeInfo) {
+            // 如果偵測到復仇事件，顯示提示框，今天的結算將在戰鬥結束後進行
             const difficulty = pendingRevengeInfo.difficulty;
             const nameConfig = CITY_NAMES[difficulty];
             const locationName = nameConfig.prefixes[randomInt(0, nameConfig.prefixes.length - 1)] + nameConfig.suffix;
@@ -1214,13 +1202,13 @@ const gameLogic = {
             this.showCustomAlert(
                 `警報！一支來自「${locationName}」的復仇小隊襲擊了你的部落！`,
                 () => {
-                    // ▼▼▼ 在此處加入偵錯碼 ▼▼▼
-                    console.log('[偵錯] 回呼函式 (Callback) 已被執行，準備觸發戰鬥！');
-                    // ▲▲▲ 新增結束 ▲▲▲
-                    this.triggerRevengeSquadBattle(difficulty, pendingBirths);
+                    this.triggerRevengeSquadBattle(difficulty, []);
                 }
             );
-            return;
+            // 注意：這裡直接 return，不執行 processDailyUpkeep
+        } else {
+            // 如果沒有任何突發事件，直接執行正常的每日結算
+            this.processDailyUpkeep();
         }
     },
     
@@ -2674,7 +2662,7 @@ const gameLogic = {
         if (continueToEnemyTurn && this.combat.enemies.filter(e => e.isAlive()).length > 0) {
             this.executeTurn(false);
         } else if (!continueToEnemyTurn) {
-            
+
         } else {
             this.endCombat(true);
         }
@@ -3225,7 +3213,7 @@ const gameLogic = {
             if (victory) {
                 this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
 
-                // 處理俘虜
+                // 步驟1: 處理戰利品 (俘虜)
                 const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
                 if (defeatedFemales.length > 0) {
                     if ((this.dungeonCaptives.length + defeatedFemales.length) > this.captiveCapacity) {
@@ -3241,22 +3229,15 @@ const gameLogic = {
                         this.logMessage('tribe', `你俘虜了 ${defeatedFemales.length} 名戰敗的敵人。`, 'info');
                     }
                 }
-
-                // 恢復狀態
-                this.player.currentHp = this.player.maxHp;
-                this.partners.forEach(p => p.currentHp = p.maxHp);
                 
-                // 處理戰鬥前暫停的出生事件
-                (this.postBattleBirths || []).forEach(mother => this.giveBirth(mother));
-                this.postBattleBirths = [];
-
-                // 清理戰鬥狀態並返回部落畫面
+                // 步驟2: 清理戰鬥狀態 (但先不切換畫面)
                 this.finishCombatCleanup(true);
 
-                // **核心修正**：呼叫新函式，繼續當天的剩餘流程
-                this.continueNextDay();
+                // 步驟3: 呼叫每日結算 (它會負責換天、恢復血量、處理生產等所有事情)
+                this.processDailyUpkeep();
+
             } else {
-                // 戰敗邏輯不變，直接觸發重生
+                // 戰敗邏輯不變
                 this.prepareToEndRaid(true);
             }
             return; // 結束函式，不再執行後續的掠奪邏輯
