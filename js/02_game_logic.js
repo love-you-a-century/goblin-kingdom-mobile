@@ -6,6 +6,9 @@ const gameLogic = {
         logging: [], // 伐木隊伍
         mining: [],  // 採礦隊伍
     },
+    dlc: {
+        hells_knights: false // 「王國騎士團」DLC，預設為未解鎖
+    },
     bailoutCounter: 0, // 【新增此行】用來計算玩家求助的次數
     raidTimeExpired: false, // 【新增此行】用來標記時間是否在戰鬥中耗盡
     isRetreatingWhenTimeExpired: false, // 【新增此行】記錄時間耗盡時是否正在脫離
@@ -747,7 +750,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.02 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.04 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -3633,6 +3636,24 @@ const gameLogic = {
         }
     },
 
+    unlockDlc() {
+        const code = this.$refs.dlc_code_input.value.trim().toUpperCase();
+        
+        if (code === "HELLKNIGHTS20147") { // 這就是我們的解鎖碼
+            if (!this.dlc.hells_knights) {
+                this.dlc.hells_knights = true;
+                this.showCustomAlert('「王國騎士團」DLC 已成功啟用！新內容將在下次遊戲或讀檔後生效。');
+                this.saveGame(); // 自動存檔以保存解鎖狀態
+            } else {
+                this.showCustomAlert('您已經擁有此 DLC！');
+            }
+        } else {
+            this.showCustomAlert('無效的解鎖碼。');
+        }
+        
+        this.$refs.dlc_code_input.value = '';
+    },
+
     saveGame() {
         const saveData = {
             player: this.player,
@@ -3648,6 +3669,7 @@ const gameLogic = {
             breedingChargesLeft: this.breedingChargesLeft,
             merchant: this.merchant,// 儲存更完整的商人資訊
             tempStatIncreases: this.tempStatIncreases,//能力點
+            dlc: this.dlc,
         };
         localStorage.setItem('goblinKingSaveFile', JSON.stringify(saveData));
         this.showCustomAlert('遊戲進度已儲存！');
@@ -3748,12 +3770,7 @@ const gameLogic = {
     },
 
     loadGame() {
-            //【新增此區塊】在讀取任何資料前，先清空所有日誌
-            this.logs = {
-            tribe: [],
-            raid: [],
-            combat: []
-        };
+        this.logs = { tribe: [], raid: [], combat: [] }; // 清空日誌
 
         const savedData = localStorage.getItem('goblinKingSaveFile');
         if (!savedData) {
@@ -3803,22 +3820,18 @@ const gameLogic = {
                 return partner;
             });
 
-            // 【 Bug 修復：新增完整的俘虜還原邏輯 】
             this.captives = (parsedData.captives || []).map(cData => {
                 let captive;
-                // 判斷是否為騎士團成員，以使用正確的類別來還原
                 if (Object.keys(KNIGHT_ORDER_UNITS).includes(cData.profession)) {
                     captive = new FemaleKnightOrderUnit(cData.profession, 0, cData.originDifficulty || 'easy');
                 } else {
-                    // 其他所有女性俘虜（居民、公主、魅魔等）都使用 FemaleHuman 類別
                     captive = new FemaleHuman(cData.name, cData.stats || {}, cData.profession, cData.visual, cData.originDifficulty || 'easy');
                 }
-                // 安全地將存檔中的所有屬性（isPregnant, pregnancyTimer, isMother...）複製到新建立的物件上
                 safelyAssign(captive, cData);
                 return captive;
             });
 
-
+            // 這邊的 Player constructor 已修正為不會提前計算，是正確的
             const loadedPlayerInstance = new Player(parsedData.player.name, parsedData.player.stats || {});
             safelyAssign(loadedPlayerInstance, parsedData.player);
             this.player = loadedPlayerInstance;
@@ -3841,6 +3854,19 @@ const gameLogic = {
             this.day = parsedData.day;
             this.dispatch = parsedData.dispatch || { hunting: [], logging: [], mining: [] }; 
             this.narrativeMemory = parsedData.narrativeMemory;
+
+            // --- 核心修正區塊：使用最穩固的 if/else 判斷 ---
+            if (parsedData.dlc) {
+                // 如果存檔中有 DLC 資料，則直接使用它
+                this.dlc = parsedData.dlc;
+            } else {
+                // 如果存檔中沒有 DLC 資料 (代表是舊存檔)，則強制建立一個全新的、預設為鎖定的 DLC 物件
+                this.dlc = {
+                    hells_knights: false
+                };
+            }
+            // --- 修正結束 ---
+
             this.tutorial = { ...{ active: false, step: 0, merchantMet: false }, ...parsedData.tutorial };
             this.breedingChargesLeft = parsedData.breedingChargesLeft;
             this.merchant = { ...this.merchant, ...parsedData.merchant };
@@ -4020,6 +4046,32 @@ const gameLogic = {
         let slot = itemToEquip.slot; 
 
         const mainHandWeapon = targetUnit.equipment.mainHand;
+        const offHandItem = targetUnit.equipment.offHand;
+
+        // --- DLC 雙持系統檢查 ---
+        // 檢查點一：嘗試裝備第二把「劍」
+        if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName === '劍' && !offHandItem) {
+            if (!this.dlc.hells_knights) {
+                this.showCustomAlert('需要「王國騎士團」DLC 才能雙持單手劍！');
+                return;
+            }
+        }
+        // 檢查點二：當主手已是「長槍」或「法杖」時，嘗試裝備「盾」
+        if (itemToEquip.baseName === '盾' && mainHandWeapon && ['長槍', '法杖'].includes(mainHandWeapon.baseName)) {
+            if (!this.dlc.hells_knights) {
+                this.showCustomAlert('需要「王國騎士團」DLC 才能將長槍或法杖與盾牌搭配使用！');
+                return;
+            }
+        }
+        // 檢查點三：當副手已是「盾」時，嘗試裝備「長槍」或「法杖」
+        if (['長槍', '法杖'].includes(itemToEquip.baseName) && offHandItem?.baseName === '盾') {
+            if (!this.dlc.hells_knights) {
+                this.showCustomAlert('需要「王國騎士團」DLC 才能將長槍或法杖與盾牌搭配使用！');
+                return;
+            }
+        }
+        // --- DLC 檢查結束 ---
+
         if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName === '劍' && !targetUnit.equipment.offHand) {
             slot = 'offHand';
         }
@@ -4028,9 +4080,10 @@ const gameLogic = {
 
         if (slot === 'offHand') {
             if (mainHandWeapon && TWO_HANDED_WEAPONS.includes(mainHandWeapon.baseName)) {
-                this.showCustomAlert(`裝備 ${mainHandWeapon.baseName} 時無法使用副手裝備！`);
+                this.showCustomAlert(`裝備 ${mainHandWeapon.name} 時無法使用副手裝備！`);
                 return;
             }
+            // 這一段檢查現在由上面的DLC邏輯處理，但保留以防萬一
             if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName !== '劍') {
                 this.showCustomAlert('只有在主手裝備單手劍時，才能在副手裝備另一把劍！');
                 return;
@@ -4053,7 +4106,6 @@ const gameLogic = {
         
         if (targetUnit.updateHp) targetUnit.updateHp(this.isStarving);
         this.logMessage('tribe', `${targetUnit.name} 裝備了 <span style="color:${itemToEquip.quality.color};">[${itemToEquip.name}]</span>。`, 'success');
-        
     },
 
     unequipItem(slot, targetUnit, silent = false) {
