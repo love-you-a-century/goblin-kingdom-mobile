@@ -750,7 +750,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.04 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.05 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -2468,9 +2468,14 @@ const gameLogic = {
     },
 
     checkRaidTime() {
+        // 如果當前已經在打支援騎士團之戰了，就直接停止任何時間檢查，避免重複觸發
+        if (this.combat.isReinforcementBattle) {
+            return;
+        }
+
         if (this.currentRaid && this.currentRaid.timeRemaining <= 0) {
             if (this.screen === 'combat') {
-                this.raidTimeExpired = true; // 在戰鬥中時間歸零，僅設定標記
+                this.raidTimeExpired = true;
             } else if (!this.currentRaid.reinforcementsDefeated) {
                 this.triggerReinforcementBattle();
             }
@@ -2518,7 +2523,9 @@ const gameLogic = {
 
     // 新增函數：觸發騎士團增援戰
     triggerReinforcementBattle() {
-        if (!this.currentRaid) return; // 安全檢查
+        if (!this.currentRaid || this.currentRaid.reinforcementsDefeated) {
+            return; // 如果沒有掠奪，或者增援已經被打敗過，則直接中斷函式，不執行任何操作
+        }
 
         this.logMessage('raid', '時間已到！王國騎士團的增援部隊抵達了城鎮！', 'enemy');
 
@@ -3234,11 +3241,9 @@ const gameLogic = {
                     this.logMessage('tribe', '你擊敗了前來阻截的騎士團，成功帶著戰利品返回部落！', 'success');
                     this.prepareToEndRaid(false);
                 } else {
-                    this.currentRaid.reinforcementsDefeated = true;
-                    // 如果是在「城鎮中」觸發的，執行新邏輯
-                    this.currentRaid.timeRemaining = Infinity; // 將時間設為無限，停止倒數
+                    this.currentRaid.timeRemaining = Infinity; 
+                    this.currentRaid.reinforcementsDefeated = true; // <-- 確保此行存在
                     this.logMessage('raid', '你擊敗了騎士團的增援部隊！時間壓力消失了，你可以繼續探索這座城鎮。', 'success');
-                    // 清理戰鬥狀態，並返回掠奪地圖，而不是部落
                     this.finishCombatCleanup(); 
                 }
                 // 無論結果如何，都要將旗標重置，以免影響下一次判斷
