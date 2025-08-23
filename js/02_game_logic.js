@@ -308,15 +308,15 @@ const gameLogic = {
     isCombatLocked: false, // 是否被巡邏隊鎖定，無法移動
     mapScale: 1, // 【新增此行】用於地圖縮放
 
-    knightPositions: [ // <--- 請將這個陣列新增於此
-        { top: '40%', left: '50%' }, // V字頂點
-        { top: '50%', left: '40%' }, // 第二排左
-        { top: '50%', left: '60%' }, // 第二排右
-        { top: '60%', left: '30%' }, // 第三排左
-        { top: '60%', left: '70%' }, // 第三排右
-        { top: '70%', left: '20%' }, // 第四排左
-        { top: '70%', left: '80%' }, // 第四排右
-    ],
+    knightPositions: {
+        '騎士': { top: '40%', left: '50%' }, // V字陣型頂點
+        '槍兵': { top: '50%', left: '35%' }, // 第二排左
+        '士兵': { top: '50%', left: '65%' }, // 第二排右
+        '盾兵': { top: '60%', left: '20%' }, // 第三排左
+        '祭司': { top: '60%', left: '80%' }, // 第三排右 (後排輔助)
+        '弓兵': { top: '70%', left: '5%' },  // 第四排左 (遠程)
+        '法師': { top: '70%', left: '95%' }, // 第四排右 (遠程)
+    },
     
     get warehouseCapacity() { 
         return CAPACITY_LEVELS.warehouse[this.buildings.warehouse.level] || 0;
@@ -507,28 +507,20 @@ const gameLogic = {
 
     executeBuildingScout(building) {
         if (building.isFinalChallenge) {
-            if (building.scouted) {
-                this.showCustomAlert('城堡深處的氣息令人不寒而慄，你已準備好深入王座之間。');
-                return;
-            }
-            this.logMessage('raid', '你開始偵查宏偉的城堡...', 'player');
-            this.currentRaid.timeRemaining -= 3;
-            building.scouted = true;
-            this.logMessage('raid', '偵查成功！一股強大且混雜的氣息從城堡深處傳來...你現在可以「深入內城」前往「王座之間」了。', 'success');
-            this.checkRaidTime();
-            return;
-        }
-        if (building.scouted) {
+            // 檢查城堡內是否還有敵人
             if (building.occupants.length > 0) {
-                this.modals.scoutInfo.target = building.occupants;
+                // 如果還有敵人，執行進入王座之間的邏輯
+                this.logMessage('raid', '你已準備好深入王座之間。');
+                this.enterThroneRoom(building.occupants);
             } else {
+                // 如果敵人已被清空，則將其視為一個普通的可搜刮建築
                 this.modals.scoutInfo.target = [];
                 this.modals.scoutInfo.emptyBuildingMessage = building.looted 
                     ? '這棟建築是空的，你已搜刮過。' 
                     : '這棟建築是空的，看來可以搜刮一番。';
+                this.modals.scoutInfo.isOpen = true;
             }
-            this.modals.scoutInfo.isOpen = true;
-            return;
+            return; // 處理完畢，中斷後續函式執行
         }
 
         this.logMessage('raid', `你開始偵查 ${building.type}...`, 'player');
@@ -2095,7 +2087,7 @@ const gameLogic = {
                 };
                 const princess = new FemaleHuman(
                     // 為多位公主取不同的名字
-                    `${FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length-1)]}公主`,
+                    FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length-1)],
                     princessStats, 
                     '公主', 
                     generateVisuals()
@@ -2149,6 +2141,7 @@ const gameLogic = {
     enterThroneRoom(units) {
         this.logMessage('raid', '你推開城堡沉重的大門，踏入了決定命運的「王座之間」！', 'system');
         this.throneRoomUnits = units;
+
         this.screen = 'throne_room';
     },
 
@@ -2619,7 +2612,7 @@ const gameLogic = {
     },
 
     startCombat(enemyGroup, enemyFirstStrike = false) {
-        console.log('[偵錯] 步驟 C: 成功進入 startCombat 函式。');
+
         this.combat.allies = [this.player, ...this.player.party].filter(u => u.isAlive());
         this.combat.enemies = enemyGroup.filter(u => u.isAlive());
         this.combat.currentEnemyGroup = enemyGroup;
@@ -2630,8 +2623,6 @@ const gameLogic = {
         this.screen = 'combat';
         this.logs.combat = [];
         this.logMessage('combat', `戰鬥開始！`, 'system');
-
-        console.log('[偵錯] 步驟 D: 畫面已設定為 "combat"。');
         
         if(enemyFirstStrike) {
             this.logMessage('combat', '敵人發動了突襲！', 'enemy');
@@ -3708,7 +3699,6 @@ const gameLogic = {
     // 【新增】存檔拯救函式，用於修復汙染的舊存檔
     // 【最終修正】存檔拯救函式，增加強制ID清洗功能
     salvageSaveData() {
-        console.log("Running final save data salvage and ID sanitation...");
         
         const processedItems = new Set(); // 用於追蹤已處理過的物品，避免重複操作
         let itemsSanitized = 0;
