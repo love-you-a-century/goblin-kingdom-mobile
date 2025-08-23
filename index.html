@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.08</title>
+    <title>哥布林王國v5.09</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1648,7 +1648,7 @@
 <!-- 王座之間畫面 (2D場景版) -->
     <template x-if="screen === 'throne_room'">
         <div id="throne-room-screen-scene" x-cloak>
-            <div class="w-full max-w-2xl game-container relative p-6 rounded-lg pt-10">
+            <div class="w-full max-w-2xl mx-auto game-container relative p-6 rounded-lg pt-10">
                 <h1 class="game-title font-medieval">王座之間</h1>
                 <div class="text-center mb-4">
                     <p class="text-lg text-amber-200">公主與她的守護騎士們擋在了你的面前。</p>
@@ -1692,8 +1692,8 @@
                         </template>
 
                         <!-- 動態生成騎士 (橘點) -->
-                        <template x-for="(unit, index) in throneRoomUnits.filter(u => u.profession !== '公主')" :key="unit.id">
-                            <div @click="scoutThroneUnit(unit)" class="unit knight" :style="`top: ${knightPositions[index].top}; left: ${knightPositions[index].left};`"></div>
+                        <template x-for="unit in throneRoomUnits.filter(u => u.profession !== '公主')" :key="unit.id">
+                            <div @click="scoutThroneUnit(unit)" class="unit knight" :style="`top: ${knightPositions[unit.profession].top}; left: ${knightPositions[unit.profession].left};`"></div>
                         </template>
 
                         <!-- 玩家 (綠點) -->

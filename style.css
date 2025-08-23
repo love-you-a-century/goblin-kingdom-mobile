@@ -28,6 +28,9 @@
             --warning-color: #f6e05e;
             --crit-color: #f6e05e;
             --skill-color: #f687b3;
+            --player-color: #48bb78;   /* 綠色 */
+            --knight-color: #f97316; /* 這是一個更純正的橘色 (同傳說品質顏色) */
+            --princess-color: #f6e05e; /* 金黃色 */
         }
 
         body {
@@ -343,9 +346,10 @@
             height: 18px;
             border-radius: 50%;
             box-shadow: 0 0 10px 3px currentColor, inset 0 0 5px rgba(255,255,255,0.3);
-            transform: translate(-50%, -50%); /* 讓 top/left 定位點在中心 */
-            cursor: pointer; /* 新增鼠標指針 */
-            transition: transform 0.2s ease; /* 新增懸停動畫 */
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            z-index: 10; /* 新增此行，提升層級 */
         }
         .unit:hover {
             transform: translate(-50%, -50%) scale(1.5); /* 懸停時放大 */
