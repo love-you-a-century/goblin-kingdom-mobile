@@ -322,25 +322,15 @@
 
                 return bonus;
             }
-            // 【新增此方法】
+
             getAffixPenalty() {
                 let penalty = 0;
                 if (!this.equipment) return penalty;
 
                 const zeroStats = Object.keys(this.stats).filter(s => ['strength', 'agility', 'intelligence', 'luck'].includes(s) && this.stats[s] === 0);
                 
-                // --- 偵錯碼 開始 ---
-                console.log('[偵錯] 開始計算詛咒懲罰...');
-                console.log('[偵錯] 基礎屬性為0的項目:', zeroStats);
-                console.log('[偵錯] 基礎屬性為0的數量:', zeroStats.length);
-                // --- 偵錯碼 結束 ---
-
                 Object.values(this.equipment).forEach(item => {
                     if (!item || !item.specialAffix) return;
-
-                    // --- 偵錯碼 開始 ---
-                    console.log(`[偵錯] 正在檢查裝備: ${item.name}, 特殊詞綴: ${item.specialAffix}`);
-                    // --- 偵錯碼 結束 ---
 
                     switch (item.specialAffix) {
                         case 'strength_curse':
@@ -361,18 +351,11 @@
                         case 'henshin_curse':
                             if (zeroStats.length !== 3) {
                                 penalty += 5;
-                                // --- 偵錯碼 開始 ---
-                                console.log('[偵錯] "變身" 懲罰條件觸發！(0屬性數量不是3)');
-                                // --- 偵錯碼 結束 ---
                             }
                             break;
                     }
                 });
 
-                // --- 偵錯碼 開始 ---
-                console.log('[偵錯] 最終計算出的懲罰值為:', penalty);
-                // --- 偵錯碼 結束 ---
-                
                 return penalty;
             }
 

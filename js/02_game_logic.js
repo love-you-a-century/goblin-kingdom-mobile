@@ -728,7 +728,17 @@ const gameLogic = {
     breedingChargesLeft: 0,
     
     currentRaid: null,
-    combat: { allies: [], enemies: [], turn: 0, log: [], isProcessing: false, currentEnemyGroup: [], playerActionTaken: false, isReinforcementBattle: false },
+        combat: { 
+        allies: [], 
+        enemies: [], 
+        turn: 0, 
+        log: [], 
+        isProcessing: false, 
+        currentEnemyGroup: [], 
+        playerActionTaken: false, 
+        isReinforcementBattle: false,
+        isUnescapable: false 
+    },
     
     submitApiKey() {
         if (this.userApiKey && this.userApiKey.trim() !== '') {
@@ -750,7 +760,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.05 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.06 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1195,13 +1205,23 @@ const gameLogic = {
         });
 
         if (pendingRevengeInfo) {
-            this.logMessage('tribe', `你從 ${pendingRevengeInfo.difficulty} 城鎮掠來的俘虜似乎引來了追兵...`, 'enemy');
-            this.triggerRevengeSquadBattle(pendingRevengeInfo.difficulty, pendingBirths);
-            return; // 中斷後續所有普通事件，交由戰鬥結束後處理
-        }
+            const difficulty = pendingRevengeInfo.difficulty;
+            const nameConfig = CITY_NAMES[difficulty];
+            const locationName = nameConfig.prefixes[randomInt(0, nameConfig.prefixes.length - 1)] + nameConfig.suffix;
 
-        // 如果沒有復仇事件，則執行正常的日常流程
-        this.continueNextDay();
+            this.logMessage('tribe', `你從 ${locationName} 掠來的俘虜引來了追兵...`, 'enemy');
+
+            this.showCustomAlert(
+                `警報！一支來自「${locationName}」的復仇小隊襲擊了你的部落！`,
+                () => {
+                    // ▼▼▼ 在此處加入偵錯碼 ▼▼▼
+                    console.log('[偵錯] 回呼函式 (Callback) 已被執行，準備觸發戰鬥！');
+                    // ▲▲▲ 新增結束 ▲▲▲
+                    this.triggerRevengeSquadBattle(difficulty, pendingBirths);
+                }
+            );
+            return;
+        }
     },
     
     getBuildingUpgradeCost(type) {
@@ -1810,9 +1830,6 @@ const gameLogic = {
     triggerRevengeSquadBattle(difficulty, pendingBirths = []) {
         this.postBattleBirths = pendingBirths;
 
-        this.showCustomAlert('警報！一支由騎士和民兵組成的復仇小隊襲擊了你的部落！');
-
-        // 【修改】新的隊伍組成，包含騎士團和居民
         const squadCompositions = {
             easy:   { knights: { '士兵': 1, '盾兵': 1 }, residents: 4 },
             normal: { knights: { '士兵': 2, '盾兵': 1, '槍兵': 1, '弓兵': 1 }, residents: 5 },
@@ -1832,29 +1849,49 @@ const gameLogic = {
         const residentStatRange = residentStatRanges[difficulty];
         let revengeSquad = [];
 
-        // 【新增】生成騎士團成員
+        // 生成騎士團成員
         for (const unitType in composition.knights) {
             for (let i = 0; i < composition.knights[unitType]; i++) {
                 const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
                 const unit = roll(50) 
                     ? new FemaleKnightOrderUnit(unitType, totalStatPoints, difficulty)
+                    // 修正：將參數傳遞給父類別
                     : new KnightOrderUnit(unitType, totalStatPoints, difficulty);
                 this.equipEnemy(unit, difficulty);
                 revengeSquad.push(unit);
             }
         }
 
-        // 【新增】生成居民（民兵）
+        // 生成居民成員
         for (let i = 0; i < composition.residents; i++) {
             const totalStatPoints = randomInt(residentStatRange[0], residentStatRange[1]);
-            const unit = roll(50)
-                ? new FemaleHuman("復仇的居民", distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), '居民', generateVisuals(), difficulty)
-                : new MaleHuman("復仇的居民", distributeStats(totalStatPoints), '居民', difficulty);
+            let unit; 
+
+            if (roll(50)) {
+                const profession = PROFESSIONS[randomInt(0, PROFESSIONS.length - 1)];
+                unit = new FemaleHuman(
+                    FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)],
+                    distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']),
+                    profession,
+                    generateVisuals(),
+                    difficulty
+                );
+            } else {
+                unit = new MaleHuman(
+                    MALE_NAMES[randomInt(0, MALE_NAMES.length - 1)],
+                    distributeStats(totalStatPoints),
+                    '男性居民',
+                    difficulty
+                );
+            }
             this.equipEnemy(unit, difficulty);
             revengeSquad.push(unit);
         }
         
-        this.combat.isReinforcementBattle = true;
+        this.combat.isReinforcementBattle = false; // 確保這個旗標是 false
+        this.combat.isUnescapable = true;          // 設定為無法脫離
+
+        // 觸發戰鬥
         this.startCombat(revengeSquad, true);
     },
 
@@ -2594,6 +2631,7 @@ const gameLogic = {
     },
 
     startCombat(enemyGroup, enemyFirstStrike = false) {
+        console.log('[偵錯] 步驟 C: 成功進入 startCombat 函式。');
         this.combat.allies = [this.player, ...this.player.party].filter(u => u.isAlive());
         this.combat.enemies = enemyGroup.filter(u => u.isAlive());
         this.combat.currentEnemyGroup = enemyGroup;
@@ -2604,6 +2642,8 @@ const gameLogic = {
         this.screen = 'combat';
         this.logs.combat = [];
         this.logMessage('combat', `戰鬥開始！`, 'system');
+
+        console.log('[偵錯] 步驟 D: 畫面已設定為 "combat"。');
         
         if(enemyFirstStrike) {
             this.logMessage('combat', '敵人發動了突襲！', 'enemy');
@@ -3533,7 +3573,8 @@ const gameLogic = {
         this.combat.currentEnemyGroup = [];
         this.combat.playerActionTaken = false;
         this.combat.isReinforcementBattle = false; // 統一在此處重置
-
+        this.combat.isUnescapable = false;
+        // 根據是否有掠奪來決定返回部落還是掠奪地圖
         this.screen = returnToTribe ? 'tribe' : 'raid';
     },
     showCustomAlert(message, onConfirmCallback = null) {
@@ -3543,10 +3584,18 @@ const gameLogic = {
     },
     confirmCustomAlert() {
         this.modals.customAlert.isOpen = false;
-        if (typeof this.modals.customAlert.onConfirm === 'function') {
+        
+        // 1. 先將可能存在的回呼函式複製到一個臨時變數中
+        const callbackToExecute = this.modals.customAlert.onConfirm;
+
+        // 2. 立刻將共用的狀態清理乾淨，設為 null
+        this.modals.customAlert.onConfirm = null;
+
+        // 3. 檢查我們複製出來的臨時變數是否為一個函式
+        if (typeof callbackToExecute === 'function') {
+            // 4. 如果是，則延遲執行它
             setTimeout(() => {
-                this.modals.customAlert.onConfirm();
-                this.modals.customAlert.onConfirm = null;
+                callbackToExecute();
             }, 100);
         }
     },
