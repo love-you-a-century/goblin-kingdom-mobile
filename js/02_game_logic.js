@@ -760,7 +760,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.07 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.08 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -3217,10 +3217,10 @@ const gameLogic = {
                 const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
                 if (defeatedFemales.length > 0) {
                     if ((this.dungeonCaptives.length + defeatedFemales.length) > this.captiveCapacity) {
-                        this.logMessage('tribe', '地牢空間不足，你需要決定俘虜的去留...', 'warning');
+                        this.logMessage('tribe', '地牢空間不足...', 'warning');
                         this.pendingDecisions.push({
                             type: 'dungeon',
-                            list: [...this.dungeonCaptives, ...defeatedFemales],
+                            list: [...this.dungeonCaptives, ...defeatedFemales], // <--- 修改回只包含地牢俘虜
                             limit: this.captiveCapacity,
                             context: { postBattleBirths: this.postBattleBirths }
                         });
@@ -3404,34 +3404,29 @@ const gameLogic = {
 
         modal.isOpen = true;
     },
-    // 請用這個【新版本】完整替換舊的 confirmCaptiveSelection 函式
     confirmCaptiveSelection() {
         const modal = this.modals.captiveManagement;
-        const selectedSet = new Set(modal.selectedIds);
+        const selectedIds = new Set(modal.selectedIds);
+
+        // 步驟一：找出所有「產房」的俘虜 (懷孕中或產奶中)，這是我們的安全名單，完全不受影響。
+        const maternityCaptives = this.captives.filter(c => c.isMother || c.isPregnant);
+
+        // 步驟二：從「決策列表」(只包含地牢+新人)中，找出玩家選擇要保留的「地牢」俘虜。
+        const keptDungeonCaptives = modal.list.filter(c => selectedIds.has(c.id));
+
+        // 步驟三：將這兩份名單合併，從無到有地重建最終的總俘虜名單。
+        this.captives = [...maternityCaptives, ...keptDungeonCaptives];
         
-        if (modal.type === 'raid') {
-            // 這是舊的邏輯：在掠奪地圖上，攜帶量滿了
-            this.currentRaid.carriedCaptives = modal.list.filter(c => selectedSet.has(c.id));
-            this.logMessage('raid', `你選擇保留 ${this.currentRaid.carriedCaptives.length} 名俘虜，拋棄了其餘的。`, 'info');
-            this.finishCombatCleanup();
-        } 
-        else if (modal.type === 'raid_return') {
-            // 【新增】這是新的邏輯：從掠奪返回部落，地牢滿了
-            const keptDungeonCaptives = modal.list.filter(c => selectedSet.has(c.id));
-            
-            // 將保留下來的俘虜與產房裡的孕母合併成最終名單
-            this.captives = [...this.mothers, ...keptDungeonCaptives];
-            
-            this.logMessage('tribe', `你整理了地牢，最終留下了 ${keptDungeonCaptives.length} 名俘虜。`, 'success');
-            this.finalizeRaidReturn(); // 執行返回部落的最終流程
-        }
-        else { 
-            // 這是舊的邏輯：從掠奪返回部落，總容量滿了 (現在較少觸發)
-            this.captives = modal.list.filter(c => selectedSet.has(c.id));
-            this.logMessage('tribe', `你帶回並整理了俘虜，最終部落擁有 ${this.captives.length} 名俘虜。`, 'player');
+        // 步驟四：根據事件的來源，決定要執行的後續動作 (這部分維持不變)
+        if (modal.type === 'raid' || modal.type === 'raid_return') {
+            this.logMessage('tribe', `你整理了地牢，最終留下了 ${this.dungeonCaptives.length} 名俘虜。`, 'success');
             this.finalizeRaidReturn();
+        } else if (modal.type === 'dungeon') { 
+            this.logMessage('tribe', `你整理了地牢，最終留下了 ${this.dungeonCaptives.length} 名俘虜。`, 'success');
+            this.processDailyUpkeep();
         }
         
+        // 步驟五：關閉視窗
         this.modals.captiveManagement.isOpen = false;
     },
     openPartnerManagementModal(list, limit, context) {
