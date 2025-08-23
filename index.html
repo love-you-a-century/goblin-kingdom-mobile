@@ -278,6 +278,8 @@
                                             </p>
                                             <p class="text-sm"><strong>生命值:</strong>
                                                 <span x-text="player.currentHp"></span> / <span x-text="player.calculateMaxHp(isStarving)"></span>
+                                                <span class="text-green-400" x-show="player.getPartyHpBonus(isStarving) > 0" x-text="` (+${player.getPartyHpBonus(isStarving)})`"></span>
+                                                <span class="text-blue-400" x-show="player.getEquipmentHpBonus() > 0" x-text="` (+${player.getEquipmentHpBonus()})`"></span>
                                             </p>
                                             <ul class="list-disc list-inside space-y-1 text-sm pt-1">
                                                 <template x-for="stat in ['strength', 'agility', 'intelligence', 'luck']" :key="stat">
@@ -287,7 +289,12 @@
                                                             <span x-text="player.stats[stat]"></span>
                                                             <span class="text-yellow-400 font-bold" x-show="tempStatIncreases[stat] > 0" x-text="` (+${tempStatIncreases[stat]})`"></span>
                                                             <span class="text-green-400" x-show="player.getPartyBonus(stat) > 0" x-text="` (+${player.getPartyBonus(stat)})`"></span>
-                                                            <span class="text-purple-400" x-show="player.getAffixEffect(stat).bonus > 0" x-text="` (+${player.getAffixEffect(stat).bonus})`"></span>
+                                                            <template x-if="player.getSpecialAffixModifier(stat).bonus > 0">
+                                                                <span class="text-purple-400" x-text="` (+${player.getSpecialAffixModifier(stat).bonus})`"></span>
+                                                            </template>
+                                                            <template x-if="player.getSpecialAffixModifier(stat).penalty > 0">
+                                                                <span class="text-red-400" x-text="` (-${player.getSpecialAffixModifier(stat).penalty})`"></span>
+                                                            </template>
                                                             <span class="text-blue-400" x-show="player.getEffectiveEquipmentBonus(stat) > 0" x-text="` (+${player.getEffectiveEquipmentBonus(stat)})`"></span>
                                                             <span class="text-red-400" x-show="isStarving" x-text="` -> ${player.getTotalStat(stat, isStarving)}`"></span>
                                                         </div>
@@ -654,6 +661,17 @@
                                                 <div>
                                                     <p class="font-bold" x-text="p.name"></p>
                                                     <p class="text-xs text-gray-400">力:<span x-text="p.stats.strength"></span> 敏:<span x-text="p.stats.agility"></span> 智:<span x-text="p.stats.intelligence"></span> 運:<span x-text="p.stats.luck"></span></p>
+                                                    
+                                                    <p class="text-sm text-green-400 mt-1" x-show="modals.dispatch.activeTab === 'hunting'">
+                                                        預計產量: <strong x-text="getGoblinYield(p, 'hunting')"></strong> 食物
+                                                    </p>
+                                                    <p class="text-sm text-yellow-500 mt-1" x-show="modals.dispatch.activeTab === 'logging'">
+                                                        預計產量: <strong x-text="getGoblinYield(p, 'logging')"></strong> 木材
+                                                    </p>
+                                                    <p class="text-sm text-gray-400 mt-1" x-show="modals.dispatch.activeTab === 'mining'">
+                                                        預計產量: <strong x-text="getGoblinYield(p, 'mining')"></strong> 礦石
+                                                    </p>
+
                                                 </div>
                                                 <button @click="removeFromDispatch(p.id, task)" class="btn btn-sm btn-danger">解除</button>
                                             </div>
@@ -1445,19 +1463,26 @@
                         <span x-show="isStarving">(飢餓中 -25%)</span>:
                     </p>
                     <ul class="list-disc list-inside space-y-1 text-sm">
-                            <template x-for="stat in ['strength', 'agility', 'intelligence', 'luck']" :key="stat">
-                                <li>
-                                    <div>
-                                        <span class="capitalize" x-text="STAT_NAMES[stat]"></span>:
-                                        <span x-text="player.stats[stat]"></span>
-                                        <span class="text-green-400" x-show="player.getPartyBonus(stat) > 0" x-text="` (+${player.getPartyBonus(stat)})`"></span>
-                                        <span class="text-purple-400" x-show="player.getAffixEffect(stat).bonus > 0" x-text="` (+${player.getAffixEffect(stat).bonus})`"></span>
-                                        <span class="text-blue-400" x-show="player.getEffectiveEquipmentBonus(stat) > 0" x-text="` (+${player.getEffectiveEquipmentBonus(stat)})`"></span>
-                                        <span class="text-red-400" x-show="isStarving" x-text="` -> ${player.getTotalStat(stat, isStarving)}`"></span>
-                                    </div>
-                                </li>
-                            </template>
-                        </ul>
+                        <template x-for="stat in ['strength', 'agility', 'intelligence', 'luck']" :key="stat">
+                            <li>
+                                <div>
+                                    <span class="capitalize" x-text="STAT_NAMES[stat]"></span>:
+                                    <span x-text="player.stats[stat]"></span>
+                                    <span class="text-green-400" x-show="player.getPartyBonus(stat) > 0" x-text="` (+${player.getPartyBonus(stat)})`"></span>
+                                    
+                                    <template x-if="player.getSpecialAffixModifier(stat).bonus > 0">
+                                        <span class="text-purple-400" x-text="` (+${player.getSpecialAffixModifier(stat).bonus})`"></span>
+                                    </template>
+                                    <template x-if="player.getSpecialAffixModifier(stat).penalty > 0">
+                                        <span class="text-red-400" x-text="` (-${player.getSpecialAffixModifier(stat).penalty})`"></span>
+                                    </template>
+                                    
+                                    <span class="text-blue-400" x-show="player.getEffectiveEquipmentBonus(stat) > 0" x-text="` (+${player.getEffectiveEquipmentBonus(stat)})`"></span>
+                                    <span class="text-red-400" x-show="isStarving" x-text="` -> ${player.getTotalStat(stat, isStarving)}`"></span>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
                         <div class="mt-2">
                             <p><strong>生命值:</strong>
                                 <span x-text="player.currentHp"></span> / <span x-text="player.calculateMaxHp(isStarving)"></span>
