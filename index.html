@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.07</title>
+    <title>哥布林王國v5.08</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1243,8 +1243,10 @@
                                     <p class="text-lg font-bold text-amber-200"><span x-text="captive.name"></span> -
                                         <span x-text="captive.profession"></span>
                                     </p>
-                                    <p class="text-sm" :class="captive.isPregnant ? 'text-pink-400' : 'text-green-400'"
-                                        x-text="captive.isPregnant ? `懷孕中 (剩餘 ${captive.pregnancyTimer} 天)` : '可繁衍'">
+                                    <p class="text-sm">
+                                        <span x-show="captive.isPregnant" class="text-pink-400 font-bold" x-text="`狀態: 懷孕中 (剩餘 ${captive.pregnancyTimer} 天)`"></span>
+                                        <span x-show="!captive.isPregnant && captive.isMother" class="text-blue-400 font-bold">狀態: 產奶中</span>
+                                        <span x-show="!captive.isPregnant && !captive.isMother" class="text-green-400 font-bold">狀態: 可繁衍</span>
                                     </p>
                                 </div>
                                 <input type="checkbox" :value="captive.id" x-model="modals.captiveManagement.selectedIds"
