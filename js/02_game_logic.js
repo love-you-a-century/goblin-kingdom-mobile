@@ -1218,7 +1218,7 @@ const gameLogic = {
                 if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
                 return { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
             case 'warehouse':
-                if (level >= 4) return { food: Infinity, wood: Infinity, stone: Infinity };
+                if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
                 return { food: 0, wood: 100 * multiplier, stone: 100 * multiplier }; // 初始花費 100木, 100礦
             case 'barracks':
                 if (level >= 5) return { food: Infinity, wood: Infinity, stone: Infinity };
@@ -1246,7 +1246,7 @@ const gameLogic = {
     },
     upgradeBuilding(type) {
         const building = this.buildings[type];
-        const maxLevels = { dungeon: 6, warehouse: 4, barracks: 5, armory: 4, maternity: 6, merchantCamp: 4 };
+        const maxLevels = { dungeon: 6, warehouse: 6, barracks: 5, armory: 4, maternity: 6, merchantCamp: 4 };
         if (building.level >= maxLevels[type]) { this.showCustomAlert(`${building.name}已達到最大等級！`); return; }
         if (!this.canAffordBuildingUpgrade(type)) { this.showCustomAlert("資源不足！"); return; }
         
