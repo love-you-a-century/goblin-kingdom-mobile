@@ -752,7 +752,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.09 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.10 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -3229,16 +3229,36 @@ const gameLogic = {
                 
                 // 步驟2: 清理戰鬥狀態 (但先不切換畫面)
                 this.finishCombatCleanup(true);
-
                 // 步驟3: 呼叫每日結算 (它會負責換天、恢復血量、處理生產等所有事情)
                 this.processDailyUpkeep();
 
             } else {
-                // 戰敗邏輯不變
-                this.prepareToEndRaid(true);
+                // 【新增】復仇小隊戰敗懲罰邏輯
+                this.logMessage('tribe', '你在部落保衛戰中失敗了！復仇小隊趁機救走了他們的同伴！', 'enemy');
+
+                // 1. 從敵人身上獲取復仇來源的難度
+                const revengeDifficulty = this.combat.enemies.length > 0 ? this.combat.enemies[0].originDifficulty : null;
+
+                if (revengeDifficulty) {
+                    // 2. 根據難度篩選出被救走的俘虜和留下的俘虜
+                    const rescuedCaptives = this.captives.filter(c => c.originDifficulty === revengeDifficulty);
+                    const remainingCaptives = this.captives.filter(c => c.originDifficulty !== revengeDifficulty);
+
+                    if (rescuedCaptives.length > 0) {
+                        // 3. 更新部落的俘虜名單
+                        this.captives = remainingCaptives;
+                        // 4. 記錄日誌，告知玩家哪些俘虜被救走
+                        const rescuedNames = rescuedCaptives.map(c => c.name).join(', ');
+                        this.logMessage('tribe', `俘虜 ${rescuedNames} 被成功救走，永遠地離開了你的部落。`, 'info');
+                    }
+                }
+                
+                // 5. 最後，觸發玩家重生
+                this.initiateRebirth();
             }
             return; // 結束函式，不再執行後續的掠奪邏輯
         }
+
 
         // --- 原有的掠奪戰鬥處理邏輯（維持不變）---
         if (victory) {
@@ -3405,26 +3425,30 @@ const gameLogic = {
         const modal = this.modals.captiveManagement;
         const selectedIds = new Set(modal.selectedIds);
 
-        // 步驟一：找出所有「產房」的俘虜 (懷孕中或產奶中)，這是我們的安全名單，完全不受影響。
+        // 【核心修正】根據 modal 的類型分別處理
+        if (modal.type === 'raid') {
+            // 情況一：在掠奪中途，整理「攜帶」的俘虜
+            this.currentRaid.carriedCaptives = modal.list.filter(c => selectedIds.has(c.id));
+            this.logMessage('raid', `你重新選擇了要攜帶的俘虜，當前攜帶 ${this.currentRaid.carriedCaptives.length} 人。`, 'info');
+            modal.isOpen = false;
+            this.finishCombatCleanup(); // 呼叫這個函式會關閉戰鬥畫面並返回掠奪地圖
+            return;
+        }
+
+        // 情況二和三：返回部落或日常事件時，整理「地牢」的俘虜
         const maternityCaptives = this.captives.filter(c => c.isMother || c.isPregnant);
-
-        // 步驟二：從「決策列表」(只包含地牢+新人)中，找出玩家選擇要保留的「地牢」俘虜。
         const keptDungeonCaptives = modal.list.filter(c => selectedIds.has(c.id));
-
-        // 步驟三：將這兩份名單合併，從無到有地重建最終的總俘虜名單。
         this.captives = [...maternityCaptives, ...keptDungeonCaptives];
         
-        // 步驟四：根據事件的來源，決定要執行的後續動作 (這部分維持不變)
-        if (modal.type === 'raid' || modal.type === 'raid_return') {
+        if (modal.type === 'raid_return') {
             this.logMessage('tribe', `你整理了地牢，最終留下了 ${this.dungeonCaptives.length} 名俘虜。`, 'success');
-            this.finalizeRaidReturn();
+            this.finalizeRaidReturn(); // 返回部落
         } else if (modal.type === 'dungeon') { 
             this.logMessage('tribe', `你整理了地牢，最終留下了 ${this.dungeonCaptives.length} 名俘虜。`, 'success');
-            this.processDailyUpkeep();
+            this.processDailyUpkeep(); // 繼續日常結算
         }
         
-        // 步驟五：關閉視窗
-        this.modals.captiveManagement.isOpen = false;
+        modal.isOpen = false;
     },
     openPartnerManagementModal(list, limit, context) {
         const modal = this.modals.partnerManagement;
@@ -4272,7 +4296,7 @@ const gameLogic = {
         // 加入到新隊伍
         this.dispatch[task].push(partnerId);
 
-        // 檢查並將夥伴從出擊隊伍中移除
+        // 【新增】檢查並將夥伴從出擊隊伍中移除
         if (this.player && this.player.party) {
             const initialPartySize = this.player.party.length;
             this.player.party = this.player.party.filter(p => p.id !== partnerId);
