@@ -354,9 +354,9 @@
         .unit:hover {
             transform: translate(-50%, -50%) scale(1.5); /* 懸停時放大 */
         }
-        .player { background-color: var(--player-color); color: var(--player-color); cursor: default; }
-        .knight { background-color: var(--knight-color); color: var(--knight-color); }
-        .princess { background-color: var(--princess-color); color: var(--princess-color); }
+        .unit.player { background-color: var(--player-color); color: var(--player-color); cursor: default; }
+        .unit.knight { background-color: var(--knight-color); color: var(--knight-color); }
+        .unit.princess { background-color: var(--princess-color); color: var(--princess-color); }
         
         /* 王座 */
         .throne {
