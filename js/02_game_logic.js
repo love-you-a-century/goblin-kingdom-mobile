@@ -450,6 +450,7 @@ const gameLogic = {
         if (unit.profession === '城市守軍') return 'bg-red-500';
         return 'bg-white'; // 居民
     },
+
     handleMapClick(target, event) {
         if (this.isCombatLocked) {
             this.showCustomAlert('你被巡邏隊攔截了，必須先擊敗他們！');
@@ -457,21 +458,24 @@ const gameLogic = {
         }
         event.stopPropagation();
 
+        // The key change: just set the selectedTarget and move the icon.
         this.selectedTarget = target;
 
         this.$nextTick(() => {
-            if (!this.selectedTarget) return; // 如果目標已清除，則不移動
-            
+            if (!this.selectedTarget) return;
+
             let anchorX, anchorY;
             if (Array.isArray(this.selectedTarget)) {
-                anchorX = this.selectedTarget[0].x - 10; // 微調位置
-                anchorY = this.selectedTarget[0].y + 10; // 微調位置
+                anchorX = this.selectedTarget[0].x - 10;
+                anchorY = this.selectedTarget[0].y + 10;
             } else {
                 anchorX = this.selectedTarget.x + (this.selectedTarget.width / 2) - 10;
                 anchorY = this.selectedTarget.y + this.selectedTarget.height;
             }
             this.playerMapPosition.x = anchorX;
             this.playerMapPosition.y = anchorY;
+            
+            // Removed the call to scoutTarget() here.
         });
     },
 
@@ -503,51 +507,6 @@ const gameLogic = {
         }
 
         return `left:${targetX}px; top:${targetY}px;`;
-    },
-
-    executeBuildingScout(building) {
-        if (building.isFinalChallenge) {
-            // 檢查城堡內是否還有敵人
-            if (building.occupants.length > 0) {
-                // 如果還有敵人，執行進入王座之間的邏輯
-                this.logMessage('raid', '你已準備好深入王座之間。');
-                this.enterThroneRoom(building.occupants);
-            } else {
-                // 如果敵人已被清空，則將其視為一個普通的可搜刮建築
-                this.modals.scoutInfo.target = [];
-                this.modals.scoutInfo.emptyBuildingMessage = building.looted 
-                    ? '這棟建築是空的，你已搜刮過。' 
-                    : '這棟建築是空的，看來可以搜刮一番。';
-                this.modals.scoutInfo.isOpen = true;
-            }
-            return; // 處理完畢，中斷後續函式執行
-        }
-
-        this.logMessage('raid', `你開始偵查 ${building.type}...`, 'player');
-        const playerIntel = this.player.getTotalStat('intelligence', this.isStarving);
-        const successChance = 80 + playerIntel * 0.5;
-
-        if (roll(successChance)) {
-            this.currentRaid.timeRemaining -= 3;
-            building.scouted = true;
-            this.logMessage('raid', `偵查成功！`, 'success');
-
-            if (building.occupants.length > 0) {
-                building.postScoutText = ` (${building.occupants.length}人)`;
-                this.modals.scoutInfo.target = building.occupants;
-            } else {
-                building.postScoutText = building.looted ? ' (空)' : ' (可搜刮)';
-                this.modals.scoutInfo.target = [];
-                this.modals.scoutInfo.emptyBuildingMessage = building.looted 
-                    ? '這棟建築是空的，你已搜刮過。' 
-                    : '這棟建築是空的，看來可以搜刮一番。';
-            }
-            this.modals.scoutInfo.isOpen = true;
-        } else {
-            this.currentRaid.timeRemaining -= 6;
-            this.logMessage('raid', `偵查 ${building.type} 失敗，你一無所獲。`, 'enemy');
-        }
-        this.checkRaidTime();
     },
     
     closeScoutModalAndClearTarget() {
@@ -752,7 +711,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.10 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.13 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1804,6 +1763,9 @@ const gameLogic = {
         this.currentRaid = this.generateCity(difficulty);
         this.currentRaid.reinforcementsDefeated = false;
         this.screen = 'raid';
+
+        this.playerMapPosition = { x: MAP_WIDTH / 2, y: MAP_HEIGHT - 30 };
+
         this.logMessage('raid', `你帶領隊伍前往 ${this.currentRaid.locationName} 進行掠奪！`, 'player');
     },
 
@@ -2177,7 +2139,23 @@ const gameLogic = {
         this.startCombat(this.throneRoomUnits, true);
     },
     scoutEnvironment() {
-        const successChance = 90 + (this.player.getTotalStat('intelligence', this.isStarving) * 1) + (this.player.party.length + 1) - (this.currentRaid.currentZoneIndex * 10);
+        const allPartyMembers = [this.player, ...this.player.party];
+        const playerPartyIntel = allPartyMembers.reduce((sum, unit) => sum + (unit.getTotalStat('intelligence') || 0), 0);
+        const playerPartyAvgIntel = playerPartyIntel / allPartyMembers.length;
+
+        const allEnemies = this.currentRaid.currentZone.enemies.flat();
+        const unscoutedEnemies = allEnemies.filter(e => !this.isTargetScouted(e.id));
+
+        let enemyAvgIntel = 0;
+        if (unscoutedEnemies.length > 0) {
+            const enemyTotalIntel = unscoutedEnemies.reduce((sum, unit) => sum + (unit.stats.intelligence || 0), 0);
+            enemyAvgIntel = enemyTotalIntel / unscoutedEnemies.length;
+        }
+
+        // Apply formula: (player_avg_intel * 2) - (unscouted_enemies_count * enemy_avg_intel * 0.2)
+        let successChance = (playerPartyAvgIntel * 2) - (unscoutedEnemies.length * enemyAvgIntel * 0.2);
+        successChance = Math.max(5, Math.min(100, successChance));
+
         if(roll(successChance)) {
             this.currentRaid.timeRemaining -= 3;
             this.currentRaid.currentZone.scouted.environment = true;
@@ -2187,57 +2165,62 @@ const gameLogic = {
             this.logMessage('raid', `環境偵查失敗！(-6 分鐘)`, 'enemy');
         }
         this.checkRaidTime();
-
-        // 【核心修正】將步驟判斷從 4.5 改為 5.5
-        if (this.tutorial.active && this.tutorial.step === 5.5) {
-            this.tutorial.step = 0; // 暫時結束教學，等待玩家自行探索後返回部落觸發下一步
-            this.showCustomAlert('很好，王。現在您可以自由行動了，試著擊敗敵人、擄走女性，或者搜刮資源，然後『脫離城鎮』返回部落吧。');
-        }
     },
-    // --- 請將舊的 scoutTarget 函數完整刪除，並貼上這個新版本 ---
+   
     scoutTarget(targetOrGroup) {
-        // 安全檢查，防止目標為空
         if (!targetOrGroup || (Array.isArray(targetOrGroup) && targetOrGroup.length === 0)) {
             this.showCustomAlert("偵查目標無效！");
-            console.error("錯誤：偵查的目標為空，無法繼續。");
             return;
         }
 
         const isGroup = Array.isArray(targetOrGroup);
-        // 【修正】無論是單體還是群組，都先取出第一個單位來進行偵查判定
         const representativeTarget = isGroup ? targetOrGroup[0] : targetOrGroup;
 
-        // 如果代表目標已經被偵查過，直接開啟情報視窗
         if (this.isTargetScouted(representativeTarget.id)) {
-            this.modals.scoutInfo.target = targetOrGroup; // 視窗顯示的是完整的群組
+            // 【修正】確保傳遞給視窗的是單位陣列，而不是建築物物件
+            this.modals.scoutInfo.target = isGroup ? targetOrGroup : targetOrGroup.occupants;
             this.modals.scoutInfo.isOpen = true;
+            this.logMessage('raid', `你再次查看了 ${isGroup ? '一個隊伍' : representativeTarget.name} 的情報。`, 'info');
             return;
         }
 
-        // --- 偵查成功率計算 ---
-        const playerIntel = this.player.getTotalStat('intelligence', this.isStarving);
-        // 【修正】使用整個群組的平均智力來計算，而非只看第一個
-        let enemyAvgIntel = 0;
-        if (isGroup) {
-            const totalIntel = targetOrGroup.reduce((sum, unit) => sum + (unit.stats.intelligence || 0), 0);
-            enemyAvgIntel = totalIntel > 0 ? totalIntel / targetOrGroup.length : 0;
-        } else {
-            enemyAvgIntel = representativeTarget.stats.intelligence || 0;
+        // Special case: Unoccupied buildings are always successfully scouted
+        if (!isGroup && targetOrGroup.occupants && targetOrGroup.occupants.length === 0) {
+            this.currentRaid.timeRemaining -= 1;
+            this.currentRaid.currentZone.scouted.targets.add(targetOrGroup.id);
+            this.logMessage('raid', `偵查成功！你發現這棟建築是空的。(-1 分鐘)`, 'success');
+            targetOrGroup.postScoutText = targetOrGroup.looted ? ' (空)' : ' (可搜刮)';
+            this.modals.scoutInfo.target = [];
+            this.modals.scoutInfo.emptyBuildingMessage = targetOrGroup.looted
+                ? '這棟建築是空的，你已搜刮過。'
+                : '這棟建築是空的，看來可以搜刮一番。';
+            this.modals.scoutInfo.isOpen = true;
+            this.checkRaidTime();
+            return;
         }
-        
-        const successChance = 70 + (playerIntel - enemyAvgIntel) * 2 + (this.player.party.length + 1);
-        
-        // --- 執行偵查 ---
+
+        // Calculate player party's average intelligence
+        const allPartyMembers = [this.player, ...this.player.party];
+        const playerPartyIntel = allPartyMembers.reduce((sum, unit) => sum + (unit.getTotalStat('intelligence') || 0), 0);
+        const playerPartyAvgIntel = playerPartyIntel / allPartyMembers.length;
+
+        // Calculate enemy party's average intelligence
+        const enemiesToScout = isGroup ? targetOrGroup : representativeTarget.occupants;
+        const enemyTotalIntel = enemiesToScout.reduce((sum, unit) => sum + (unit.stats.intelligence || 0), 0);
+        const enemyAvgIntel = enemyTotalIntel / enemiesToScout.length;
+
+        // Apply formula: 70 + (player_avg_intel - enemy_avg_intel) * 2 + party_size
+        let successChance = 70 + (playerPartyAvgIntel - enemyAvgIntel) * 2 + allPartyMembers.length;
+        successChance = Math.max(5, Math.min(100, successChance)); // Cap between 5% and 100%
+
         if (roll(successChance)) {
             this.currentRaid.timeRemaining -= 3;
-            // 【修正】將群組內所有單位的ID都標記為已偵查
             const targetsToMark = isGroup ? targetOrGroup : [representativeTarget];
             targetsToMark.forEach(t => this.currentRaid.currentZone.scouted.targets.add(t.id));
 
             this.logMessage('raid', `你成功偵查了 ${isGroup ? '一個隊伍' : representativeTarget.name} 的詳細情報！(-3 分鐘)`, 'success');
-            
-            // 開啟情報視窗
-            this.modals.scoutInfo.target = targetOrGroup;
+
+            this.modals.scoutInfo.target = isGroup ? targetOrGroup : targetOrGroup.occupants;
             this.modals.scoutInfo.isOpen = true;
         } else {
             this.currentRaid.timeRemaining -= 6;
@@ -2253,7 +2236,7 @@ const gameLogic = {
     lootBuilding(building) {
         if(building.looted) return;
 
-        // --- 【新增】搜刮時被巡邏隊發現的機制 ---
+        // --- 搜刮時被巡邏隊發現的機制 ---
         const zone = this.currentRaid.currentZone;
         const isInnerCity = zone.name.includes('內城') || zone.name === '王城';
         const patrolsExist = zone.enemies && zone.enemies.length > 0;
@@ -2276,7 +2259,7 @@ const gameLogic = {
                     // 開始一場強制戰鬥（敵人先攻）
                     this.startCombat(patrolToFight, true);
                     
-                    // 【重要】中斷搜刮，玩家不會獲得資源
+                    // 中斷搜刮，玩家不會獲得資源
                     return; 
                 }
             }
@@ -2427,7 +2410,7 @@ const gameLogic = {
         const newCaptives = this.currentRaid.carriedCaptives;
         const currentDungeonCaptives = this.dungeonCaptives;
 
-        // 【修改】新的觸發條件：當地牢的現有人 + 新抓的人 > 地牢容量時
+        // 新的觸發條件：當地牢的現有人 + 新抓的人 > 地牢容量時
         if (currentDungeonCaptives.length + newCaptives.length > this.captiveCapacity) {
             
             this.logMessage('tribe', '你帶回的俘虜過多，地牢無法容納！你需要從現有和新增的俘虜中決定去留...', 'warning');
@@ -2467,7 +2450,7 @@ const gameLogic = {
         }
         
         this.currentRaid = null;
-        // 【新增】重置掠奪地圖上被選中的目標
+        // 重置掠奪地圖上被選中的目標
         this.selectedTarget = null; 
         
         this.screen = 'tribe';
@@ -2545,7 +2528,7 @@ const gameLogic = {
         }
     },
 
-    // 新增函數：觸發騎士團增援戰
+    // 觸發騎士團增援戰
     triggerReinforcementBattle() {
         if (!this.currentRaid || this.currentRaid.reinforcementsDefeated) {
             return; // 如果沒有掠奪，或者增援已經被打敗過，則直接中斷函式，不執行任何操作
@@ -2617,30 +2600,29 @@ const gameLogic = {
         }
     },
 
-    startCombat(enemyGroup, enemyFirstStrike = false) {
-
-        this.combat.allies = [this.player, ...this.player.party].filter(u => u.isAlive());
+    startCombat(enemyGroup, enemyFirstStrike = false, alliesOverride = null) {
+        this.combat.allies = (alliesOverride || [this.player, ...this.player.party]).filter(u => u.isAlive());
         this.combat.enemies = enemyGroup.filter(u => u.isAlive());
         this.combat.currentEnemyGroup = enemyGroup;
         this.combat.turn = 1;
         this.combat.isProcessing = false;
         this.combat.playerActionTaken = false;
-        
         this.screen = 'combat';
         this.logs.combat = [];
         this.logMessage('combat', `戰鬥開始！`, 'system');
         
-        if(enemyFirstStrike) {
+        if (enemyFirstStrike) {
             this.logMessage('combat', '敵人發動了突襲！', 'enemy');
             this.executeTurn(true); 
         } else {
             this.logMessage('combat', '等待你的指令...', 'system');
         }
     },
+
     async executePlayerAction(action) {
         if (this.combat.isProcessing || this.combat.playerActionTaken || !this.player || !this.player.isAlive()) return;
         this.combat.playerActionTaken = true;
-        
+
         let continueToEnemyTurn = true;
 
         if (action === 'attack') {
@@ -2664,6 +2646,7 @@ const gameLogic = {
             this.endCombat(true);
         }
     },
+
     async executeTurn(isEnemyFirstStrike = false) {
         if (this.combat.isProcessing) return;
         this.combat.isProcessing = true;
@@ -2673,7 +2656,7 @@ const gameLogic = {
             this.logs.combat = this.logs.combat.filter(entry => entry.turn >= oldestTurnToKeep);
         }
         
-        // 【修改】將消耗時間的邏輯包裹在條件判斷中
+        // 將消耗時間的邏輯包裹在條件判斷中
         if (this.currentRaid) {
             // 如果是在掠奪中，才消耗時間並顯示倒數
             this.currentRaid.timeRemaining--;
@@ -2719,7 +2702,7 @@ const gameLogic = {
         if (!this.player.isAlive()) {
             // 王陣亡，但夥伴還在，觸發自動戰鬥
             this.logMessage('combat', '哥布林王倒下了！夥伴們將繼續戰鬥！', 'system');
-            // 延遲後自動進入下一回合
+            // 遲後後自動進入下一回合
             setTimeout(() => this.executeTurn(false), 1500); // 延遲1.5秒讓玩家閱讀戰報
         } else {
             // 王還活著，恢復正常流程，等待玩家指令
@@ -2728,6 +2711,7 @@ const gameLogic = {
         }
     }
     },
+
     async processAiAction(attacker) {
         const isAlly = this.combat.allies.some(a => a.id === attacker.id);
         const allies = isAlly ? this.combat.allies.filter(u => u.isAlive()) : this.combat.enemies.filter(u => u.isAlive());
@@ -2747,19 +2731,23 @@ const gameLogic = {
                         await this.executeSkill(skill, attacker, allies, enemies);
                         actionTaken = true;
                     }
-                } else {
-                    // 【新增檢查】檢查施法者身上是否已經有同類型的技能效果
-                    const isEffectActive = attacker.statusEffects.some(e => e.type === skill.type);
-
-                    // 只有當效果未生效時，才施放技能
-                    if (!isEffectActive) {
-                        await this.executeSkill(skill, attacker, allies, enemies);
-                        actionTaken = true;
-                    }
-                    // 如果 isEffectActive 為 true，則 actionTaken 保持 false，AI會接著執行普通攻擊
+                } else if (skill.type === 'charge_nuke') {
+                // 法師技能的獨立施放邏輯
+                const isCasting = attacker.statusEffects.some(e => e.type === 'charge_nuke');
+                if (!isCasting) {
+                    await this.executeSkill(skill, attacker, allies, enemies);
+                    actionTaken = true;
+                }
+            } else {
+                // 檢查施法者身上是否已經有同類型的技能效果
+                const isEffectActive = attacker.statusEffects.some(e => e.type === skill.type);
+                if (!isEffectActive) {
+                    await this.executeSkill(skill, attacker, allies, enemies);
+                    actionTaken = true;
                 }
             }
         }
+    }
         
         const chargingEffect = attacker.statusEffects.find(e => e.type === 'charge_nuke');
         if (chargingEffect) {
@@ -2787,6 +2775,7 @@ const gameLogic = {
         
         await new Promise(res => setTimeout(res, 300));
     },
+
     async processAttack(attacker, target, isMultiHit = false) {
         const isAllyAttacking = this.combat.allies.some(a => a.id === attacker.id);
         const enemyTeam = isAllyAttacking ? this.combat.enemies : this.combat.allies;
@@ -2799,7 +2788,7 @@ const gameLogic = {
             currentTarget = taunter;
         }
 
-        // --- 【核心修改】格擋判定 ---
+        // --- 格擋判定 ---
         const targetHasShield = currentTarget.equipment?.offHand?.baseName === '盾';
         if (targetHasShield && currentTarget.isAlive()) {
             const luckConversionRate = 0.1; // 幸運轉換率 (10%)
@@ -2881,8 +2870,9 @@ const gameLogic = {
             }
         }
     },
+
     gainResourcesFromEnemy(enemy) {
-        // 【新增】如果不是在掠奪中 (例如部落防衛戰)，則不掉落資源，直接返回。
+        // 如果不是在掠奪中 (例如部落防禦戰)，則不掉落資源，直接返回。
         if (!this.currentRaid) {
             return;
         }
@@ -2910,6 +2900,7 @@ const gameLogic = {
             this.logMessage('raid', `你獲得了 食物x${foodDrop}, 礦石x${stoneDrop}。`, 'success');
         }
     },
+
     handleLootDrop(enemy) {
         const baseDropRates = { '居民': 10, '女性居民': 10, '城市守軍': 30 };
         const isKnight = Object.keys(KNIGHT_ORDER_UNITS).includes(enemy.profession);
@@ -3363,9 +3354,15 @@ const gameLogic = {
                 }
                 break;
             case 'charge_nuke':
-                caster.statusEffects.push({ type: 'charge_nuke', duration: skill.chargeTime + 1, chargeTurns: skill.chargeTime });
-                this.logMessage('combat', `${caster.name} 開始詠唱咒文，空氣變得凝重起來...`, 'info');
-                break;
+            //現在將 multiplier 和 chargeTurns 一同儲存到狀態效果中
+            caster.statusEffects.push({ 
+                type: 'charge_nuke', 
+                duration: skill.chargeTime + 1, 
+                chargeTurns: skill.chargeTime, 
+                multiplier: skill.multiplier // 這裡就是關鍵的修正
+            });
+            this.logMessage('combat', `${caster.name} 開始詠唱咒文，空氣變得凝重起來...`, 'info');
+            break;
             case 'team_heal':
                 const healAmount = caster.getTotalStat('intelligence') * allies.length;
                 allies.forEach(ally => {
