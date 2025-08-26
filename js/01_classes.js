@@ -494,7 +494,9 @@
                 const totalInt = this.getTotalStat('intelligence', isStarving);
                 const totalLuc = this.getTotalStat('luck', isStarving);
 
-                let maxHp = (totalStr + totalAgi + totalInt + totalLuc) * 6 + this.getEquipmentHpBonus();
+                let maxHp = this.getBaseMaxHp(isStarving) + 
+                this.getPartyHpBonus(isStarving) + 
+                this.getEquipmentHpBonus();
                 
                 // --- START OF ADDED CODE ---
                 // Apply HP multipliers from standard affixes
@@ -608,8 +610,21 @@
             }
 
             getTotalStat(stat, isStarving = false) {
-                if (!this.stats.hasOwnProperty(stat)) return 0;
-                const total = this.stats[stat] || 0;
+                if (stat === 'hp') return this.calculateMaxHp(isStarving);
+                if (!this.stats.hasOwnProperty(stat) || !['strength', 'agility', 'intelligence', 'luck'].includes(stat)) {
+                    return 0;
+                }
+
+                // 基礎值 (只計算自身)
+                let baseValue = this.stats[stat];
+
+                // 固定加成值 (只計算裝備)
+                let flatBonus = this.getEquipmentBonus(stat);
+
+                let total = baseValue + flatBonus;
+                total = Math.max(0, total);
+
+                // 敵人不受飢餓影響，但保留 isStarving 參數以維持函式簽名一致
                 return isStarving ? Math.floor(total * 0.75) : total;
             }
 
@@ -704,11 +719,12 @@
                 const stats = distributeStatsWithRatio(totalStatPoints, unitDetails.ratio);
                 super(unitType, stats, unitType, originDifficulty); // 將參數傳遞給父類別
                 this.skills = [];
+                this.skills = [];
                 if (unitDetails.skill) {
-                    this.skills.push({
-                        ...unitDetails.skill,
-                        currentCooldown: 0,
-                    });
+                    // 使用 JSON.parse 和 JSON.stringify 進行深拷貝，確保每個實例都有獨立的技能物件
+                    const skillCopy = JSON.parse(JSON.stringify(unitDetails.skill));
+                    skillCopy.currentCooldown = 0; // 為拷貝後的物件添加冷卻時間
+                    this.skills.push(skillCopy);
                 }
             }
         }
@@ -726,10 +742,10 @@
                 
                 this.skills = [];
                 if (unitDetails.skill) {
-                    this.skills.push({
-                        ...unitDetails.skill,
-                        currentCooldown: 0,
-                    });
+                    // 使用 JSON.parse 和 JSON.stringify 進行深拷貝，確保每個實例都有獨立的技能物件
+                    const skillCopy = JSON.parse(JSON.stringify(unitDetails.skill));
+                    skillCopy.currentCooldown = 0; // 為拷貝後的物件添加冷卻時間
+                    this.skills.push(skillCopy);
                 }
             }
         }

@@ -1,4 +1,28 @@
+function filterInventory(inventory, filter) {
+    if (filter === 'all') return inventory;
+    return inventory.filter(item => {
+        if (filter === 'weapon') return item.slot === 'mainHand';
+        if (filter === 'shield') return item.baseName === '盾';
+        if (filter === 'armor') return item.slot === 'chest';
+        return true;
+    });
+}
+
 const gameLogic = {
+
+    get canExecuteBreeding() {
+        if (!this.player) return false; // 安全檢查
+
+        const selectedCount = this.modals.dungeon.selectedBreedIds.length;
+
+        if (selectedCount === 0) return true; // 如果沒選人，按鈕應該是可用的（但點了會提示）
+        if (selectedCount > this.breedingChargesLeft) return true;
+        if (this.maternityCapacity === 0) return true;
+        if ((this.mothers.length + selectedCount) > this.maternityCapacity) return true;
+        
+        return false; // 所有條件都滿足，按鈕不禁用
+    },
+    
     pendingDecisions: [],
     //派遣系統
     dispatch: {
@@ -6,15 +30,31 @@ const gameLogic = {
         logging: [], // 伐木隊伍
         mining: [],  // 採礦隊伍
     },
+
+    // 判斷「商人營地」按鈕是否應該被禁用
+    get isMerchantButtonDisabled() {
+        return !this.merchant.isPresent;
+    },
+
+    // 判斷「出擊掠奪」按鈕是否應該發光
+    get shouldRaidButtonGlow() {
+        return this.tutorial.active && this.tutorial.step === 5;
+    },
+
+    // 判斷「部落建設」按鈕是否應該發光
+    get shouldConstructionButtonGlow() {
+        return this.tutorial.active && this.tutorial.step === 2;
+    },
+
     dlc: {
         hells_knights: false // 「王國騎士團」DLC，預設為未解鎖
     },
-    bailoutCounter: 0, // 【新增此行】用來計算玩家求助的次數
-    raidTimeExpired: false, // 【新增此行】用來標記時間是否在戰鬥中耗盡
-    isRetreatingWhenTimeExpired: false, // 【新增此行】記錄時間耗盡時是否正在脫離
-    bailoutOfferedButRefused: false, // 【新增此行】記錄玩家是否拒絕過求助
-    screen: 'api_key_input', // 【修改】將初始畫面改為 API 輸入介面
-    userApiKey: '',          // 【新增】用來儲存玩家輸入的金鑰
+    bailoutCounter: 0, // 用來計算玩家求助的次數
+    raidTimeExpired: false, // 用來標記時間是否在戰鬥中耗盡
+    isRetreatingWhenTimeExpired: false, // 記錄時間耗盡時是否正在脫離
+    bailoutOfferedButRefused: false, // 記錄玩家是否拒絕過求助
+    screen: 'api_key_input', // 將初始畫面改為 API 輸入介面
+    userApiKey: '',          // 用來儲存玩家輸入的金鑰
     musicSettings: {
         src: null,
         isPlaying: false,
@@ -181,11 +221,7 @@ const gameLogic = {
             this.musicSettings.isPlaying = false;
         }
     },
-    musicSettings: {
-        src: null,
-        isPlaying: false,
-        playOnScreen: 'tribe', // 預設在部落畫面播放
-    },
+    
     day: 1,
     player: null,
     partners: [],
@@ -229,14 +265,15 @@ const gameLogic = {
         },
     },
     
+    merchantDialogueTimeout: null,
     merchant: { 
-        dialogue: '', // 【新增此行】用來存放當前對話
+        dialogue: '', // 用來存放當前對話
         throneRoomUnits: [],
         isPresent: false,
         goods: [],
         stayDuration: 0,
         purchases: 0, // 用於追蹤彩蛋
-        selectedItemIds: [], // 【修改】改為陣列以支援複選
+        selectedItemIds: [], // 改為陣列以支援複選
         selectedCaptiveIds: [],
     },
 
@@ -390,48 +427,18 @@ const gameLogic = {
         return this.partners.find(p => p.id === this.modals.partnerEquipment.partnerId);
     },
     get filteredWarehouseInventory() {
-        const filter = this.modals.warehouse.activeFilter;
-        if (filter === 'all') return this.warehouseInventory;
-        return this.warehouseInventory.filter(item => {
-            if (filter === 'weapon') return item.slot === 'mainHand';
-            if (filter === 'shield') return item.baseName === '盾';
-            if (filter === 'armor') return item.slot === 'chest';
-            return true;
-        });
+        return filterInventory(this.warehouseInventory, this.modals.warehouse.activeFilter);
     },
     get filteredPlayerInventory() {
-        if (!this.player) {
-            return [];
-        }
-        const filter = this.modals.warehouse.activeFilter;
-        if (filter === 'all') return this.player.inventory;
-        return this.player.inventory.filter(item => {
-            if (filter === 'weapon') return item.slot === 'mainHand';
-            if (filter === 'shield') return item.baseName === '盾';
-            if (filter === 'armor') return item.slot === 'chest';
-            return true;
-        });
+        if (!this.player) return [];
+        return filterInventory(this.player.inventory, this.modals.warehouse.activeFilter);
     },
     get filteredPartnerWarehouse() {
-        const filter = this.modals.partnerEquipment.activeFilter;
-        if (filter === 'all') return this.warehouseInventory;
-        return this.warehouseInventory.filter(item => {
-            if (filter === 'weapon') return item.slot === 'mainHand';
-            if (filter === 'shield') return item.baseName === '盾';
-            if (filter === 'armor') return item.slot === 'chest';
-            return true;
-        });
+        return filterInventory(this.warehouseInventory, this.modals.partnerEquipment.activeFilter);
     },
     get filteredPartnerBackpack() {
         if (!this.player) return [];
-        const filter = this.modals.partnerEquipment.activeFilter;
-        if (filter === 'all') return this.player.inventory;
-        return this.player.inventory.filter(item => {
-            if (filter === 'weapon') return item.slot === 'mainHand';
-            if (filter === 'shield') return item.baseName === '盾';
-            if (filter === 'armor') return item.slot === 'chest';
-            return true;
-        });
+        return filterInventory(this.player.inventory, this.modals.partnerEquipment.activeFilter);
     },
     openPartnerEquipment(partnerId) {
         this.modals.partnerEquipment.partnerId = partnerId;
@@ -656,7 +663,8 @@ const gameLogic = {
             // 如果還有商品
             this.merchant.dialogue = "「眼光不錯，這裝備肯定能成為助力」";
             // 讓這句「反應式對話」停留 4 秒後，再恢復成預設對話
-            setTimeout(() => {
+            clearTimeout(this.merchantDialogueTimeout); // 先清除舊的，以防萬一
+            this.merchantDialogueTimeout = setTimeout(() => {
                 this.updateMerchantDialogue();
             }, 4000);
         }
@@ -721,18 +729,13 @@ const gameLogic = {
             }
         });
         this.$watch('modals.construction.isOpen', (isOpen) => {
-            // 當建築介面被關閉 (isOpen 變為 false)
-            // 且玩家剛好處於「拒絕過幫助」的狀態
             if (!isOpen && this.bailoutOfferedButRefused) {
-                // 重置旗標
                 this.bailoutOfferedButRefused = false; 
-                // 延遲一小段時間再觸發，避免視窗閃爍
                 setTimeout(() => {
                     this.handleBailoutRequest();
                 }, 200);
             }
-        });
-        this.$watch('modals.construction.isOpen', (isOpen) => {
+            
             if (isOpen && this.player && this.modals.construction.activeTab === 'barracks') {
                 this.modals.barracks.selectedPartyIds = this.player.party.map(p => p.id);
             }
@@ -740,6 +743,11 @@ const gameLogic = {
         this.$watch('modals.construction.activeTab', (newTab) => {
             if (newTab === 'barracks' && this.player) {
                 this.modals.barracks.selectedPartyIds = this.player.party.map(p => p.id);
+            }
+        });
+        this.$watch('modals.merchant.isOpen', (isOpen) => {
+            if (!isOpen) {
+                clearTimeout(this.merchantDialogueTimeout);
             }
         });
 
@@ -1017,23 +1025,30 @@ const gameLogic = {
     },
     
     handleRaidButtonClick() {
+        // 步驟 1: 首先檢查是否滿足最基本的掠奪條件
         const canRaid = this.buildings.dungeon.level > 0 && this.buildings.maternity.level > 0;
 
         if (canRaid) {
+            // 條件滿足：直接切換到掠奪選擇畫面
             this.screen = 'raid_selection';
-            return;
-        }
-        
-        // 【核心修改】無論如何，先彈出正常的提示
-        this.showCustomAlert('必須先建造「地牢」與「產房」，為掠奪來的俘虜和新生兒做好準備，才能出擊！', () => {
-            // 這個函式會在玩家按下提示框的「確定」後執行
-            const isStuck = (this.buildings.dungeon.level === 0 || this.buildings.maternity.level === 0) &&
-                            (this.resources.food < 200 || this.resources.wood < 200 || this.resources.stone < 200);
 
-            if (isStuck) {
-                this.handleBailoutRequest();
+            // 教學邏輯可以放在這裡
+            if (this.tutorial.active && this.tutorial.step === 5) {
+                this.advanceTutorial(5.5);
             }
-        });
+
+        } else {
+            // 條件不滿足：執行提示與潛在的求助流程
+            this.showCustomAlert('必須先建造「地牢」與「產房」，才能出擊！', () => {
+                // 在玩家關閉提示後，檢查是否卡關
+                const isStuck = this.resources.food < 200 || this.resources.wood < 200 || this.resources.stone < 200;
+                
+                // 只有在「真的沒資源蓋房子」時才觸發求助
+                if (isStuck) {
+                    this.handleBailoutRequest();
+                }
+            });
+        }
     },
 
     processDailyUpkeep() {
@@ -1746,15 +1761,6 @@ const gameLogic = {
         { difficulty: 'hell', name: '地獄', description: '居民(30-35), 守軍(20-25)' },
     ],
     startRaid(difficulty) {
-        // 【修改】將步驟判斷從 4 改為 5，並將下一步指向 5.5
-        if (this.tutorial.active && this.tutorial.step === 5) {
-            if (difficulty !== 'easy') {
-                this.showCustomAlert('王，您的勇氣可嘉。那麼，您自己看著辦吧。引導教學將在部落中等您歸來。');
-                this.tutorial.active = false;
-            } else {
-                this.advanceTutorial(5.5); // 推進到偵查環境的提示
-            }
-        }
 
         if (this.buildings.dungeon.level === 0) {
             this.showCustomAlert('地牢尚未建造，無法發動掠奪來抓捕俘虜！');
@@ -2175,56 +2181,65 @@ const gameLogic = {
 
         const isGroup = Array.isArray(targetOrGroup);
         const representativeTarget = isGroup ? targetOrGroup[0] : targetOrGroup;
+        // 【修正】統一獲取目標名稱給日誌使用
+        const targetNameForLog = isGroup ? '一個隊伍' : (representativeTarget.type || representativeTarget.name);
 
-        if (this.isTargetScouted(representativeTarget.id)) {
-            // 【修正】確保傳遞給視窗的是單位陣列，而不是建築物物件
-            this.modals.scoutInfo.target = isGroup ? targetOrGroup : targetOrGroup.occupants;
-            this.modals.scoutInfo.isOpen = true;
-            this.logMessage('raid', `你再次查看了 ${isGroup ? '一個隊伍' : representativeTarget.name} 的情報。`, 'info');
-            return;
-        }
-
-        // Special case: Unoccupied buildings are always successfully scouted
-        if (!isGroup && targetOrGroup.occupants && targetOrGroup.occupants.length === 0) {
+        // 【核心邏輯重構】
+        // 優先判斷目標是不是一個「空的建築」，無論之前是否偵查過
+        if (!isGroup && representativeTarget.occupants && representativeTarget.occupants.length === 0) {
+            // 因為建築已經是空的，偵查成本很低
             this.currentRaid.timeRemaining -= 1;
-            this.currentRaid.currentZone.scouted.targets.add(targetOrGroup.id);
-            this.logMessage('raid', `偵查成功！你發現這棟建築是空的。(-1 分鐘)`, 'success');
-            targetOrGroup.postScoutText = targetOrGroup.looted ? ' (空)' : ' (可搜刮)';
+            this.logMessage('raid', `偵查成功！你發現 ${targetNameForLog} 是空的。(-1 分鐘)`, 'success');
+            
+            // 確保偵查狀態和文字被更新
+            representativeTarget.scouted = true;
+            this.updateBuildingScoutText(); // 呼叫新的輔助函式更新文字
+            
+            // 準備並打開「空建築」專用的情報視窗
             this.modals.scoutInfo.target = [];
-            this.modals.scoutInfo.emptyBuildingMessage = targetOrGroup.looted
+            this.modals.scoutInfo.emptyBuildingMessage = representativeTarget.looted
                 ? '這棟建築是空的，你已搜刮過。'
                 : '這棟建築是空的，看來可以搜刮一番。';
             this.modals.scoutInfo.isOpen = true;
             this.checkRaidTime();
+            return; // 結束函式
+        }
+
+        // 如果之前偵查過，且裡面還有敵人
+        if (this.isTargetScouted(representativeTarget.id)) {
+            this.modals.scoutInfo.target = isGroup ? targetOrGroup : representativeTarget.occupants;
+            this.modals.scoutInfo.isOpen = true;
+            // 【修正】使用正確的目標名稱
+            this.logMessage('raid', `你再次查看了 ${targetNameForLog} 的情報。`, 'info');
             return;
         }
 
-        // Calculate player party's average intelligence
+        // --- 首次偵查的邏輯 (維持不變) ---
         const allPartyMembers = [this.player, ...this.player.party];
         const playerPartyIntel = allPartyMembers.reduce((sum, unit) => sum + (unit.getTotalStat('intelligence') || 0), 0);
         const playerPartyAvgIntel = playerPartyIntel / allPartyMembers.length;
 
-        // Calculate enemy party's average intelligence
         const enemiesToScout = isGroup ? targetOrGroup : representativeTarget.occupants;
         const enemyTotalIntel = enemiesToScout.reduce((sum, unit) => sum + (unit.stats.intelligence || 0), 0);
         const enemyAvgIntel = enemyTotalIntel / enemiesToScout.length;
 
-        // Apply formula: 70 + (player_avg_intel - enemy_avg_intel) * 2 + party_size
         let successChance = 70 + (playerPartyAvgIntel - enemyAvgIntel) * 2 + allPartyMembers.length;
-        successChance = Math.max(5, Math.min(100, successChance)); // Cap between 5% and 100%
+        successChance = Math.max(5, Math.min(100, successChance));
 
         if (roll(successChance)) {
             this.currentRaid.timeRemaining -= 3;
-            const targetsToMark = isGroup ? targetOrGroup : [representativeTarget];
-            targetsToMark.forEach(t => this.currentRaid.currentZone.scouted.targets.add(t.id));
+            representativeTarget.scouted = true; // 標記建築本身為已偵查
+            this.currentRaid.currentZone.scouted.targets.add(representativeTarget.id);
 
-            this.logMessage('raid', `你成功偵查了 ${isGroup ? '一個隊伍' : representativeTarget.name} 的詳細情報！(-3 分鐘)`, 'success');
+            this.updateBuildingScoutText(); // 偵查成功後也更新一次文字
+            // 【修正】使用正確的目標名稱
+            this.logMessage('raid', `你成功偵查了 ${targetNameForLog} 的詳細情報！(-3 分鐘)`, 'success');
 
-            this.modals.scoutInfo.target = isGroup ? targetOrGroup : targetOrGroup.occupants;
+            this.modals.scoutInfo.target = isGroup ? targetOrGroup : representativeTarget.occupants;
             this.modals.scoutInfo.isOpen = true;
         } else {
             this.currentRaid.timeRemaining -= 6;
-            this.logMessage('raid', `偵查 ${isGroup ? '一個隊伍' : representativeTarget.name} 失敗！(-6 分鐘)`, 'enemy');
+            this.logMessage('raid', `偵查 ${targetNameForLog} 失敗！(-6 分鐘)`, 'enemy');
         }
         this.checkRaidTime();
     },
@@ -2445,7 +2460,9 @@ const gameLogic = {
         }
 
         if (!wasDefeated) {
-            this.captives.push(...this.currentRaid.carriedCaptives);
+            // 使用 JSON.parse(JSON.stringify(...)) 進行深拷貝
+            const carriedCaptivesClone = JSON.parse(JSON.stringify(this.currentRaid.carriedCaptives));
+            this.captives.push(...carriedCaptivesClone);
             this.logMessage('tribe', `你帶回了 ${this.currentRaid.carriedCaptives.length} 名俘虜。`, 'player');
         }
         
@@ -2503,6 +2520,7 @@ const gameLogic = {
                 return;
             }
             this.modals.scoutInfo.isOpen = false; // 執行前關閉視窗
+            this.selectedTarget = null;
             this.sneakKidnap(targetFemale, group); // 呼叫核心潛行邏輯
         } else {
             this.showCustomAlert('找不到可下手的目標。');
@@ -2579,23 +2597,66 @@ const gameLogic = {
     },
 
     sneakKidnap(target, group) {
+        // 找出群組中所有符合條件的女性，而不僅僅是第一個
+        const femalesInGroup = group.filter(unit => unit.visual && unit.isAlive());
+
+        // 如果隊伍中沒有可擄走的女性，則不執行任何操作 (安全檢查)
+        if (femalesInGroup.length === 0) {
+            this.showCustomAlert('該隊伍中沒有可下手的目標。');
+            return;
+        }
+
+        // --- 潛行成功率計算 (維持不變，仍以第一個目標為計算基準) ---
+        const primaryTarget = femalesInGroup[0]; // 以第一個女性作為計算潛行難度的對象
+        if (this.currentRaid.failedSneakTargets.has(primaryTarget.id)) {
+            this.showCustomAlert(`你已經對 ${primaryTarget.name} 所在的隊伍潛行失敗過，再次嘗試會被直接發現！`);
+            this.startCombat(group, true); // 直接觸發戰鬥
+            return;
+        }
         const playerAgility = this.player.getTotalStat('agility', this.isStarving);
-        const enemyAgility = target.stats.agility;
+        const enemyAgility = primaryTarget.stats.agility;
         const sneakChance = 50 + (playerAgility - enemyAgility) * 1.5 - (this.player.party.length + 1 - 1) * 2;
         const successChance = sneakChance - 15;
 
         if (roll(successChance)) {
+            // --- 潛行成功 ---
             this.currentRaid.timeRemaining -= 3;
-            this.logMessage('raid', `潛行擄走 ${target.name} 成功！(-3 分鐘)`, 'success');
-            this.addCaptiveToCarry(target);
-            this.gainResourcesFromEnemy(target);
-            this.currentRaid.currentZone.enemies = this.currentRaid.currentZone.enemies.map(g => g.filter(e => e.id !== target.id)).filter(g => g.length > 0);
+            this.logMessage('raid', `潛行成功！你將 ${femalesInGroup.map(f => f.name).join('、')} 全部擄走！(-3 分鐘)`, 'success');
+
+            // 遍歷所有找到的女性
+            femalesInGroup.forEach(femaleUnit => {
+                // 1. 為每一位女性創建一個全新的、乾淨的俘虜物件，確保獲得唯一的 new ID
+                const newCaptive = new FemaleHuman(
+                    femaleUnit.name,
+                    femaleUnit.stats,
+                    femaleUnit.profession,
+                    femaleUnit.visual,
+                    femaleUnit.originDifficulty
+                );
+                newCaptive.maxHp = newCaptive.calculateMaxHp();
+                newCaptive.currentHp = newCaptive.maxHp;
+
+                // 2. 將這個全新的俘虜物件加入攜帶列表
+                this.addCaptiveToCarry(newCaptive); // addCaptiveToCarry 內部有容量檢查，很安全
+                
+                // 3. 從敵人身上獲取資源 (可選，但保持了原有邏輯)
+                this.gainResourcesFromEnemy(femaleUnit);
+
+                // 4. 呼叫我們之前創建的統一移除函式，將原始的敵人物件從地圖上徹底清除
+                this.removeUnitFromRaidZone(femaleUnit.id);
+            });
+
+            this.updateBuildingScoutText();
+
             this.checkRaidTime();
+
         } else {
+            // --- 潛行失敗 (邏輯不變) ---
             this.currentRaid.timeRemaining -= 6;
-            this.currentRaid.failedSneakTargets.add(target.id);
-            this.logMessage('raid', `潛行擄走 ${target.name} 失敗，你被發現了！(-6 分鐘)`, 'enemy');
-            this.startCombat(group, true);
+            // 將整個隊伍標記為失敗，避免對同一個隊伍的不同女性反覆嘗試
+            femalesInGroup.forEach(f => this.currentRaid.failedSneakTargets.add(f.id));
+            this.logMessage('raid', `潛行擄走 ${primaryTarget.name} 失敗，你被整個隊伍發現了！(-6 分鐘)`, 'enemy');
+            this.startCombat(group, true); // 觸發與整個隊伍的戰鬥
             this.checkRaidTime();
         }
     },
@@ -3250,45 +3311,50 @@ const gameLogic = {
             return; // 結束函式，不再執行後續的掠奪邏輯
         }
 
+        const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+        if (defeatedFemales.length > 0) {
+            // 不再直接轉移舊的敵人物件，而是根據敵人的資料，
+            // 創建一個全新的、獨立的 FemaleHuman 物件作為俘虜。
+            const newCaptives = defeatedFemales.map(enemy => {
+                const newCaptive = new FemaleHuman(
+                    enemy.name,
+                    enemy.stats,
+                    enemy.profession,
+                    enemy.visual,
+                    enemy.originDifficulty
+                );
+                // 確保新俘虜的生命值是滿的
+                newCaptive.maxHp = newCaptive.calculateMaxHp();
+                newCaptive.currentHp = newCaptive.maxHp;
+                return newCaptive; // 返回這個全新的「房子」
+            });
 
-        // --- 原有的掠奪戰鬥處理邏輯（維持不變）---
-        if (victory) {
-            // --- 這一段處理戰利品和訊息的邏輯不變 ---
-            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
-            if (defeatedFemales.length > 0) {
-                this.currentRaid.carriedCaptives.push(...defeatedFemales);
-            }
-            if (this.player && !this.player.isAlive()) {
-                this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
-            }
+            // 將這些全新的俘虜物件加入攜帶列表
+            this.currentRaid.carriedCaptives.push(...newCaptives);
+        }
 
-            // --- 核心修改從這裡開始 ---
-            if (this.combat.isReinforcementBattle) {
-                // 【新增判斷式】檢查增援戰是如何觸發的
-                if (this.isRetreatingWhenTimeExpired) {
-                    // 如果是在「脫離時」觸發的，維持舊邏輯，返回部落
-                    this.logMessage('tribe', '你擊敗了前來阻截的騎士團，成功帶著戰利品返回部落！', 'success');
-                    this.prepareToEndRaid(false);
-                } else {
-                    this.currentRaid.timeRemaining = Infinity; 
-                    this.currentRaid.reinforcementsDefeated = true; // <-- 確保此行存在
-                    this.logMessage('raid', '你擊敗了騎士團的增援部隊！時間壓力消失了，你可以繼續探索這座城鎮。', 'success');
-                    this.finishCombatCleanup(); 
-                }
-                // 無論結果如何，都要將旗標重置，以免影響下一次判斷
-                this.isRetreatingWhenTimeExpired = false;
-                
+
+        if (this.player && !this.player.isAlive()) {
+            this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
+        }
+
+        if (this.combat.isReinforcementBattle) {
+            if (this.isRetreatingWhenTimeExpired) {
+                this.logMessage('tribe', '你擊敗了前來阻截的騎士團，成功帶著戰利品返回部落！', 'success');
+                this.prepareToEndRaid(false);
             } else {
-                // 普通戰鬥的勝利邏輯不變
-                if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
-                    this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
-                } else {
-                    this.finishCombatCleanup();
-                }
+                this.currentRaid.timeRemaining = Infinity;
+                this.currentRaid.reinforcementsDefeated = true;
+                this.logMessage('raid', '你擊敗了騎士團的增援部隊！時間壓力消失了，你可以繼續探索這座城鎮。', 'success');
+                this.finishCombatCleanup();
             }
-        } else { 
-            // 戰敗邏輯不變
-            this.prepareToEndRaid(true);
+            this.isRetreatingWhenTimeExpired = false;
+        } else {
+            if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
+                this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
+            } else {
+                this.finishCombatCleanup();
+            }
         }
     },
 
@@ -3534,7 +3600,7 @@ const gameLogic = {
 
         modal.isOpen = false;
         
-        // 【核心修正】採用更簡潔、更穩定的方式來更新出擊隊伍
+        // 採用更簡潔、更穩定的方式來更新出擊隊伍
         const keptPartnerIds = new Set(this.partners.map(p => p.id));
         this.player.party = this.player.party.filter(p => keptPartnerIds.has(p.id));
         this.player.updateHp(this.isStarving);
@@ -3542,21 +3608,13 @@ const gameLogic = {
     // 1. 在函式定義中，加入一個帶有「預設值」的參數
     finishCombatCleanup(returnToTribe = false) {
         if (this.currentRaid) {
-            this.currentRaid.currentZone.buildings.forEach(b => {
-                b.occupants = b.occupants.filter(o => o.isAlive());
-                if (b.scouted && b.occupants.length === 0) {
-                    b.postScoutText = b.looted ? ' (空)' : ' (可搜刮)';
-                }
-            });
+            // 找出所有戰敗的敵人ID
+            const defeatedEnemyIds = this.combat.enemies.filter(e => !e.isAlive()).map(e => e.id);
             
-            const newEnemiesList = [];
-            for (const group of this.currentRaid.currentZone.enemies) {
-                const livingMembers = group.filter(member => member.isAlive());
-                if (livingMembers.length > 0) {
-                    newEnemiesList.push(livingMembers);
-                }
-            }
-            this.currentRaid.currentZone.enemies = newEnemiesList;
+            // 對每一個戰敗者，都呼叫統一移除函式
+            defeatedEnemyIds.forEach(id => this.removeUnitFromRaidZone(id));
+
+            this.updateBuildingScoutText();
         }
         
         this.combat.allies = [];
@@ -4357,5 +4415,45 @@ const gameLogic = {
             this.resources.stone = Math.min(this.stoneCapacity, this.resources.stone + stoneGained);
             this.logMessage('tribe', `採礦隊帶回了 ${stoneGained} 單位礦石。`, 'success');
         }
-    },  
+    },
+
+    removeUnitFromRaidZone(unitId) {
+        if (!this.currentRaid || !unitId) return;
+
+        const zone = this.currentRaid.currentZone;
+
+        // 1. 處理遊蕩的敵人 (二維陣列)
+        zone.enemies = zone.enemies
+            .map(group => group.filter(unit => unit.id !== unitId)) // 從每個小隊中移除該單位
+            .filter(group => group.length > 0); // 移除因此變空的小隊
+
+        // 2. 處理所有建築物內的敵人 (一維陣列)
+        zone.buildings.forEach(building => {
+            if (building.occupants && building.occupants.length > 0) {
+                building.occupants = building.occupants.filter(unit => unit.id !== unitId);
+            }
+        });
+        this.currentRaid.currentZone = { ...zone };
+    }, 
+    updateBuildingScoutText() {
+        if (!this.currentRaid) return;
+        this.currentRaid.currentZone.buildings.forEach(b => {
+            // 只更新那些已經被偵查過的建築
+            if (b.scouted) {
+                if (b.occupants.length === 0) {
+                    // 如果建築是空的，根據是否搜刮過來顯示文字
+                    b.postScoutText = b.looted ? ' (空)' : ' (可搜刮)';
+                } else {
+                    // 如果裡面還有人，顯示人數
+                    b.postScoutText = ` (${b.occupants.length}人)`;
+                }
+            } else {
+                // 如果還沒偵查過，就沒有後綴文字
+                b.postScoutText = '';
+            }
+        });
+        // 這一步是為了確保即使只是文字變動，畫面也能強制刷新
+        this.currentRaid.currentZone = { ...this.currentRaid.currentZone };
+    },
+    
 };
