@@ -109,7 +109,7 @@
                                         <label class="font-bold capitalize" x-text="STAT_NAMES[stat]"></label>
                                         <div class="flex items-center">
                                             <button @click="updateStat(stat, creation.stats[stat] - 1)" class="px-3 py-1 bg-gray-700 rounded-l-md">-</button>
-                                            <input type="number" min="0" max="999" x-model.number="creation.stats[stat]" @input="checkStatValue(stat, $event.target.value)" class="stat-input w-16 text-center bg-gray-800 border-y-2 border-gray-600 py-1">
+                                            <input type="number" min="0" max="100" :value="creation.stats[stat]" @input="updateStat(stat, $event.target.value)" class="stat-input w-16 text-center bg-gray-800 border-y-2 border-gray-600 py-1">
                                             <button @click="updateStat(stat, creation.stats[stat] + 1)" class="px-3 py-1 bg-gray-700 rounded-r-md">+</button>
                                         </div>
                                     </div>
@@ -118,7 +118,7 @@
                         </div>
                     </div>
                     <div class="text-center mt-8 space-x-4">
-                        <button @click="createCharacter()" class="btn btn-primary text-xl">創建我的哥布林王</button>
+                        <button @click="createCharacter()" :disabled="creation.pointsRemaining !== 0" class="btn btn-primary text-xl">創建我的哥布林王</button>
                         <button x-show="hasSaveFile" @click="loadGame()" class="btn btn-secondary text-xl">讀取進度</button>
                     </div>
                 </div>
@@ -907,7 +907,7 @@
                                     <h3 class="text-xl font-bold mb-2">升級倉庫 (等級 <span x-text="buildings.warehouse.level"></span>)</h3>
                                     <p class="text-sm text-gray-400 mb-4">增加倉庫和背包的儲存上限。</p>
                                     <p class="mb-4">當前容量: 倉庫 <span x-text="warehouseCapacity"></span> / 背包 <span x-text="backpackCapacity"></span></p>
-                                    <template x-if="buildings.warehouse.level < 4">
+                                    <template x-if="buildings.warehouse.level < 6">
                                         <div>
                                             <p class="text-sm">
                                                 <span x-text="buildings.warehouse.level === 0 ? '建造花費:' : `升級至 ${buildings.warehouse.level + 1} 級花費:`"></span>
@@ -919,7 +919,7 @@
                                             </button>
                                         </div>
                                     </template>
-                                    <p x-show="buildings.warehouse.level >= 4" class="text-sm text-green-400 mt-2">倉庫已達到最大等級！</p>
+                                    <p x-show="buildings.warehouse.level >= 6" class="text-sm text-green-400 mt-2">倉庫已達到最大等級！</p>
                                 </div>
                             </div>
 
