@@ -191,7 +191,7 @@
                             weaponDamage = mainStatValue;
                     }
 
-                    // 【新增】單手持有懲罰邏輯
+                    // 單手持有懲罰邏輯
                     if (hasShield && (weaponType === '長槍' || weaponType === '法杖')) {
                         // 這就是您可以隨時調整的平衡係數
                         const oneHandedPenalty = 0.7; // 傷害變為 70%
@@ -253,7 +253,7 @@
                 });
                 return flatBonus;
             }
-            // 【新增此函數】
+
             getEffectiveEquipmentBonus(stat) {
                 if (!this.equipment) return 0;
                 
@@ -267,7 +267,7 @@
 
                 return Math.round(effectiveBonus);
             }
-            // 【新增此方法】
+
             getAffixEffect(stat) {
                 const bonus = { bonus: 0 };
                 if (!this.equipment) return bonus;
@@ -429,7 +429,7 @@
                 // 2. 固定加成值 = 裝備基礎屬性 + 詞綴固定加成 + 特殊詛咒裝備效果 (正負)
                 let flatBonus = this.getEquipmentBonus(stat);
 
-                // --- 修正：加入標準詞綴的固定加成 ---
+                // --- 加入標準詞綴的固定加成 ---
                 Object.values(this.equipment).forEach(item => {
                     if (!item) return;
                     item.affixes.forEach(affix => {
@@ -528,7 +528,7 @@
                 // 先計算出新的最大生命值
                 this.maxHp = this.calculateMaxHp(isStarving);
 
-                // 【核心修正】如果最大生命值是增加的，且之前是滿血狀態，則直接補滿當前生命值
+                // 如果最大生命值是增加的，且之前是滿血狀態，則直接補滿當前生命值
                 if (this.maxHp > oldMaxHp && oldHpPercentage >= 1) {
                     this.currentHp = this.maxHp;
                 } else {
@@ -574,7 +574,7 @@
                             weaponDamage = mainStatValue;
                     }
 
-                    // 【新增】單手持有懲罰邏輯
+                    // 單手持有懲罰邏輯
                     if (hasShield && (weaponType === '長槍' || weaponType === '法杖')) {
                         // 這就是您可以隨時調整的平衡係數
                         const oneHandedPenalty = 0.7; // 傷害變為 70%
@@ -593,7 +593,7 @@
         class Human extends Unit {
             constructor(name, stats, profession) {
                 super(name, stats, profession);
-                // 【新增】初始化裝備欄位
+                // 初始化裝備欄位
                 this.equipment = {
                     mainHand: null,
                     offHand: null,
@@ -601,7 +601,7 @@
                 };
             }
 
-            // 【新增】從 Goblin 類別複製過來的函式
+            // 從 Goblin 類別複製過來的函式
             getEquipmentBonus(stat) {
                 if (!this.equipment) return 0;
                 return Object.values(this.equipment).reduce((sum, item) => {
@@ -628,7 +628,7 @@
                 return isStarving ? Math.floor(total * 0.75) : total;
             }
 
-            // 【新增】從 Goblin 類別複製過來的函式
+            // 從 Goblin 類別複製過來的函式
             calculateDamage(isStarving = false) {
                 const mainHand = this.equipment.mainHand;
                 let weaponDamage = 0;
@@ -672,7 +672,7 @@
                 return weaponDamage + shieldBonus + armorBonus;
             }
 
-            // 【新增】一個簡易版的 updateHp
+            // 一個簡易版的 updateHp
             updateHp(isStarving = false) {
                 const oldMaxHp = this.maxHp;
                 this.maxHp = this.calculateMaxHp(isStarving);
@@ -682,14 +682,14 @@
         }
         
         class FemaleHuman extends Human {
-             // 【修改】確保 constructor 的參數列表包含了 originDifficulty
+             // 確保 constructor 的參數列表包含了 originDifficulty
             constructor(name, stats, profession, visual, originDifficulty = 'easy') { 
                 super(name, stats, profession);
                 this.visual = visual;
                 this.isPregnant = false;
                 this.pregnancyTimer = 0;
                 this.isMother = false;
-                // 【修改】這一行現在可以正確地從參數接收 originDifficulty
+                // 這一行現在可以正確地從參數接收 originDifficulty
                 this.originDifficulty = originDifficulty; 
                 this.maxHp = this.calculateMaxHp();
                 this.currentHp = this.maxHp;
@@ -701,9 +701,9 @@
         }
 
         class MaleHuman extends Human {
-            constructor(name, stats, profession, originDifficulty = 'easy') { // 新增參數
+            constructor(name, stats, profession, originDifficulty = 'easy') { 
                 super(name, stats, profession);
-                this.originDifficulty = originDifficulty; // 新增屬性
+                this.originDifficulty = originDifficulty; 
                 this.maxHp = this.calculateMaxHp();
                 this.currentHp = this.maxHp;
             }
@@ -714,7 +714,7 @@
         }
 
         class KnightOrderUnit extends MaleHuman {
-            constructor(unitType, totalStatPoints, originDifficulty = 'easy') { // 新增參數
+            constructor(unitType, totalStatPoints, originDifficulty = 'easy') { 
                 const unitDetails = KNIGHT_ORDER_UNITS[unitType];
                 const stats = distributeStatsWithRatio(totalStatPoints, unitDetails.ratio);
                 super(unitType, stats, unitType, originDifficulty); // 將參數傳遞給父類別
@@ -730,14 +730,14 @@
         }
         // 生成女性騎士團成員
         class FemaleKnightOrderUnit extends FemaleHuman {
-            // 【修改】確保 constructor 接收 difficulty 參數
+            // 確保 constructor 接收 difficulty 參數
             constructor(unitType, totalStatPoints, difficulty = 'easy') { 
                 const unitDetails = KNIGHT_ORDER_UNITS[unitType];
                 const stats = distributeStatsWithFemaleKnightRatio(totalStatPoints, unitDetails.ratio);
                 const visual = generateVisuals();
                 const name = FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)];
 
-                // 【修改】確保 super() 將 difficulty 參數傳遞給父類別 FemaleHuman
+                // 確保 super() 將 difficulty 參數傳遞給父類別 FemaleHuman
                 super(name, stats, unitType, visual, difficulty); 
                 
                 this.skills = [];

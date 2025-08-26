@@ -282,7 +282,7 @@ const gameLogic = {
     narrativeMemory: '',
     tutorial: {
         active: false, // 總開關，判斷玩家是否需要教學
-        pendingTutorial: null, // 【新增】用於存放待處理的教學事件
+        pendingTutorial: null, //   用於存放待處理的教學事件
         // --- 以下為各教學模組的完成狀態旗標 ---
         finishedIntro: false,         // 完成初級教學 (建築->掠奪->繁衍)
         finishedPartyMgmt: false,     // 完成夥伴管理教學
@@ -295,7 +295,7 @@ const gameLogic = {
     triggerTutorial(eventName) {
         if (!this.tutorial.active) return;
 
-        // 【核心修改】如果玩家不在部落，則將教學事件暫存起來
+        //    如果玩家不在部落，則將教學事件暫存起來
         if (this.screen !== 'tribe') {
             this.tutorial.pendingTutorial = eventName;
             return; // 暫不執行，等待玩家返回部落
@@ -398,7 +398,7 @@ const gameLogic = {
     },
     get totalBreedingCharges() {
         if (!this.player) return 1;
-        // 【修改】將 getTotalStat('luck') 改為 stats.luck，只計算玩家本體原始點數
+        //  將 getTotalStat('luck') 改為 stats.luck，只計算玩家本體原始點數
         return 1 + Math.floor(this.player.stats.luck * 0.1);
     },
     get carryCapacity() {
@@ -419,7 +419,7 @@ const gameLogic = {
     get currentlyEditingPartner() {
         if (!this.modals.partnerEquipment.partnerId) return null;
         
-        // 【新增】判斷目標是否為玩家本人
+        //   判斷目標是否為玩家本人
         if (this.modals.partnerEquipment.partnerId === 'player') {
             return this.player;
         }
@@ -570,7 +570,7 @@ const gameLogic = {
 
         partner.hasBeenTrained = true;
 
-        // 【新增】在屬性增加後，立刻更新夥伴的生命值
+        //   在屬性增加後，立刻更新夥伴的生命值
         partner.updateHp(this.isStarving);
 
         this.logMessage('tribe', `你花費了一整天時間，對 ${partner.name} 進行了嚴格的訓練！`, 'player');
@@ -580,7 +580,7 @@ const gameLogic = {
             .join(', ');
         this.logMessage('tribe', `${partner.name} 的潛力被激發了：${logDetails}。`, 'success');
         
-        // 【新增】顯示一個包含詳細結果的提示框
+        //   顯示一個包含詳細結果的提示框
         this.showCustomAlert(`${partner.name} 的訓練完成了！\n獲得的能力提升：\n${logDetails}`);
 
         this.nextDay(); // 訓練消耗一天
@@ -599,13 +599,13 @@ const gameLogic = {
         // 根據GDD: 俘虜價值 = 該俘虜當前總生命值 × 1.5
         return Math.floor(hp * 1.5);
     },
-    // 【修改】重新命名並修改邏輯以處理陣列
+    //  重新命名並修改邏輯以處理陣列
     get selectedItems() {
         if (!this.merchant.selectedItemIds || this.merchant.selectedItemIds.length === 0) return [];
         const selectedSet = new Set(this.merchant.selectedItemIds);
         return this.merchant.goods.filter(g => selectedSet.has(g.id));
     },
-    // 【修改】重新命名並修改邏輯以計算總和
+    //  重新命名並修改邏輯以計算總和
     get selectedItemsValue() {
         return this.selectedItems.reduce((total, item) => total + this.calculateEquipmentValue(item), 0);
     },
@@ -616,10 +616,10 @@ const gameLogic = {
         }, 0);
     },
     get canExecuteTrade() {
-        // 【修改】更新判斷條件以適應複選
+        //  更新判斷條件以適應複選
         return this.merchant.selectedItemIds.length > 0 && this.merchant.selectedCaptiveIds.length > 0 && this.selectedCaptivesValue >= this.selectedItemsValue;
     },
-    // 【新增】根據商店狀態更新商人對話的函式
+    //   根據商店狀態更新商人對話的函式
     updateMerchantDialogue() {
         if (this.merchant.goods.length === 0) {
             this.merchant.dialogue = "「哎呀...這麼想我嗎？會有下次的」";
@@ -628,7 +628,7 @@ const gameLogic = {
         }
     },
 
-    // 【新增】打開商人介面的準備函式
+    //   打開商人介面的準備函式
     openMerchant() {
         this.updateMerchantDialogue(); // 先設定好初始對話
         this.modals.merchant.isOpen = true; // 再打開介面
@@ -656,7 +656,7 @@ const gameLogic = {
         this.merchant.selectedItemIds = [];
         this.merchant.selectedCaptiveIds = [];
 
-        // 【核心修改】根據交易後的狀態更新對話
+        //    根據交易後的狀態更新對話
         if (this.merchant.goods.length === 0) {
             // 如果商品被買完了
             this.merchant.dialogue = "「真是大手筆，歡迎下次再來」";
@@ -778,28 +778,41 @@ const gameLogic = {
     },
     
     updateStat(stat, value) {
-        let intValue = parseInt(value); // 將 const 改為 let 以便修改
-        if (!isNaN(intValue)) {
-            // 【新增此段】如果計算後的值是負數，就將其校正為 0
-            if (intValue < 0) {
-                intValue = 0;
-            }
-            this.creation.stats[stat] = intValue;
-            this.checkStatValue(stat, intValue);
+        const MAX_INDIVIDUAL_STAT = 100; // 設定單項能力值的上限
+
+        // 1. 處理並淨化輸入值
+        let intValue = parseInt(value);
+        if (isNaN(intValue)) {
+            intValue = 0; // 將英文、亂碼等無效輸入轉換為 0
         }
+
+        // 2. 驗證單項能力值的上下限 (0 ~ 100)
+        if (intValue < 0) {
+            intValue = 0;
+        }
+        if (intValue > MAX_INDIVIDUAL_STAT) {
+            intValue = MAX_INDIVIDUAL_STAT;
+        }
+
+        // 3. 驗證總點數 (40點) 的上限
+        const currentStatValue = this.creation.stats[stat];
+        const difference = intValue - currentStatValue; // 計算使用者想增加多少點
+
+        // 如果想增加的點數(difference > 0) 超過了剩餘可用點數...
+        if (difference > 0 && difference > this.creation.pointsRemaining) {
+            // ...則只允許增加剩餘的點數
+            intValue = currentStatValue + this.creation.pointsRemaining;
+        }
+
+        // 4. 更新最終數值
+        this.creation.stats[stat] = intValue;
+        
+        // 5. 更新警告訊息
+        this.checkStatValue(stat, intValue);
     },
 
     checkStatValue(stat, value) {
-        const intValue = parseInt(value);
-
-        if (isNaN(intValue)) {
-            this.creation.stats[stat] = 0;
-        } else {
-            this.creation.stats[stat] = intValue;
-        }
-
-        this.creation.stats[stat] = intValue; 
-
+        // 這個函式現在只負責根據當前的狀態顯示警告，不再修改數值。
         const zeroStatCount = Object.values(this.creation.stats).filter(v => v <= 0).length;
 
         if (zeroStatCount >= 3) {
@@ -824,14 +837,23 @@ const gameLogic = {
         }
     },
     async createCharacter() {
+            // 檢查剩餘點數是否剛好為 0
+        if (this.creation.pointsRemaining < 0) {
+            this.showCustomAlert(`你的能力點數總和超過40點了！請重新分配。`);
+            return; // 中斷創建
+        }
+        if (this.creation.pointsRemaining > 0) {
+            this.showCustomAlert(`你還有 ${this.creation.pointsRemaining} 點能力點尚未分配！`);
+            return; // 中斷創建
+        }
         this.player = new Player(this.creation.name, this.creation.stats, this.creation.appearance, this.creation.height, this.creation.penisSize);
         const encodedName = encodeURIComponent(this.player.name);
         this.player.avatarUrl = `https://placehold.co/400x400/2d3748/cbd5e0?text=哥布林王\\n${encodedName}`;
 
-        // 【核心修改】先切換畫面
+        // 先切換畫面
         this.screen = 'birth_narrative';
 
-        // 【核心修改】然後使用 $nextTick 確保新畫面渲染完成後，再設定其內部狀態
+        // 然後使用 $nextTick 確保新畫面渲染完成後，再設定其內部狀態
         this.$nextTick(() => {
             const modal = this.modals.narrative;
             modal.isAwaitingConfirmation = true;
@@ -915,30 +937,30 @@ const gameLogic = {
     advanceTutorial(step) {
         this.tutorial.step = step;
         switch(step) {
-            // 【修改】步驟1: 僅作為一次性的裝備提示，確認後直接推進到步驟2
+            //  步驟1: 僅作為一次性的裝備提示，確認後直接推進到步驟2
             case 1:
                 this.showCustomAlert(
                     '你在部落中發現了一些基礎裝備！你可以隨時在「部落建設」->「倉庫」->「玩家背包」中找到並穿上它們。',
                     () => { this.advanceTutorial(2); } // 點擊確認後，立即執行下一步教學
                 );
                 break;
-            // 【修改】步驟2: 引導點擊「部落建設」
+            //  步驟2: 引導點擊「部落建設」
             case 2:
                 this.showCustomAlert('一個強大的部落需要穩固的根基。讓我們點擊發光的『部落建設』按鈕，來規劃您的部落。');
                 break;
-            // 【修改】步驟3: 引導建造「地牢」
+            //  步驟3: 引導建造「地牢」
             case 3:
                 this.modals.construction.isOpen = true;
                 this.modals.construction.activeTab = 'dungeon';
                 this.modals.dungeon.subTab = 'upgrade';
                 this.showCustomAlert('做得好！現在請點擊發光的『升級』分頁，並為您的部落打下第一個根基。');
                 break;
-            // 【修改】步驟4: 引導建造「產房」
+            //  步驟4: 引導建造「產房」
             case 4:
                 this.modals.construction.activeTab = 'maternity';
                 this.modals.maternity.subTab = 'upgrade';
                 break;
-            // 【修改】步驟5: 引導「出擊掠奪」
+            //  步驟5: 引導「出擊掠奪」
             case 5:
                 this.modals.construction.isOpen = false;
                 setTimeout(() => {
@@ -1002,7 +1024,7 @@ const gameLogic = {
         }
     },
 
-    // 【新增】啟動求助流程的主函式
+    //   啟動求助流程的主函式
     handleBailoutRequest() {
         this.bailoutCounter++; // 求助次數+1
         const modal = this.modals.bailoutConfirm;
@@ -1024,7 +1046,7 @@ const gameLogic = {
     handleConstructionClick() {
         this.modals.construction.isOpen = true;
 
-        // 【修改】對應新的步驟編號，現在檢查步驟2
+        //  對應新的步驟編號，現在檢查步驟2
         if (this.tutorial.active && this.tutorial.step === 2) {
             setTimeout(() => {
                 this.advanceTutorial(3); // 推進到步驟3
@@ -1183,6 +1205,8 @@ const gameLogic = {
         } else {
             // 如果沒有任何突發事件，直接執行正常的每日結算
             this.processDailyUpkeep();
+            // 在每日結算後，立即檢查是否有待辦事項
+            this.checkAndProcessDecisions();
         }
     },
     
@@ -1245,7 +1269,7 @@ const gameLogic = {
 
         if (this.tutorial.active) {
             setTimeout(() => {
-                // 【修改】對應新的步驟編號
+                //  對應新的步驟編號
                 if (type === 'dungeon' && this.tutorial.step === 3 && building.level === 1) {
                     this.advanceTutorial(4);
                 } 
@@ -1262,7 +1286,7 @@ const gameLogic = {
         const selectedIds = this.modals.dungeon.selectedBreedIds;
         const selectedCaptives = this.captives.filter(c => selectedIds.includes(c.id));
 
-        // 【核心修改】準備好狀態
+        //  準備好狀態
         modal.title = "繁衍";
         modal.type = "breeding";
         modal.isAwaitingConfirmation = true; // 預設為等待確認狀態
@@ -1271,7 +1295,7 @@ const gameLogic = {
         modal.currentCaptives = selectedCaptives;
         modal.hasBred = false;
         
-        // 【核心修改】關閉當前視窗，並切換到新的專屬敘事畫面
+        //  關閉當前視窗，並切換到新的專屬敘事畫面
         this.modals.construction.isOpen = false;
         this.screen = 'breeding_narrative'; 
     },
@@ -1291,7 +1315,7 @@ const gameLogic = {
             this.screen = 'tutorial_query';
         }
 
-        // 【新增】對 tutorial 類型的處理
+        //   對 tutorial 類型的處理
         if (this.modals.narrative.type === 'tutorial') {
             // 教學彈窗關閉後，不需要做任何特殊操作，直接關閉即可
         }
@@ -1330,15 +1354,15 @@ const gameLogic = {
         this.modals.dungeon.selectedBreedIds = [];
         this.nextDay();
 
-        // 【修改】返回部落畫面的同時，重新打開「部落建設」視窗
+        //  返回部落畫面的同時，重新打開「部落建設」視窗
         this.screen = 'tribe';
         this.modals.construction.isOpen = true;
 
-        // 【新增】為了更好的體驗，直接定位回繁衍分頁
+        //   為了更好的體驗，直接定位回繁衍分頁
         this.modals.construction.activeTab = 'dungeon';
         this.modals.dungeon.subTab = 'breed';
 
-        // 【新增】顯示操作成功的提示框
+        //   顯示操作成功的提示框
         this.showCustomAlert('繁衍已完成！');
         
     },
@@ -1346,7 +1370,7 @@ const gameLogic = {
         // 防止重複觸發
         if (this.modals.narrative.hasBred) return;
 
-        // 【核心修改】在此處加入繁衍的遊戲機制
+        //    在此處加入繁衍的遊戲機制
         const selectedIds = this.modals.dungeon.selectedBreedIds;
         const selectedCount = selectedIds.length;
         selectedIds.forEach(id => {
@@ -1448,7 +1472,7 @@ const gameLogic = {
         }
     },
     async callGeminiAPI(prompt, temperature = 0.7) {
-        // 【修改】如果沒有金鑰，則直接回傳提示訊息，不發出請求
+        //  如果沒有金鑰，則直接回傳提示訊息，不發出請求
         if (!this.userApiKey || this.userApiKey.trim() === '') {
             return "（AI 敘事功能需要 API 金鑰。請刷新頁面，在初始畫面中輸入您的金鑰。）";
         }
@@ -1460,7 +1484,7 @@ const gameLogic = {
                 temperature: temperature
             }
         };
-        // 【修改】使用玩家輸入的金鑰
+        //  使用玩家輸入的金鑰
         const apiKey = this.userApiKey; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         
@@ -1475,7 +1499,7 @@ const gameLogic = {
             if (response.status === 400) {
                 return "（您的 API 金鑰無效或已過期，請刷新頁面重新輸入。）";
             }
-            // 【新增】處理請求頻率過高的錯誤
+            //   處理請求頻率過高的錯誤
             if (response.status === 429) {
                 return "（對AI的請求過於頻繁，已觸發流量限制，請稍後再試。）";
             }
@@ -1505,7 +1529,6 @@ const gameLogic = {
     },        
         
     giveBirth(mother) {
-        // 【防禦性檢查】
         if (!mother || !mother.stats) {
             this.logMessage('tribe', `一名孕母的資料異常，本次生產失敗！`, 'enemy');
             if(mother) {
@@ -1555,7 +1578,7 @@ const gameLogic = {
         }
     },
 
-    // 【新增】這個全新的函式
+    //   這個全新的函式
     releaseCarriedCaptive(captiveId) {
         if (!this.currentRaid) return;
 
@@ -1587,7 +1610,7 @@ const gameLogic = {
                 this.showCustomAlert(`${captive.name} 正在懷孕中，無法移動！`);
                 return;
             }
-            // 【新增】檢查地牢容量
+            //   檢查地牢容量
             if (this.dungeonCaptives.length >= this.captiveCapacity) {
                 this.showCustomAlert(`地牢空間已滿 ( ${this.dungeonCaptives.length} / ${this.captiveCapacity} )，無法移入更多俘虜！`);
                 return;
@@ -1734,7 +1757,7 @@ const gameLogic = {
         this.player.updateHp(this.isStarving);
         this.logMessage('tribe', `你更新了出擊隊伍，現在有 ${this.player.party.length} 名夥伴與你同行。`, 'info');
 
-        // 【新增】顯示一個提示框，告知玩家操作成功，增加操作回饋
+        //   顯示一個提示框，告知玩家操作成功，增加操作回饋
         this.showCustomAlert('出擊隊伍已更新！');
     },
                     
@@ -1853,7 +1876,7 @@ const gameLogic = {
 
     generateCity(difficulty) {
         const config = {
-            // 【修改】更新各難度的居民 (pop) 數量
+            //  更新各難度的居民 (pop) 數量
             easy:    { time: 300, zones: ['外城', '內城'], pop: [10, 15], guards: [5, 10], knightStats: [80, 150] },
             normal: { time: 240, zones: ['外城', '內城A', '內城B'], pop: [15, 25], guards: [10, 15], knightStats: [150, 240] },
             hard:    { time: 180, zones: ['外城', '內城A', '內城B', '內城C'], pop: [25, 30], guards: [15, 20], knightStats: [240, 350] },
@@ -1879,7 +1902,7 @@ const gameLogic = {
         
         const gridCols = Math.floor(MAP_WIDTH / GRID_SIZE);
         const gridRows = Math.floor(MAP_HEIGHT / GRID_SIZE);
-        // 【修改】為每個 zone 建立獨立的 grid，避免跨層干擾
+        //  為每個 zone 建立獨立的 grid，避免跨層干擾
         city.zones.forEach(zone => {
             zone.placementGrid = Array(gridRows).fill(null).map(() => Array(gridCols).fill(null));
         });
@@ -1990,7 +2013,7 @@ const gameLogic = {
             }
         }
 
-        // 【新增】確保每層建築不少於3棟的邏輯
+        //   確保每層建築不少於3棟的邏輯
         innerZones.forEach(zone => {
             while (zone.buildings.length > 0 && zone.buildings.length < 3) {
                     const pos = getFreePosition(zone, true);
@@ -2438,7 +2461,7 @@ const gameLogic = {
             
             this.logMessage('tribe', '你帶回的俘虜過多，地牢無法容納！你需要從現有和新增的俘虜中決定去留...', 'warning');
 
-            // 【修改】只將「原地牢俘虜」和「新抓的俘虜」放入選擇列表
+            //  只將「原地牢俘虜」和「新抓的俘虜」放入選擇列表
             this.openCaptiveManagementModal(
                 'raid_return', // 使用一個新的類型來區分這個特殊情境
                 [...currentDungeonCaptives, ...newCaptives],
@@ -2453,7 +2476,7 @@ const gameLogic = {
         // 判斷是否為玩家戰敗死亡
         if (wasDefeated && this.player && !this.player.isAlive()) {
             this.initiateRebirth(); // 觸發重生流程
-            this.selectedTarget = null; // 【新增】確保清除地圖目標
+            this.selectedTarget = null; //   確保清除地圖目標
             return; // 中斷後續的返回部落邏輯
         }
 
@@ -3293,7 +3316,7 @@ const gameLogic = {
                 this.processDailyUpkeep();
 
             } else {
-                // 【新增】復仇小隊戰敗懲罰邏輯
+                //   復仇小隊戰敗懲罰邏輯
                 this.logMessage('tribe', '你在部落保衛戰中失敗了！復仇小隊趁機救走了他們的同伴！', 'enemy');
 
                 // 1. 從敵人身上獲取復仇來源的難度
@@ -3579,7 +3602,7 @@ const gameLogic = {
         // 如果不需要處理裝備或已處理完畢，直接執行最終確認
         this.finalizePartnerSelection();
     },
-    // 【新增】用於新生兒決策的最終執行函式
+    //   用於新生兒決策的最終執行函式
     finalizePartnerSelection() {
         const modal = this.modals.partnerManagement;
         const selectedSet = new Set(modal.selectedIds);
@@ -3768,6 +3791,14 @@ const gameLogic = {
         this.$refs.dlc_code_input.value = '';
     },
 
+    checkAndProcessDecisions() {
+        // 檢查是否在部落畫面，且是否有待辦事項
+        if (this.screen === 'tribe' && this.pendingDecisions.length > 0) {
+            // 延遲執行以確保畫面穩定
+            setTimeout(() => this.processNextDecision(), 100);
+        }
+    },
+
     saveGame() {
         const saveData = {
             player: this.player,
@@ -3789,8 +3820,8 @@ const gameLogic = {
         this.showCustomAlert('遊戲進度已儲存！');
         this.hasSaveFile = true;
     },
-    // 【新增】存檔拯救函式，用於修復汙染的舊存檔
-    // 【最終修正】存檔拯救函式，增加強制ID清洗功能
+    // 存檔拯救函式，用於修復汙染的舊存檔
+    // 存檔拯救函式，增加強制ID清洗功能
     salvageSaveData() {
         
         const processedItems = new Set(); // 用於追蹤已處理過的物品，避免重複操作
@@ -4084,7 +4115,7 @@ const gameLogic = {
         this.player.inventory.push(newItem);
         this.logMessage('tribe', `你成功製作了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
 
-        // 【新增】顯示一個包含詳細結果的提示框，給予玩家即時回饋
+        //   顯示一個包含詳細結果的提示框，給予玩家即時回饋
         this.showCustomAlert(`製作成功！\n你獲得了 [${newItem.name}]`);
     },
     decomposeItem(itemId) {
@@ -4364,7 +4395,7 @@ const gameLogic = {
         // 加入到新隊伍
         this.dispatch[task].push(partnerId);
 
-        // 【新增】檢查並將夥伴從出擊隊伍中移除
+        //   檢查並將夥伴從出擊隊伍中移除
         if (this.player && this.player.party) {
             const initialPartySize = this.player.party.length;
             this.player.party = this.player.party.filter(p => p.id !== partnerId);

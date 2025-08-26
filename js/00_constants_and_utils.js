@@ -16,7 +16,7 @@
         // --- 工具 & 常數 ---
         const $ = (selector) => document.querySelector(selector);
         const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-        // 【新增】定義復仇事件的難度係數
+        // 定義復仇事件的難度係數
         const REVENGE_DIFFICULTY_COEFFICIENT = {
             easy: 0.5,
             normal: 1,
@@ -148,7 +148,7 @@
             }
             return stats;
         }
-        // 【新增此函數】
+
         function distributeStatsWithFemaleKnightRatio(totalPoints, baseRatio) {
             const stats = { strength: 0, agility: 0, intelligence: 0, luck: 0, charisma: 0 };
             const statKeys = ['strength', 'agility', 'intelligence', 'luck', 'charisma'];
@@ -194,7 +194,7 @@
 
         function generateVisuals() {
             return {
-                // 【修改】分別生成髮色與髮型，並移除舊的hair屬性
+                // 分別生成髮色與髮型，並移除舊的hair屬性
                 hairColor: VISUAL_OPTIONS.hairColor[randomInt(0, VISUAL_OPTIONS.hairColor.length - 1)],
                 hairStyle: VISUAL_OPTIONS.hairStyle[randomInt(0, VISUAL_OPTIONS.hairStyle.length - 1)],
                 height: randomInt(130, 170),
