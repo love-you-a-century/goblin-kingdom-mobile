@@ -247,12 +247,29 @@
                         <div class="game-container relative p-4 rounded-lg pt-10">
                             <h2 class="game-title font-medieval">王之號令</h2>
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <button @click="handleRaidButtonClick()" class="btn btn-primary" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 5 }">出擊掠奪</button>
-                                <button @click="handleConstructionClick()" class="btn btn-primary" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 2 }">部落建設</button>
-                                <button @click="openMerchant()" class="btn btn-primary" :disabled="!merchant.isPresent" title="旅行商人來訪時才能進入">
+                                <button @click="handleRaidButtonClick()" 
+                                        class="btn btn-primary" 
+                                        :class="{ 'glow-pulse': shouldRaidButtonGlow }"
+                                        title="必須先建造地牢與產房">
+                                    出擊掠奪
+                                </button>
+
+                                <button @click="handleConstructionClick()" 
+                                        class="btn btn-primary" 
+                                        :class="{ 'glow-pulse': shouldConstructionButtonGlow }">
+                                    部落建設
+                                </button>
+
+                                <button @click="openMerchant()" 
+                                        class="btn btn-primary" 
+                                        :disabled="isMerchantButtonDisabled" 
+                                        title="旅行商人來訪時才能進入">
                                     商人營地 <span x-show="merchant.isPresent" class="text-yellow-300">(來訪中)</span>
                                 </button>
-                                <button @click="openDispatchModal()" class="btn btn-primary">部落派遣</button>
+
+                                <button @click="openDispatchModal()" class="btn btn-primary">
+                                    部落派遣
+                                </button>
                             </div>
                         </div>
     
@@ -762,9 +779,8 @@
                                 </div>
                                 <div class="text-center mt-4">
                                     <button @click="handleBreedingClick()"
-                                            :disabled="modals.dungeon.selectedBreedIds.length === 0 || modals.dungeon.selectedBreedIds.length > breedingChargesLeft || (mothers.length + modals.dungeon.selectedBreedIds.length) > maternityCapacity || maternityCapacity === 0"
-                                            class="btn btn-primary"
-                                            :class="{'glow-pulse': tutorial.active && !tutorial.finishedIntro && dungeonCaptives.length > 0}">
+                                            :disabled="canExecuteBreeding"
+                                            class="btn btn-primary">
                                         執行繁衍 (<span x-text="modals.dungeon.selectedBreedIds.length"></span>)
                                     </button>
                                     <p x-show="maternityCapacity === 0" class="text-red-400 text-sm mt-2">請先建造或升級產房！</p>
@@ -1202,9 +1218,28 @@
                                     </p>
                                 </div>
                                 <div class="text-right text-sm">
-                                    <p>魅力: <span class="font-bold" x-text="captive.stats.charisma"></span></p>
+                                    <p>魅力: <span class="font-bold text-pink-400" x-text="captive.stats.charisma"></span></p>
                                 </div>
                             </div>
+                            
+                            <div class="mt-2 pt-2 border-t border-gray-700 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                <div><strong>力量:</strong> <span x-text="captive.stats.strength"></span></div>
+                                <div><strong>敏捷:</strong> <span x-text="captive.stats.agility"></span></div>
+                                <div><strong>智力:</strong> <span x-text="captive.stats.intelligence"></span></div>
+                                <div><strong>運氣:</strong> <span x-text="captive.stats.luck"></span></div>
+                            </div>
+
+                            <template x-if="captive.visual">
+                                <div class="mt-2 pt-2 border-t border-gray-700 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-400">
+                                    <div><strong>身高:</strong> <span x-text="captive.visual.height + ' cm'"></span></div>
+                                    <div><strong>年紀:</strong> <span x-text="captive.visual.age"></span></div>
+                                    <div><strong>髮色:</strong> <span x-text="captive.visual.hairColor"></span></div>
+                                    <div><strong>髮型:</strong> <span x-text="captive.visual.hairStyle"></span></div>
+                                    <div><strong>胸圍:</strong> <span x-text="captive.visual.bust"></span></div>
+                                    <div class="col-span-2"><strong>個性:</strong> <span x-text="captive.visual.personality"></span></div>
+                                </div>
+                            </template>
+                            
                             <div class="text-right mt-2">
                                 <button @click="releaseCarriedCaptive(captive.id)" class="btn btn-danger btn-sm">釋放</button>
                             </div>
@@ -1258,6 +1293,7 @@
                                 <div class="mt-2 pt-2 border-t border-gray-600 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                                 <div><strong>身高:</strong> <span x-text="captive.visual.height"></span> cm</div>
                                 <div><strong>年紀:</strong> <span x-text="captive.visual.age"></span></div>
+                                <div><strong>髮色:</strong> <span x-text="captive.visual.hairColor"></span></div>
                                 <div><strong>髮型:</strong> <span x-text="captive.visual.hair"></span></div>
                                     <div><strong>胸圍:</strong> <span x-text="captive.visual.bust"></span></div>
                                     <div class="col-span-2"><strong>個性:</strong>
