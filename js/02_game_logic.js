@@ -238,8 +238,9 @@ const gameLogic = {
         merchantCamp: { level: 0, name: "商人營地" },
     },
     modals: {
-        dispatch: { isOpen: false, activeTab: 'hunting' }, // 【新增】派遣系統 modal
+        dispatch: { isOpen: false, activeTab: 'hunting' }, // 派遣系統 modal
         construction: { isOpen: false, activeTab: 'dungeon' },
+        skillTree: { isOpen: false, activeTab: 'combat' },
         dungeon: { subTab: 'manage', selectedBreedIds: [] },
         barracks: { subTab: 'manage', selectedPartyIds: [] },
         partnerEquipment: { isOpen: false, partnerId: null, activeFilter: 'all' },
@@ -719,7 +720,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.13 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.17 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -777,12 +778,17 @@ const gameLogic = {
     },
     
     updateStat(stat, value) {
-        const intValue = parseInt(value);
+        let intValue = parseInt(value); // 將 const 改為 let 以便修改
         if (!isNaN(intValue)) {
+            // 【新增此段】如果計算後的值是負數，就將其校正為 0
+            if (intValue < 0) {
+                intValue = 0;
+            }
             this.creation.stats[stat] = intValue;
             this.checkStatValue(stat, intValue);
         }
     },
+
     checkStatValue(stat, value) {
         const intValue = parseInt(value);
 
@@ -791,6 +797,8 @@ const gameLogic = {
         } else {
             this.creation.stats[stat] = intValue;
         }
+
+        this.creation.stats[stat] = intValue; 
 
         const zeroStatCount = Object.values(this.creation.stats).filter(v => v <= 0).length;
 
@@ -4339,6 +4347,11 @@ const gameLogic = {
     openDispatchModal() {
         this.modals.dispatch.isOpen = true;
     },
+
+    openSkillTree() {
+        this.modals.skillTree.isOpen = true;
+    },
+
     assignToDispatch(partnerId, task) {
         if (this.dispatch[task].length >= 10) {
             this.showCustomAlert('這個隊伍已經滿員了！');

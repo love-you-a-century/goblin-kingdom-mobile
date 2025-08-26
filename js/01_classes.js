@@ -221,7 +221,7 @@
             this.appearance = appearance;
             this.height = height;
             this.penisSize = penisSize;
-            this.skillPoints = 0;
+            this.skillPoints = 5;
             this.attributePoints = 0;
             this.party = [];
             this.avatarUrl = null;
