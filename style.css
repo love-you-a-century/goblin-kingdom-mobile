@@ -384,3 +384,11 @@
             75% { opacity: 1; }
             100% { transform: translate(0, 0); opacity: 0; }
         }
+        /* --- 新增：提升特定 Modal 的顯示層級 --- */
+        #custom-alert-modal,
+        #discard-confirm-modal,
+        #bailout-confirm-modal,
+        #item-management-modal,
+        #partner-management-modal {
+            z-index: 110;
+        }
