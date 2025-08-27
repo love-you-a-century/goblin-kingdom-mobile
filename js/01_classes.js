@@ -73,7 +73,7 @@
 
             isAlive() { return this.currentHp > 0; }
             calculateMaxHp() { return 0; }
-            
+
             getTotalStat(stat, isStarving = false) {
                 if (stat === 'hp') return this.calculateMaxHp(isStarving);
                 if (!this.stats.hasOwnProperty(stat) || !['strength', 'agility', 'intelligence', 'luck'].includes(stat)) {
@@ -221,8 +221,10 @@
             this.appearance = appearance;
             this.height = height;
             this.penisSize = penisSize;
-            this.skillPoints = 5;
+            this.skillPoints = 0;
             this.attributePoints = 0;
+            this.learnedSkills = {};
+            this.activeSkillBuff = null;
             this.party = [];
             this.avatarUrl = null;
             this.inventory = [];
@@ -233,14 +235,58 @@
             };
             this.maxHp = 1;     // 給一個暫時的預設值，避免出錯
             this.currentHp = 1;   // 給一個暫時的預設值
-        }
+            }
 
+            getEffectiveIntelligence() {
+                // 根據GDD：有效智力 = 原始智力 + 裝備智力
+                const baseInt = this.stats.intelligence || 0;
+                const equipInt = this.getEquipmentBonus('intelligence');
+                return baseInt + equipInt;
+            }
+
+            getFinalCooldown(skill) {
+                if (!skill) return 0;
+
+                const effectiveInt = this.getEffectiveIntelligence();
+                const quickCooldownSkillId = 'combat_quick_cooldown';
+                let quickCooldownLevel = 0;
+
+                if (this.learnedSkills[quickCooldownSkillId]) {
+                    const quickCooldownData = SKILL_TREES.combat.find(s => s.id === quickCooldownSkillId);
+                    const currentLevel = this.learnedSkills[quickCooldownSkillId];
+                    quickCooldownLevel = quickCooldownData.levels[currentLevel - 1].effect.value;
+                }
+
+                const intReduction = Math.floor(effectiveInt / 120);
+                const finalCd = skill.baseCooldown - intReduction - quickCooldownLevel;
+
+                return Math.max(skill.minCooldown || 1, finalCd);
+            }
 
             getPartyBonus(stat) {
                 if (!this.party || !stat || stat === 'hp' || stat === 'damage') return 0;
-                const totalBonus = this.party.reduce((sum, p) => sum + (p.stats[stat] || 0), 0);
-                return Math.floor(totalBonus * 0.5);
+
+                // 檢查是否學習了「集團戰略」
+                const skillId = 'tribe_01';
+                if (!this.learnedSkills || !this.learnedSkills[skillId]) {
+                    return 0; // 如果沒學，就沒有任何加成
+                }
+
+                // 獲取技能資料和當前等級
+                const skillData = SKILL_TREES.combat.find(s => s.id === skillId);
+                if (!skillData) return 0; // 安全檢查
+
+                const currentLevel = this.learnedSkills[skillId];
+                const skillLevelData = skillData.levels[currentLevel - 1];
+                if (!skillLevelData) return 0; // 安全檢查
+
+                // 計算夥伴提供的基礎能力總和
+                const totalBonusFromParty = this.party.reduce((sum, p) => sum + (p.stats[stat] || 0), 0);
+                
+                // 返回被動效果的百分比加成
+                return Math.floor(totalBonusFromParty * skillLevelData.passive);
             }
+
             getEquipmentBonus(stat) {
                 if (!this.equipment || !stat) return 0;
                 let flatBonus = 0;
@@ -464,9 +510,23 @@
                 
                 // 4. 計算最終總值
                 let total = Math.floor((baseValue + flatBonus) * multiplier);
+
+                // 檢查「集團戰略」主動 BUFF
+                if (this.statusEffects) { 
+                    const groupTacticsBuff = this.statusEffects.find(e => e.type === 'group_tactics_buff');
+                    if (groupTacticsBuff) {
+                        const skillData = SKILL_TREES.combat.find(s => s.id === 'tribe_01');
+                        const skillLevelData = skillData.levels[groupTacticsBuff.level - 1];
+                        if (skillLevelData) {
+                            const partyRawBonus = this.party.reduce((sum, p) => sum + (p.stats[stat] || 0), 0);
+                            const activeBonus = Math.floor(partyRawBonus * skillLevelData.active);
+                            total += activeBonus; // 將主動加成疊加上去
+                        }
+                    }
+                }
                 
                 total = Math.max(0, total);
-                
+
                 // 5. 最後套用飢餓懲罰
                 return isStarving ? Math.floor(total * 0.75) : total;
             }
@@ -587,6 +647,15 @@
                 const shieldBonus = this.equipment.offHand?.stats?.damage || 0;
                 const armorBonus = this.equipment.chest?.stats?.damage || 0;
                 return weaponDamage + shieldBonus + armorBonus;
+                
+                if (this.activeSkillBuff && this.activeSkillBuff.id === 'combat_powerful_strike') {
+                    const totalStrength = this.getTotalStat('strength', isStarving);
+                    const bonusDamage = Math.floor(totalStrength * this.activeSkillBuff.multiplier);
+                    finalDamage += bonusDamage;
+                    
+                    // 在 gameLogic 中會 log 訊息，這裡先清除 buff
+                    this.activeSkillBuff = null; 
+                }
             }
         }
         

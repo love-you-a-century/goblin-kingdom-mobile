@@ -10,6 +10,33 @@ function filterInventory(inventory, filter) {
 
 const gameLogic = {
 
+    get learnedActiveSkills() {
+        if (!this.player || !this.player.learnedSkills) return [];
+        
+        const activeSkills = [];
+        for (const skillId in this.player.learnedSkills) {
+            for (const category in SKILL_TREES) {
+                const skillData = SKILL_TREES[category].find(s => s.id === skillId);
+                if (skillData && skillData.combatActive) {
+                    const playerSkillState = this.player.skills.find(s => s.id === skillId);
+                    
+                    // --- 核心修改：使用新函式來計算最終冷卻 ---
+                    const finalCooldown = this.player.getFinalCooldown(skillData);
+
+                    activeSkills.push({
+                        ...skillData,
+                        // 使用實例的當前冷卻，如果沒有則為0
+                        currentCooldown: playerSkillState ? playerSkillState.currentCooldown : 0,
+                        // 顯示給UI的冷卻時間是計算後的最終值
+                        cooldown: finalCooldown, 
+                        currentLevel: this.player.learnedSkills[skillId]
+                    });
+                }
+            }
+        }
+        return activeSkills;
+    },
+
     get canExecuteBreeding() {
         if (!this.player) return false; // 安全檢查
 
@@ -241,6 +268,7 @@ const gameLogic = {
         dispatch: { isOpen: false, activeTab: 'hunting' }, // 派遣系統 modal
         construction: { isOpen: false, activeTab: 'dungeon' },
         skillTree: { isOpen: false, activeTab: 'combat' },
+        combatSkills: { isOpen: false },
         dungeon: { subTab: 'manage', selectedBreedIds: [] },
         barracks: { subTab: 'manage', selectedPartyIds: [] },
         partnerEquipment: { isOpen: false, partnerId: null, activeFilter: 'all' },
@@ -720,7 +748,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.17 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.18 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -865,6 +893,8 @@ const gameLogic = {
     initializeTribe() {
         if (!this.isNewGame) return;
         this.isNewGame = false;
+
+        this.player.updateHp(this.isStarving);
 
         const starterSword = this.createEquipment('iron', 'worn', '劍');
         const starterArmor = this.createEquipment('iron', 'worn', '鎧甲');
@@ -1538,7 +1568,6 @@ const gameLogic = {
             return;
         }
 
-        // 提前創建新生兒，無論寢室是否已滿
         const pStats = this.player.stats;
         const mStats = mother.stats;
         const newStats = {
@@ -1552,33 +1581,47 @@ const gameLogic = {
         newPartner.maxHp = newPartner.calculateMaxHp(this.isStarving);
         newPartner.currentHp = newPartner.maxHp;
 
-        // 檢查寢室容量
-        if ((this.partners.length + 1) <= this.partnerCapacity) {
-            // 容量充足，直接加入
-            this.partners.push(newPartner);
-            mother.isPregnant = false;
-            mother.pregnancyTimer = 0;
-            mother.isMother = true;
-            this.player.skillPoints++;
-            this.logMessage('tribe', `${mother.name} 誕下了一個新的哥布林夥伴：${newName}！你獲得了 1 點技能點。`, 'success');
-            this.logMessage('tribe', `${mother.name} 現在開始在產房為部落貢獻奶水。`, 'info');
-            if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
-                this.triggerTutorial('firstBirth');
-            }
-        } else {
-            // 容量不足，將決策事件加入佇列
+        // --- 核心修改開始 ---
+        // 檢查寢室是否已滿
+        const isBarracksFull = (this.partners.length + 1) > this.partnerCapacity;
+
+        // 如果寢室已滿，並且當前正在一場復仇之戰中
+        if (isBarracksFull && this.combat.isUnescapable) {
+            // 則將這個出生事件暫存起來，等待戰後處理
+            this.logMessage('tribe', `${mother.name} 在戰鬥中誕下了一個孩子，但寢室已滿！戰鬥結束後需要您做出選擇...`, 'warning');
+            this.postBattleBirths.push({ mother: mother, newborn: newPartner });
+        } 
+        // 如果寢室已滿，但不在戰鬥中
+        else if (isBarracksFull) {
+            // 則按照原來的邏輯，立即加入待辦決策列表
             this.logMessage('tribe', `${mother.name} 誕下了一個孩子，但寢室已滿！返回部落後需要您做出選擇...`, 'warning');
             this.pendingDecisions.push({
                 type: 'partner',
                 list: [...this.partners, newPartner],
                 limit: this.partnerCapacity,
-                dungeonLimit: -1,
                 context: { mother: mother, newborn: newPartner }
             });
+        } 
+        // 如果寢室空間充足
+        else {
+            // 直接加入夥伴列表
+            this.partners.push(newPartner);
+            this.player.skillPoints++;
+            this.logMessage('tribe', `${mother.name} 誕下了一個新的哥布林夥伴：${newName}！你獲得了 1 點技能點。`, 'success');
+            if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
+                this.triggerTutorial('firstBirth');
+            }
         }
+        // --- 核心修改結束 ---
+
+        // 無論如何，母親的狀態都需要更新
+        mother.isPregnant = false;
+        mother.pregnancyTimer = 0;
+        mother.isMother = true;
+        this.logMessage('tribe', `${mother.name} 現在開始在產房為部落貢獻奶水。`, 'info');
     },
 
-    //   這個全新的函式
+    //  這個全新的函式
     releaseCarriedCaptive(captiveId) {
         if (!this.currentRaid) return;
 
@@ -1594,6 +1637,23 @@ const gameLogic = {
             // 在掠奪日誌中記錄此事件
             this.logMessage('raid', `你釋放了俘虜 ${captiveName}。`, 'info');
         }
+    },
+
+    removeAllCaptives(reason) {
+        // 如果本來就沒有俘虜，就什麼都不做
+        if (this.captives.length === 0) {
+            return;
+        }
+
+        const captiveCount = this.captives.length;
+        
+        // 根據移除原因，記錄不同的日誌
+        if (reason === 'rescued') {
+            this.logMessage('tribe', `復仇小隊趁亂將你所有的 ${captiveCount} 名俘虜（包含地牢與產房）全部救走了！`, 'enemy');
+        }
+        // 未來可以擴充其他原因，例如 'escaped' (集體逃跑), 'sacrificed' (獻祭) 等
+        // 核心邏輯：將俘虜陣列直接清空
+        this.captives = [];
     },
     
     releaseCaptive(captiveId) {
@@ -1619,27 +1679,38 @@ const gameLogic = {
             this.logMessage('tribe', `${captive.name} 已被移回地牢，等待繁衍。`, 'info');
         }
     },
-    releasePartner(partnerId) {
+
+    //步驟1.1：一個私有的輔助函式，負責將夥伴從所有隊伍中移除
+    _removePartnerFromAllAssignments(partnerId) {
+        // 從出擊隊伍中移除
+        this.player.party = this.player.party.filter(p => p.id !== partnerId);
+        // 從所有派遣隊伍中移除
+        Object.keys(this.dispatch).forEach(task => {
+            this.dispatch[task] = this.dispatch[task].filter(id => id !== partnerId);
+        });
+    },
+
+    // 步驟1.2：權威的「移除夥伴」函式
+    removePartner(partnerId) {
         const partner = this.partners.find(p => p.id === partnerId);
-        if (!partner) return;
+        if (!partner) return; // 如果找不到夥伴，就中斷
 
+        // 1. 處理該夥伴身上的裝備 (這段邏輯直接從舊的 releasePartner 函式搬移過來)
         const itemsToReturn = Object.values(partner.equipment).filter(item => item !== null);
-
         if (itemsToReturn.length > 0) {
             const availableSpace = (this.warehouseCapacity - this.warehouseInventory.length) + (this.backpackCapacity - this.player.inventory.length);
-            
             if (itemsToReturn.length > availableSpace) {
-                // 空間不足，打開處理視窗
+                // 空間不足時，打開物品管理視窗，並設定好後續動作
                 this.modals.itemManagement = {
                     isOpen: true,
                     title: `處理 ${partner.name} 的裝備`,
                     message: `倉庫與背包空間不足！請先處理以下裝備，直到剩餘數量小於等於 ${availableSpace}。`,
-                    items: [...itemsToReturn], // 複製一份陣列
+                    items: [...itemsToReturn],
                     capacity: availableSpace,
-                    onConfirm: () => {
-                        this.finalizeReleasePartner(partner); // 設定確認後要執行的動作
-                    }
+                    // 設定確認後的回呼：從部落中正式移除夥伴
+                    onConfirm: () => this.removePartner(partnerId) 
                 };
+                return; // 暫時中斷，等待玩家處理裝備
             } else {
                 // 空間足夠，自動轉移
                 itemsToReturn.forEach(item => {
@@ -1650,19 +1721,59 @@ const gameLogic = {
                     }
                 });
                 this.logMessage('tribe', `已將 ${partner.name} 的 ${itemsToReturn.length} 件裝備自動移至倉庫/背包。`, 'info');
-                this.finalizeReleasePartner(partner);
             }
-        } else {
-            // 身上沒裝備，直接逐出
-            this.finalizeReleasePartner(partner);
         }
+        
+        // 2. 將夥伴從所有隊伍中移除
+        this._removePartnerFromAllAssignments(partnerId);
+
+        // 3. 從部落夥伴總名單中移除
+        this.partners = this.partners.filter(p => p.id !== partnerId);
+
+        // 4. 更新玩家狀態並記錄日誌
+        this.player.updateHp(this.isStarving);
+        this.logMessage('tribe', `你將 ${partner.name} 逐出了部落。`, 'info');
+    },
+
+    // 步驟1.3：權威的「指派夥伴」函式
+    assignPartner(partnerId, task) { // task可以是 'party', 'hunting', 'logging', 'mining'
+        // 1. 先將該夥伴從所有舊的隊伍中移除，確保狀態乾淨
+        this._removePartnerFromAllAssignments(partnerId);
+
+        // 2. 根據任務類型，將夥伴加入到新的隊伍中
+        if (task === 'party') {
+            const partner = this.partners.find(p => p.id === partnerId);
+            if (partner && this.player.party.length < 20) {
+                this.player.party.push(partner);
+            }
+        } else if (this.dispatch[task]) {
+            if (this.dispatch[task].length < 10) {
+                this.dispatch[task].push(partnerId);
+            }
+        }
+        
+        // 3. 任何隊伍的變動都可能影響玩家血量，統一更新
+        this.player.updateHp(this.isStarving);
+    },
+
+    releasePartner(partnerId) {
+        // 直接呼叫權威的移除函式
+        this.removePartner(partnerId);
+    },
+
+    cleanupDispatchLists() {
+        // 取得一份當前所有合法夥伴ID的集合，方便快速查找
+        const allCurrentPartnerIds = new Set(this.partners.map(p => p.id));
+
+        // 過濾每一個派遣列表，只保留ID存在於合法夥伴ID集合中的成員
+        this.dispatch.hunting = this.dispatch.hunting.filter(id => allCurrentPartnerIds.has(id));
+        this.dispatch.logging = this.dispatch.logging.filter(id => allCurrentPartnerIds.has(id));
+        this.dispatch.mining = this.dispatch.mining.filter(id => allCurrentPartnerIds.has(id));
     },
 
     finalizeReleasePartner(partner) {
-        this.partners = this.partners.filter(p => p.id !== partner.id);
-        this.player.party = this.player.party.filter(p => p.id !== partner.id);
-        this.player.updateHp(this.isStarving);
-        this.logMessage('tribe', `你將 ${partner.name} 逐出了部落。`, 'info');
+        // 這個函式現在已經不再被直接使用，但為安全起見，也將其邏輯指向新的函式
+        this.removePartner(partner.id);
     },
 
     executeItemManagementAction(action, itemId) {
@@ -1695,9 +1806,7 @@ const gameLogic = {
             this.showCustomAlert('處理尚未完成！剩餘裝備數量仍大於可用空間。');
             return;
         }
-
-        // 將剩餘決定保留的裝備放入倉庫/背包
-        modal.items.forEach(item => {
+        modal.items.forEach(item => {  // 將剩餘決定保留的裝備放入倉庫/背包
             if (this.warehouseInventory.length < this.warehouseCapacity) {
                 this.warehouseInventory.push(item);
             } else {
@@ -1705,13 +1814,10 @@ const gameLogic = {
             }
         });
         this.logMessage('tribe', `你處理完畢，並保留了 ${modal.items.length} 件裝備。`, 'success');
-
-        // 執行回呼函式 (例如：完成夥伴的逐出)
-        if (typeof modal.onConfirm === 'function') {
+        if (typeof modal.onConfirm === 'function') {  // 執行回呼函式 (例如：完成夥伴的逐出)
             modal.onConfirm();
         }
 
-        // 關閉並重置 modal
         modal.isOpen = false;
         modal.onConfirm = null;
         modal.items = [];
@@ -1722,7 +1828,6 @@ const gameLogic = {
         const itemCounts = [2, 4, 6, 8, 10];
         const numItems = itemCounts[level] || 2;
         let goods = [];
-
         const materialTiers = { 0: [1,2], 1: [1,3], 2: [2,4], 3: [3,5], 4: [4,6] };
         const possibleTiers = materialTiers[level];
 
@@ -1753,11 +1858,17 @@ const gameLogic = {
         this.merchant.goods = goods;
     },
     confirmPartySelection() {
-        this.player.party = this.partners.filter(p => this.modals.barracks.selectedPartyIds.includes(p.id));
+        // 1. 清空現有的出擊隊伍
+        this.player.party = [];
+        
+        // 2. 透過新的指派函式，逐一將選擇的夥伴加入隊伍
+        this.modals.barracks.selectedPartyIds.forEach(id => {
+            this.assignPartner(id, 'party');
+        });
+        
+        // 3. 更新玩家狀態並記錄日誌
         this.player.updateHp(this.isStarving);
         this.logMessage('tribe', `你更新了出擊隊伍，現在有 ${this.player.party.length} 名夥伴與你同行。`, 'info');
-
-        //   顯示一個提示框，告知玩家操作成功，增加操作回饋
         this.showCustomAlert('出擊隊伍已更新！');
     },
                     
@@ -1953,7 +2064,7 @@ const gameLogic = {
                 guard = new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length-1)], distributeStats(totalStatPoints), '城市守軍');
             }
 
-            this.equipEnemy(guard, difficulty); // 【核心修正】為生成的守軍呼叫裝備函式
+            this.equipEnemy(guard, difficulty); // 為生成的守軍呼叫裝備函式
 
             return guard; // 最後返回這個已經穿好裝備的守軍
         });
@@ -2053,7 +2164,7 @@ const gameLogic = {
 
         const royalCityZone = city.zones.find(z => z.name === '王城');
         if (difficulty === 'hell' && royalCityZone) {
-            // [重要] 清空王城，確保只有我們的特殊建築
+            //  清空王城，確保只有我們的特殊建築
             royalCityZone.enemies = [];
             royalCityZone.buildings = [];
 
@@ -2073,7 +2184,7 @@ const gameLogic = {
                 castleOccupants.push(knight);
             });
 
-            // 2. [修正] 根據 GDD 6.5 與 10.3 產生 1 至 3 位公主
+            // 2.  根據 GDD 6.5 與 10.3 產生 1 至 3 位公主
             const numPrincesses = randomInt(1, 3); // [修正] 公主數量為1-3人
 
             // 1. 建立一個可修改的、隨機打亂的女性名字複製列表
@@ -2110,7 +2221,7 @@ const gameLogic = {
                 resources: { food: 500, wood: 500, stone: 500 },
                 scouted: false, 
                 postScoutText: '',
-                isFinalChallenge: true, // [關鍵] 特殊標記
+                isFinalChallenge: true, //  特殊標記
                 x: pos.x, 
                 y: pos.y, 
                 width: GRID_SIZE,
@@ -2212,10 +2323,9 @@ const gameLogic = {
 
         const isGroup = Array.isArray(targetOrGroup);
         const representativeTarget = isGroup ? targetOrGroup[0] : targetOrGroup;
-        // 【修正】統一獲取目標名稱給日誌使用
+        // 統一獲取目標名稱給日誌使用
         const targetNameForLog = isGroup ? '一個隊伍' : (representativeTarget.type || representativeTarget.name);
 
-        // 【核心邏輯重構】
         // 優先判斷目標是不是一個「空的建築」，無論之前是否偵查過
         if (!isGroup && representativeTarget.occupants && representativeTarget.occupants.length === 0) {
             // 因為建築已經是空的，偵查成本很低
@@ -2233,14 +2343,14 @@ const gameLogic = {
                 : '這棟建築是空的，看來可以搜刮一番。';
             this.modals.scoutInfo.isOpen = true;
             this.checkRaidTime();
-            return; // 結束函式
+            return; 
         }
 
         // 如果之前偵查過，且裡面還有敵人
         if (this.isTargetScouted(representativeTarget.id)) {
             this.modals.scoutInfo.target = isGroup ? targetOrGroup : representativeTarget.occupants;
             this.modals.scoutInfo.isOpen = true;
-            // 【修正】使用正確的目標名稱
+            // 使用正確的目標名稱
             this.logMessage('raid', `你再次查看了 ${targetNameForLog} 的情報。`, 'info');
             return;
         }
@@ -2263,7 +2373,6 @@ const gameLogic = {
             this.currentRaid.currentZone.scouted.targets.add(representativeTarget.id);
 
             this.updateBuildingScoutText(); // 偵查成功後也更新一次文字
-            // 【修正】使用正確的目標名稱
             this.logMessage('raid', `你成功偵查了 ${targetNameForLog} 的詳細情報！(-3 分鐘)`, 'success');
 
             this.modals.scoutInfo.target = isGroup ? targetOrGroup : representativeTarget.occupants;
@@ -2379,7 +2488,7 @@ const gameLogic = {
     advanceToNextZone(force = false) {
         const castle = this.currentRaid.currentZone.buildings.find(b => b.isFinalChallenge);
         if (this.currentRaid.currentZone.name === '王城' && castle && castle.scouted) {
-            // [關鍵] 呼叫新函數，而不是移動到下一個zone
+            // 呼叫新函數，而不是移動到下一個zone
             this.enterThroneRoom(castle.occupants);
             return;
         }
@@ -2429,7 +2538,7 @@ const gameLogic = {
             
             this.logMessage('raid', `你帶著 ${this.currentRaid.carriedCaptives.length} 名俘虜脫離城鎮，花費了 ${totalCost} 分鐘。`, 'player');
             
-            this.isRetreatingWhenTimeExpired = true; // 【新增此行】在檢查時間前，標記為正在脫離
+            this.isRetreatingWhenTimeExpired = true; // 在檢查時間前，標記為正在脫離
             this.checkRaidTime(); 
             
             if (this.currentRaid && this.currentRaid.timeRemaining > 0) {
@@ -2473,13 +2582,6 @@ const gameLogic = {
         }
     },
     endRaid(wasDefeated = false) {
-        // 判斷是否為玩家戰敗死亡
-        if (wasDefeated && this.player && !this.player.isAlive()) {
-            this.initiateRebirth(); // 觸發重生流程
-            this.selectedTarget = null; //   確保清除地圖目標
-            return; // 中斷後續的返回部落邏輯
-        }
-
         if (this.tutorial.active) {
             if(this.currentRaid.carriedCaptives.length > 0) {
                 this.advanceTutorial(6);
@@ -2491,9 +2593,7 @@ const gameLogic = {
         }
 
         if (!wasDefeated) {
-            // 使用 JSON.parse(JSON.stringify(...)) 進行深拷貝
-            const carriedCaptivesClone = JSON.parse(JSON.stringify(this.currentRaid.carriedCaptives));
-            this.captives.push(...carriedCaptivesClone);
+            this.captives.push(...this.currentRaid.carriedCaptives);
             this.logMessage('tribe', `你帶回了 ${this.currentRaid.carriedCaptives.length} 名俘虜。`, 'player');
         }
         
@@ -2693,7 +2793,25 @@ const gameLogic = {
     },
 
     startCombat(enemyGroup, enemyFirstStrike = false, alliesOverride = null) {
-        this.combat.allies = (alliesOverride || [this.player, ...this.player.party]).filter(u => u.isAlive());
+        let combatAllies;
+
+        // 檢查這是否為一場部落保衛戰 (非掠奪期間的戰鬥)
+        if (!this.currentRaid) {
+            // 是保衛戰：集結所有「未被派遣」的夥伴
+            const dispatchedIds = new Set([
+                ...this.dispatch.hunting,
+                ...this.dispatch.logging,
+                ...this.dispatch.mining
+            ]);
+            const availablePartners = this.partners.filter(p => !dispatchedIds.has(p.id));
+            combatAllies = [this.player, ...availablePartners];
+            this.logMessage('tribe', `部落全員動員，抵禦入侵者！`, 'system');
+        } else {
+            // 是掠奪戰：使用玩家手動設定的出擊隊伍
+            combatAllies = [this.player, ...this.player.party];
+        }
+
+        this.combat.allies = (alliesOverride || combatAllies).filter(u => u.isAlive());
         this.combat.enemies = enemyGroup.filter(u => u.isAlive());
         this.combat.currentEnemyGroup = enemyGroup;
         this.combat.turn = 1;
@@ -2711,6 +2829,65 @@ const gameLogic = {
         }
     },
 
+    async useSkill(skillId) {
+        if (this.combat.isProcessing || this.combat.playerActionTaken) return;
+
+        const skillData = this.learnedActiveSkills.find(s => s.id === skillId);
+        if (!skillData || skillData.currentCooldown > 0) {
+            this.showCustomAlert('技能尚未冷卻！');
+            return;
+        }
+
+        this.combat.playerActionTaken = true;
+        this.modals.combatSkills.isOpen = false;
+
+        // 找到玩家技能列表中的對應技能來設定冷卻
+        const playerSkillInstance = this.player.skills.find(s => s.id === skillId);
+        if (playerSkillInstance) {
+            playerSkillInstance.currentCooldown = this.player.getFinalCooldown(skillData);
+        }
+
+        this.logMessage('combat', `${this.player.name} 施放了技能 [${skillData.name}]！`, 'skill');
+
+        // --- 處理不同技能的效果 ---
+        switch (skillId) {
+            case 'combat_powerful_strike':
+                const skillLevel = this.player.learnedSkills[skillId];
+                const multiplier = skillData.levels[skillLevel - 1].effect.multiplier;
+                
+                this.player.activeSkillBuff = {
+                    id: skillId,
+                    multiplier: multiplier
+                };
+                this.logMessage('combat', `${this.player.name} 的武器灌注了力量，下一次攻擊將造成毀滅性打擊！`, 'system');
+                
+                // 重要：施放強力一擊後，輪到敵人行動
+                await new Promise(res => setTimeout(res, 300));
+                this.executeTurn(false);
+                break;
+
+            case 'tribe_01': // 集團戰略的 ID
+                this.player.statusEffects.push({
+                    type: 'group_tactics_buff',
+                    duration: this.player.getFinalDuration(skillData), // 使用動態計算的持續時間
+                    level: this.player.learnedSkills[skillId] // 將當前技能等級也存入效果中
+                });
+                this.logMessage('combat', `${this.player.name} 的周身散發出領袖氣場，所有夥伴的能力都加持到了你身上！`, 'system');
+                
+                // 施放技能後，輪到敵人行動
+                await new Promise(res => setTimeout(res, 300));
+                this.executeTurn(false);
+                break;
+
+            // 未來可以在這裡添加其他技能的 case
+            default:
+                // 如果是其他類型的技能，可以在這裡處理，然後輪到敵人
+                await new Promise(res => setTimeout(res, 300));
+                this.executeTurn(false);
+                break;
+        }
+    },
+
     async executePlayerAction(action) {
         if (this.combat.isProcessing || this.combat.playerActionTaken || !this.player || !this.player.isAlive()) return;
         this.combat.playerActionTaken = true;
@@ -2718,6 +2895,9 @@ const gameLogic = {
         let continueToEnemyTurn = true;
 
         if (action === 'attack') {
+            if (this.player.activeSkillBuff?.id === 'combat_powerful_strike') {
+                this.logMessage('combat', `[強力一擊] 效果觸發！`, 'crit');
+            }
             const livingEnemies = this.combat.enemies.filter(t => t.isAlive());
             if (livingEnemies.length > 0) {
                 const target = livingEnemies[randomInt(0, livingEnemies.length - 1)];
@@ -2790,7 +2970,7 @@ const gameLogic = {
         this.combat.turn++;
         this.combat.isProcessing = false;
 
-        // 【核心修正】檢查哥布林王是否存活
+        // 檢查哥布林王是否存活
         if (!this.player.isAlive()) {
             // 王陣亡，但夥伴還在，觸發自動戰鬥
             this.logMessage('combat', '哥布林王倒下了！夥伴們將繼續戰鬥！', 'system');
@@ -3056,15 +3236,13 @@ const gameLogic = {
             this.logMessage('raid', `你從 ${enemy.name} 身上獲得了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
         }
     },
-    // 【最終版本】為敵人穿戴裝備的智慧助手函式
+    // 為敵人穿戴裝備的智慧助手函式
     equipEnemy(enemy, difficulty) {
         if (!enemy || !enemy.equipment) return;
 
         const isKnight = Object.keys(KNIGHT_ORDER_UNITS).includes(enemy.profession);
 
-        // ------------------------------------------------------------------
         // I. 騎士團 (Knight Order) 的專屬裝備邏輯
-        // ------------------------------------------------------------------
         if (isKnight) {
             const qualityKey = 'epic'; // 騎士團固定穿史詩品質
 
@@ -3142,13 +3320,10 @@ const gameLogic = {
                     break;
             }
 
-        // ------------------------------------------------------------------
         // II. 守軍與居民 (Guard & Resident) 的裝備邏輯
-        // ------------------------------------------------------------------
         } else {
             let numPieces = 0;
             let qualityKey = 'worn';
-            // (此處邏輯與上一版相同)
             if (enemy.profession === '城市守軍') {
                 numPieces = randomInt(1, 2);
                 qualityKey = 'uncommon';
@@ -3162,7 +3337,6 @@ const gameLogic = {
             } else {
                 return;
             }
-            // (後續的通用裝備生成邏輯也與上一版相同)
             const materialTiers = {
                 easy: { metal: [1, 3], wood: [1, 3] },
                 normal: { metal: [2, 4], wood: [2, 4] },
@@ -3194,9 +3368,7 @@ const gameLogic = {
             }
         }
 
-        // ------------------------------------------------------------------
         // III. 最後更新敵人狀態 (通用)
-        // ------------------------------------------------------------------
         if (enemy.updateHp) {
             enemy.updateHp(this.isStarving);
         } else {
@@ -3276,7 +3448,12 @@ const gameLogic = {
     },
 
     endCombat(victory) {
-        // 【新增此區塊】在所有邏輯開始前，檢查時間耗盡標記
+        // 這個檢查將覆蓋所有後續的勝利/失敗邏輯。
+        if (this.player && !this.player.isAlive()) {
+            this.initiateRebirth();
+            return; // 直接觸發重生並中斷後續所有程式碼
+        }
+        // 在所有邏輯開始前，檢查時間耗盡標記
         if (this.currentRaid && this.raidTimeExpired) {
             this.raidTimeExpired = false; // 重置標記
             if (victory) {
@@ -3286,9 +3463,21 @@ const gameLogic = {
                 // 如果玩家輸了當前戰鬥，直接結束掠奪
                 this.prepareToEndRaid(true);
             }
+            if (this.postBattleBirths.length > 0) {
+                this.postBattleBirths.forEach(birth => {
+                    this.pendingDecisions.push({
+                        type: 'partner',
+                        list: [...this.partners, birth.newborn],
+                        limit: this.partnerCapacity,
+                        context: { mother: birth.mother, newborn: birth.newborn }
+                    });
+                });
+                this.postBattleBirths = []; // 清空暫存列表
+                this.checkAndProcessDecisions(); // 立即觸發決策視窗
+            }
             return; // 中斷後續的 endCombat 程式碼，防止邏輯衝突
         }
-        // --- 新增：處理非掠奪戰鬥（如復仇小隊）---
+        // --- 處理非掠奪戰鬥（如復仇小隊）---
         if (!this.currentRaid) {
             if (victory) {
                 this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
@@ -3317,27 +3506,10 @@ const gameLogic = {
 
             } else {
                 //   復仇小隊戰敗懲罰邏輯
-                this.logMessage('tribe', '你在部落保衛戰中失敗了！復仇小隊趁機救走了他們的同伴！', 'enemy');
+                this.logMessage('tribe', '你在部落保衛戰中失敗了！', 'enemy');
 
-                // 1. 從敵人身上獲取復仇來源的難度
-                const revengeDifficulty = this.combat.enemies.length > 0 ? this.combat.enemies[0].originDifficulty : null;
-
-                if (revengeDifficulty) {
-                    // 2. 根據難度篩選出被救走的俘虜和留下的俘虜
-                    const rescuedCaptives = this.captives.filter(c => c.originDifficulty === revengeDifficulty);
-                    const remainingCaptives = this.captives.filter(c => c.originDifficulty !== revengeDifficulty);
-
-                    if (rescuedCaptives.length > 0) {
-                        // 3. 更新部落的俘虜名單
-                        this.captives = remainingCaptives;
-                        // 4. 記錄日誌，告知玩家哪些俘虜被救走
-                        const rescuedNames = rescuedCaptives.map(c => c.name).join(', ');
-                        this.logMessage('tribe', `俘虜 ${rescuedNames} 被成功救走，永遠地離開了你的部落。`, 'info');
-                    }
-                }
-                
-                // 5. 最後，觸發玩家重生
-                this.initiateRebirth();
+                // 直接呼叫權威函式，移除所有俘虜
+                this.removeAllCaptives('rescued');
             }
             return; // 結束函式，不再執行後續的掠奪邏輯
         }
@@ -3363,7 +3535,6 @@ const gameLogic = {
             // 將這些全新的俘虜物件加入攜帶列表
             this.currentRaid.carriedCaptives.push(...newCaptives);
         }
-
 
         if (this.player && !this.player.isAlive()) {
             this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
@@ -3477,7 +3648,7 @@ const gameLogic = {
         const tempCarried = [...this.currentRaid.carriedCaptives, ...captivesToAdd];
 
         if (tempCarried.length > this.carryCapacity) {
-            // 【修正】在呼叫時，將 this.carryCapacity 作為第三個參數傳遞進去
+            // 在呼叫時，將 this.carryCapacity 作為第三個參數傳遞進去
             this.openCaptiveManagementModal('raid', tempCarried, this.carryCapacity);
         } else {
             this.currentRaid.carriedCaptives = tempCarried;
@@ -3519,7 +3690,7 @@ const gameLogic = {
         const modal = this.modals.captiveManagement;
         const selectedIds = new Set(modal.selectedIds);
 
-        // 【核心修正】根據 modal 的類型分別處理
+        // 根據 modal 的類型分別處理
         if (modal.type === 'raid') {
             // 情況一：在掠奪中途，整理「攜帶」的俘虜
             this.currentRaid.carriedCaptives = modal.list.filter(c => selectedIds.has(c.id));
@@ -3560,13 +3731,13 @@ const gameLogic = {
         const selectedSet = new Set(modal.selectedIds);
         const { mother, newborn } = modal.context;
 
-        // 【第一步】找出被放棄的夥伴
+        // 找出被放棄的夥伴
         const discardedPartners = modal.list.filter(p => !selectedSet.has(p.id));
         
-        // 【第二步】收集所有被放棄夥伴身上的裝備
+        // 收集所有被放棄夥伴身上的裝備
         const itemsToReturn = discardedPartners.flatMap(p => Object.values(p.equipment).filter(item => item !== null));
 
-        // 【第三步】檢查空間並處理裝備 (與 releasePartner 函式邏輯相同)
+        // 檢查空間並處理裝備 (與 releasePartner 函式邏輯相同)
         if (itemsToReturn.length > 0) {
             const availableSpace = (this.warehouseCapacity - this.warehouseInventory.length) + (this.backpackCapacity - this.player.inventory.length);
             
@@ -3608,21 +3779,30 @@ const gameLogic = {
         const selectedSet = new Set(modal.selectedIds);
         const { mother, newborn } = modal.context;
 
-        const keptPartners = modal.list.filter(p => selectedSet.has(p.id));
-        const wasNewbornKept = keptPartners.some(p => p.id === newborn.id);                  
+        // 找出被放棄的夥伴
+        const discardedPartners = modal.list.filter(p => !selectedSet.has(p.id));
         
-        // 更新部落的夥伴總列表
-        this.partners = keptPartners;
+        // 呼叫權威的移除函式來逐出這些夥伴
+        discardedPartners.forEach(p => {
+            this.removePartner(p.id);
+        });
+
+        // 更新夥伴總列表 (因為 removePartner 已經處理了，這裡確保最終狀態一致)
+        this.partners = this.partners.filter(p => selectedSet.has(p.id));
         
+        const wasNewbornKept = selectedSet.has(newborn.id);
+        
+        // 如果新生兒被留下來，則將其正式加入部落
         if (wasNewbornKept) {
+            this.partners.push(newborn);
             this.player.skillPoints++;
             this.logMessage('tribe', `你為 ${newborn.name} 在寢室中騰出了空間！你獲得了 1 點技能點。`, 'success');
-            if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
+             if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
                 this.triggerTutorial('firstBirth');
             }
         } else {
             this.logMessage('tribe', `你決定放棄 ${mother.name} 的孩子，為更強的夥伴保留了位置。`, 'info');
-        }                    
+        }                  
         
         mother.isPregnant = false;
         mother.pregnancyTimer = 0;
@@ -3630,20 +3810,16 @@ const gameLogic = {
         this.logMessage('tribe', `${mother.name} 現在開始在產房為部落貢獻奶水。`, 'info');
 
         modal.isOpen = false;
-        
-        // 採用更簡潔、更穩定的方式來更新出擊隊伍
-        const keptPartnerIds = new Set(this.partners.map(p => p.id));
-        this.player.party = this.player.party.filter(p => keptPartnerIds.has(p.id));
         this.player.updateHp(this.isStarving);
     },
+
     // 1. 在函式定義中，加入一個帶有「預設值」的參數
     finishCombatCleanup(returnToTribe = false) {
         if (this.currentRaid) {
-            // 找出所有戰敗的敵人ID
-            const defeatedEnemyIds = this.combat.enemies.filter(e => !e.isAlive()).map(e => e.id);
             
-            // 對每一個戰敗者，都呼叫統一移除函式
-            defeatedEnemyIds.forEach(id => this.removeUnitFromRaidZone(id));
+            const defeatedEnemyIds = this.combat.enemies.filter(e => !e.isAlive()).map(e => e.id);// 找出所有戰敗的敵人ID
+             
+            defeatedEnemyIds.forEach(id => this.removeUnitFromRaidZone(id));// 對每一個戰敗者，都呼叫統一移除函式
 
             this.updateBuildingScoutText();
         }
@@ -3868,7 +4044,7 @@ const gameLogic = {
     },
 
     migrateSaveData() {
-        // 【修正】使用 Map 來收集所有物品，以確保每個物品的唯一性
+        // 使用 Map 來收集所有物品，以確保每個物品的唯一性
         const allKnownItems = new Map();
 
         // 1. 定義一個輔助函式來安全地添加物品到 Map 中
@@ -3896,7 +4072,6 @@ const gameLogic = {
         const allItems = Array.from(allKnownItems.values());
 
         const migrateItem = (item) => {
-            // (遷移邏輯維持不變)
             if (item && item.baseName === '盾' && typeof item.stats.blockChance === 'undefined') {
                 const materialTier = item.material.tier;
                 const materialType = item.material.type;
@@ -4009,7 +4184,6 @@ const gameLogic = {
                     hells_knights: false
                 };
             }
-            // --- 修正結束 ---
 
             this.tutorial = { ...{ active: false, step: 0, merchantMet: false }, ...parsedData.tutorial };
             this.breedingChargesLeft = parsedData.breedingChargesLeft;
@@ -4085,7 +4259,7 @@ const gameLogic = {
             this.showCustomAlert('資源不足！');
             return;
         }
-        // 【修正】將 equipmentCapacity 改為正確的 backpackCapacity，以正確檢查背包容量
+        // 將 equipmentCapacity 改為正確的 backpackCapacity，以正確檢查背包容量
         if (this.player.inventory.length >= this.backpackCapacity) {
             this.showCustomAlert('你的背包已滿，無法製作新裝備！');
             return;
@@ -4099,11 +4273,11 @@ const gameLogic = {
 
         const roll = randomInt(1, 100);
         let qualityKey = 'worn';
-        if (roll <= 5) qualityKey = 'legendary';      // GDD 13.5 機率為 5%
-        else if (roll <= 15) qualityKey = 'epic';     // GDD 13.5 機率為 10%
-        else if (roll <= 32) qualityKey = 'rare';     // GDD 13.5 機率為 17%
-        else if (roll <= 58) qualityKey = 'uncommon'; // GDD 13.5 機率為 26%
-        else if (roll <= 93) qualityKey = 'common';   // GDD 13.5 機率為 35%
+        if (roll <= 5) qualityKey = 'legendary';      // 機率為 5%
+        else if (roll <= 15) qualityKey = 'epic';     // 機率為 10%
+        else if (roll <= 32) qualityKey = 'rare';     // 機率為 17%
+        else if (roll <= 58) qualityKey = 'uncommon'; // 機率為 26%
+        else if (roll <= 93) qualityKey = 'common';   // 機率為 35%
                                                     // 剩下 7% 為 worn
 
         const newItem = this.createEquipment(
@@ -4378,34 +4552,115 @@ const gameLogic = {
     openDispatchModal() {
         this.modals.dispatch.isOpen = true;
     },
-
+    //技能樹
     openSkillTree() {
         this.modals.skillTree.isOpen = true;
     },
+    getSkillStatus(skill) {
+        if (!this.player) return 'locked';
+        const isLearned = this.player.learnedSkills.hasOwnProperty(skill.id);
+        if (isLearned) return 'learned';
 
-    assignToDispatch(partnerId, task) {
-        if (this.dispatch[task].length >= 10) {
-            this.showCustomAlert('這個隊伍已經滿員了！');
+        const canAfford = this.player.skillPoints >= skill.levels[0].cost;
+        const dependenciesMet = this.areSkillDependenciesMet(skill);
+
+        if (canAfford && dependenciesMet) {
+            return 'learnable';
+        }
+        return 'locked';
+    },
+
+    getSkillDisplayInfo(skill) {
+        if (!this.player) return '';
+
+        // 獲取技能的當前等級，如果未學習則為0級
+        const currentLevel = this.player.learnedSkills[skill.id] || 0;
+        // 獲取對應等級的資料。如果未學習，則顯示第1級的資料
+        const levelData = currentLevel > 0 ? skill.levels[currentLevel - 1] : skill.levels[0];
+        
+        let infoParts = []; // 用來存放要顯示的各項資訊
+
+        // 1. 產生「效果」文字
+        if (levelData && levelData.effect) {
+            let effectString = '效果: ';
+            switch (skill.id) {
+                case 'combat_powerful_strike':
+                    const multiplier = levelData.effect.multiplier;
+                    effectString += `+${Math.round(multiplier * 100)}% 力量傷害`;
+                    break;
+                case 'combat_quick_cooldown':
+                    const reduction = levelData.effect.value;
+                    effectString += `-${reduction} 回合冷卻`;
+                    break;
+
+                case 'tribe_01':
+                    const passivePercent = Math.round(levelData.passive * 100);
+                    const activePercent = Math.round(levelData.active * 100);
+                    effectString = `被動: +${passivePercent}% | 主動: +${activePercent}%`;
+                    break;
+                // 未來可以在此處為其他技能新增效果描述
+                default:
+                    effectString = ''; // 如果沒有特別格式，暫不顯示
+            }
+            if (effectString) infoParts.push(effectString);
+        }
+
+        // 2. 產生「冷卻時間」文字 (僅對主動技)
+        if (skill.baseCooldown) {
+            const finalCd = this.player.getFinalCooldown(skill);
+            infoParts.push(`冷卻: ${finalCd} 回合`);
+        }
+        
+        // 3. 產生「持續時間」文字 (僅對有持續時間的技能)
+        if (skill.baseDuration) { // 雖然目前技能沒有，但為未來擴充
+            const finalDuration = skill.baseDuration + Math.floor(this.player.getEffectiveIntelligence() / 80);
+            infoParts.push(`持續: ${finalDuration} 回合`);
+        }
+
+        // 將所有資訊用 " | " 串聯起來回傳
+        return infoParts.join(' | ');
+    },
+
+    areSkillDependenciesMet(skill) {
+        if (!skill.dependencies || skill.dependencies.length === 0) {
+            return true;
+        }
+        return skill.dependencies.every(depId => this.player.learnedSkills.hasOwnProperty(depId));
+    },
+
+    learnSkill(skillId) {
+        const skillTab = Object.keys(SKILL_TREES).find(tab => SKILL_TREES[tab].some(s => s.id === skillId));
+        if (!skillTab) return;
+
+        const skill = SKILL_TREES[skillTab].find(s => s.id === skillId);
+        if (!skill) return;
+
+        const status = this.getSkillStatus(skill);
+        if (status !== 'learnable') {
+            this.showCustomAlert('不滿足學習條件！');
             return;
         }
-        // 從其他隊伍中移除
-        Object.keys(this.dispatch).forEach(key => {
-            this.dispatch[key] = this.dispatch[key].filter(id => id !== partnerId);
-        });
-        // 加入到新隊伍
-        this.dispatch[task].push(partnerId);
 
-        //   檢查並將夥伴從出擊隊伍中移除
-        if (this.player && this.player.party) {
-            const initialPartySize = this.player.party.length;
-            this.player.party = this.player.party.filter(p => p.id !== partnerId);
-            
-            // 如果隊伍成員真的有變動，則更新玩家的生命值 (因為夥伴加成會改變)
-            if (this.player.party.length !== initialPartySize) {
-                this.player.updateHp(this.isStarving);
-            }
+        this.player.skillPoints -= skill.levels[0].cost;
+        this.player.learnedSkills[skill.id] = 1;
+
+        if (skill.combatActive) {
+            // 將技能資料複製一份，並加入冷卻狀態
+            const newActiveSkill = JSON.parse(JSON.stringify(skill));
+            newActiveSkill.currentCooldown = 0;
+            this.player.skills.push(newActiveSkill);
         }
+
+        this.logMessage('tribe', `你學會了新技能：[${skill.name}]！`, 'success');
+        this.showCustomAlert(`成功學習 [${skill.name}]！`);
+
     },
+
+    assignToDispatch(partnerId, task) {
+        // 直接呼叫權威的指派函式
+        this.assignPartner(partnerId, task);
+    },
+
     removeFromDispatch(partnerId, task) {
         this.dispatch[task] = this.dispatch[task].filter(id => id !== partnerId);
     },
@@ -4413,14 +4668,12 @@ const gameLogic = {
     getGoblinYield(goblin, task) {
         if (!goblin) return 0;
 
-        // 使用 getTotalStat 來計算包含裝備加成的總四圍
-        const totalStats = goblin.getTotalStat('strength', this.isStarving) +
+        const totalStats = goblin.getTotalStat('strength', this.isStarving) +  // 使用 getTotalStat 來計算包含裝備加成的總四圍
                         goblin.getTotalStat('agility', this.isStarving) +
                         goblin.getTotalStat('intelligence', this.isStarving) +
                         goblin.getTotalStat('luck', this.isStarving);
         
-        // 統一獲取裝備血量加成
-        const equipmentHp = goblin.getEquipmentBonus('hp');
+        const equipmentHp = goblin.getEquipmentBonus('hp');  // 統一獲取裝備血量加成
 
         switch (task) {
             case 'hunting': {
@@ -4437,6 +4690,7 @@ const gameLogic = {
                 return 0;
         }
     },
+
     calculateDispatchYields() {
         // 升級後的「每日結算」函式，現在它會使用上面的計算機
         const huntingGoblins = this.getDispatchedPartners('hunting');

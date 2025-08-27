@@ -1,4 +1,78 @@
- // --- 地圖尺寸設定 ---
+
+        // --- 技能樹資料 ---
+        const SKILL_TREES = {
+            combat: [
+                {
+                    id: 'combat_powerful_strike',
+                    name: '強力一擊',
+                    description: '玩家計算完普通攻擊傷害後，額外增加哥布林王總力量的百分比傷害。',
+                    maxLevel: 5,
+                    dependencies: [],
+                    type: 'active',
+                    combatActive: true, // 標記為戰鬥主動技能
+                    baseCooldown: 12,
+                    minCooldown: 5,
+                    levels: [
+                        { cost: 2, effect: { multiplier: 1.4 } },
+                        { cost: 4, effect: { multiplier: 1.8 } },
+                        { cost: 6, effect: { multiplier: 2.2 } },
+                        { cost: 8, effect: { multiplier: 2.6 } },
+                        { cost: 10, effect: { multiplier: 3.0 } }
+                    ]
+                },
+                {
+                    id: 'combat_quick_cooldown',
+                    name: '快速冷卻',
+                    description: '被動：永久減少所有主動技能的冷卻時間。',
+                    maxLevel: 5,
+                    dependencies: [],
+                    type: 'passive',
+                    levels: [
+                        { cost: 5, effect: { value: 1 } },
+                        { cost: 10, effect: { value: 2 } },
+                        { cost: 15, effect: { value: 3 } },
+                        { cost: 20, effect: { value: 4 } },
+                        { cost: 25, effect: { value: 5 } }
+                    ]
+                },
+                {
+                    id: 'tribe_01',
+                    name: '集團戰略',
+                    description: '你將夥伴的力量化為己用。被動效果在非戰鬥時生效，主動效果需在戰鬥中施放。',
+                    maxLevel: 5,
+                    dependencies: [],
+                    type: 'hybrid', // 混合型
+                    combatActive: true, // 可在戰鬥中主動使用
+                    baseDuration: 3,    // 基礎持續時間
+                    baseCooldown: 15,   // 基礎冷卻時間 (平衡後)
+                    minCooldown: 1,     // 最低冷卻時間
+                    levels: [
+                        { cost: 5,  passive: 0.1, active: 0.1 }, // 等級 1
+                        { cost: 10, passive: 0.2, active: 0.2 }, // 等級 2
+                        { cost: 15, passive: 0.3, active: 0.3 }, // 等級 3
+                        { cost: 20, passive: 0.4, active: 0.4 }, // 等級 4
+                        { cost: 25, passive: 0.5, active: 0.5 }  // 等級 5
+                    ]
+                },
+                // --- GDD中的其他戰鬥技能（暫時註解，待後續實作） ---
+                /*
+                {
+                    id: 'combat_agile_strike',
+                    name: '迅捷一擊',
+                    // ... 其他屬性 ...
+                },
+                {
+                    id: 'combat_symbiosis',
+                    name: '共生關係',
+                    // ... 其他屬性 ...
+                },
+                */
+            ],
+            raiding: [ /* 掠奪技能將在此處添加 */ ],
+            tribe: [ /* 部落技能將在此處添加 */],
+            breeding: [ /* 繁衍技能將在此處添加 */ ]
+        };
+        // --- 地圖尺寸設定 ---
         const MAP_WIDTH = 480;  // 【修改】地圖畫布寬度 (單位: px)
         const MAP_HEIGHT = 700; // 【修改】地圖畫布高度 (單位: px)
         const GRID_SIZE = 120;   // 【修改】稍微增大網格，讓佈局更鬆散
