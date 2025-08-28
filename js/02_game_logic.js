@@ -10,6 +10,57 @@ function filterInventory(inventory, filter) {
 
 const gameLogic = {
 
+    getPartyAverageStats(unitList) {
+        if (!unitList || unitList.length === 0) {
+            return { strength: 0, agility: 0, intelligence: 0, luck: 0, average: 0 };
+        }
+        const totalStats = unitList.reduce((totals, unit) => {
+            totals.strength += unit.getTotalStat('strength', this.isStarving);
+            totals.agility += unit.getTotalStat('agility', this.isStarving);
+            totals.intelligence += unit.getTotalStat('intelligence', this.isStarving);
+            totals.luck += unit.getTotalStat('luck', this.isStarving);
+            return totals;
+        }, { strength: 0, agility: 0, intelligence: 0, luck: 0 });
+
+        const avgStrength = totalStats.strength / unitList.length;
+        const avgAgility = totalStats.agility / unitList.length;
+        const avgIntelligence = totalStats.intelligence / unitList.length;
+        const avgLuck = totalStats.luck / unitList.length;
+        
+        // 根據 GDD，計算最終的綜合平均值
+        const finalAverage = (avgStrength + avgAgility + avgIntelligence + avgLuck) / 4;
+
+        return {
+            strength: avgStrength,
+            agility: avgAgility,
+            intelligence: avgIntelligence,
+            luck: avgLuck,
+            average: finalAverage
+        };
+    },
+
+    performAbilityContest(partyA, partyB) {
+        // 1. 計算 A 方的對抗值
+        const partyA_Stats = this.getPartyAverageStats(partyA);
+        const partyA_DiceCount = Math.max(1, Math.floor(partyA_Stats.average / 10));
+        const partyA_Roll = rollDice(`${partyA_DiceCount}d10`);
+        const partyA_Value = partyA_Roll + partyA.length;
+
+        // 2. 計算 B 方的對抗值
+        const partyB_Stats = this.getPartyAverageStats(partyB);
+        const partyB_DiceCount = Math.max(1, Math.floor(partyB_Stats.average / 10));
+        const partyB_Roll = rollDice(`${partyB_DiceCount}d10`);
+        const partyB_Value = partyB_Roll + partyB.length;
+
+        // 3. 返回一個包含所有計算細節的物件，方便日誌記錄
+        return {
+            partyA_Value,
+            partyB_Value,
+            partyA_Details: { roll: partyA_Roll, diceCount: partyA_DiceCount, partySize: partyA.length },
+            partyB_Details: { roll: partyB_Roll, diceCount: partyB_DiceCount, partySize: partyB.length }
+        };
+    },
+
     get learnedActiveSkills() {
         if (!this.player || !this.player.learnedSkills) return [];
         
@@ -173,7 +224,7 @@ const gameLogic = {
         this.modals.construction.isOpen = false;
         
         // 繁衍會消耗一天
-        this.nextDay();
+        //this.nextDay();
     },
 
     returnToBreedingModal(message) {
@@ -265,6 +316,13 @@ const gameLogic = {
         merchantCamp: { level: 0, name: "商人營地" },
     },
     modals: {
+        dice: {
+            isOpen: false,
+            title: '',      // 視窗標題，例如 "攻擊判定"
+            sides: { player: [], opponent: [] },
+            showButton: false, // 是否顯示確認按鈕
+            onComplete: null, // 動畫結束後的回呼函式
+        },
         dispatch: { isOpen: false, activeTab: 'hunting' }, // 派遣系統 modal
         construction: { isOpen: false, activeTab: 'dungeon' },
         skillTree: { isOpen: false, activeTab: 'combat' },
@@ -411,6 +469,15 @@ const gameLogic = {
     get stoneCapacity() { 
         // 礦石容量永遠跟食物容量同步
         return this.foodCapacity; 
+    },
+
+    getUnitFoodConsumption(unit) {
+        if (!unit || !unit.stats) return 0;
+        let statSum = (unit.stats.strength || 0) + (unit.stats.agility || 0) + (unit.stats.intelligence || 0) + (unit.stats.luck || 0);
+        if (unit.stats.charisma) {
+            statSum += unit.stats.charisma;
+        }
+        return Math.floor(statSum / 10);
     },
 
     get dailyFoodConsumption() {
@@ -581,11 +648,25 @@ const gameLogic = {
             return;
         }
 
+        // --- 計算並檢查食物消耗 ---
+        const playerFoodCost = this.getUnitFoodConsumption(this.player);
+        const partnerFoodCost = this.getUnitFoodConsumption(partner);
+        const totalFoodCost = playerFoodCost + partnerFoodCost;
+
+        if (this.resources.food < totalFoodCost) {
+            this.showCustomAlert(`食物不足！本次訓練需要 ${totalFoodCost} 單位食物。`);
+            return; // 食物不夠，中斷訓練
+        }
+
         const pointsGained = this.potentialTrainingPoints;
         if (pointsGained <= 0) {
             this.showCustomAlert("以王您現在的狀態，無法為夥伴帶來任何提升。");
             return;
         }
+
+        // --- 扣除食物並記錄日誌 ---
+        this.resources.food -= totalFoodCost;
+        this.logMessage('tribe', `訓練消耗了 ${totalFoodCost} 單位食物。`, 'info');
 
         const statKeys = ['strength', 'agility', 'intelligence', 'luck'];
         let pointDistributionLog = { strength: 0, agility: 0, intelligence: 0, luck: 0 };
@@ -601,7 +682,7 @@ const gameLogic = {
         //   在屬性增加後，立刻更新夥伴的生命值
         partner.updateHp(this.isStarving);
 
-        this.logMessage('tribe', `你花費了一整天時間，對 ${partner.name} 進行了嚴格的訓練！`, 'player');
+        this.logMessage('tribe', `你對 ${partner.name} 進行了嚴格的訓練！`, 'player'); // 修改了日誌文字，不再提“花費一天”
         const logDetails = Object.entries(pointDistributionLog)
             .filter(([stat, value]) => value > 0)
             .map(([stat, value]) => `${STAT_NAMES[stat]} +${value}`)
@@ -611,7 +692,8 @@ const gameLogic = {
         //   顯示一個包含詳細結果的提示框
         this.showCustomAlert(`${partner.name} 的訓練完成了！\n獲得的能力提升：\n${logDetails}`);
 
-        this.nextDay(); // 訓練消耗一天
+        // this.nextDay(); // 訓練消耗一天
+        this.checkAndProcessDecisions();
     },
 
     calculateEquipmentValue(item) {
@@ -748,7 +830,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.18 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.25 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1137,7 +1219,7 @@ const gameLogic = {
                 this.tutorial.merchantMet = true;
             } else if (this.day > 9) {
                 const arrivalChance = [10, 15, 20, 25, 30][this.buildings.merchantCamp.level || 0] || 10;
-                if (roll(arrivalChance)) {
+                if (rollPercentage(arrivalChance)) {
                     this.merchant.isPresent = true;
                     this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
                     this.generateMerchantGoods();
@@ -1211,7 +1293,7 @@ const gameLogic = {
             const coefficient = REVENGE_DIFFICULTY_COEFFICIENT[difficulty] || 0;
             const triggerChance = count * coefficient;
 
-            if (roll(triggerChance)) {
+            if (rollPercentage(triggerChance)) {
                 pendingRevengeInfo = { difficulty: difficulty };
             }
         }
@@ -1358,7 +1440,7 @@ const gameLogic = {
     finalizeBreedingAndReturn() {
         if (this.modals.narrative.hasBred) {
             this.modals.dungeon.selectedBreedIds = [];
-            this.nextDay();
+            //this.nextDay();
         }
         // 呼叫新的共用函式
         this.returnToBreedingModal('繁衍已完成！');
@@ -1382,7 +1464,7 @@ const gameLogic = {
         
         // 清理並觸發下一天
         this.modals.dungeon.selectedBreedIds = [];
-        this.nextDay();
+        //this.nextDay();
 
         //  返回部落畫面的同時，重新打開「部落建設」視窗
         this.screen = 'tribe';
@@ -1571,10 +1653,10 @@ const gameLogic = {
         const pStats = this.player.stats;
         const mStats = mother.stats;
         const newStats = {
-            strength: Math.floor(((pStats.strength || 0) + (mStats.strength || 0)) / 4 + (mStats.charisma || 0)),
-            agility: Math.floor(((pStats.agility || 0) + (mStats.agility || 0)) / 4 + (mStats.charisma || 0)),
-            intelligence: Math.floor(((pStats.intelligence || 0) + (mStats.intelligence || 0)) / 4 + (mStats.charisma || 0)),
-            luck: Math.floor(((pStats.luck || 0) + (mStats.luck || 0)) / 4 + (mStats.charisma || 0))
+            strength: Math.floor(((pStats.strength || 0) + (mStats.strength || 0)) / 4 + (mStats.charisma || 0) / 4),
+            agility: Math.floor(((pStats.agility || 0) + (mStats.agility || 0)) / 4 + (mStats.charisma || 0) / 4),
+            intelligence: Math.floor(((pStats.intelligence || 0) + (mStats.intelligence || 0)) / 4 + (mStats.charisma || 0) / 4),
+            luck: Math.floor(((pStats.luck || 0) + (mStats.luck || 0)) / 4 + (mStats.charisma || 0) / 4)
         };
         const newName = `(${(mother.profession || '未知')}${(mother.name || '無名')}之子)哥布林`;
         const newPartner = new Goblin(newName, newStats);
@@ -1691,7 +1773,7 @@ const gameLogic = {
     },
 
     // 步驟1.2：權威的「移除夥伴」函式
-    removePartner(partnerId) {
+    /*removePartner(partnerId) {
         const partner = this.partners.find(p => p.id === partnerId);
         if (!partner) return; // 如果找不到夥伴，就中斷
 
@@ -1733,9 +1815,9 @@ const gameLogic = {
         // 4. 更新玩家狀態並記錄日誌
         this.player.updateHp(this.isStarving);
         this.logMessage('tribe', `你將 ${partner.name} 逐出了部落。`, 'info');
-    },
+    },*/
 
-    // 步驟1.3：權威的「指派夥伴」函式
+    // 權威的「指派夥伴」函式
     assignPartner(partnerId, task) { // task可以是 'party', 'hunting', 'logging', 'mining'
         // 1. 先將該夥伴從所有舊的隊伍中移除，確保狀態乾淨
         this._removePartnerFromAllAssignments(partnerId);
@@ -1756,9 +1838,60 @@ const gameLogic = {
         this.player.updateHp(this.isStarving);
     },
 
+     // 一個純粹的內部函式，專門負責執行移除夥伴的最終動作
+    _finalizePartnerRemoval(partnerId) {
+        const partnerName = this.getPartnerById(partnerId)?.name || '一名夥伴';
+        
+        // 1. 從所有隊伍指派中移除
+        this._removePartnerFromAllAssignments(partnerId);
+
+        // 2. 從部落夥伴總名單中移除
+        this.partners = this.partners.filter(p => p.id !== partnerId);
+
+        // 3. 更新玩家狀態並記錄日誌
+        this.player.updateHp(this.isStarving);
+        this.logMessage('tribe', `你將 ${partnerName} 逐出了部落。`, 'info');
+    },
+
+    // releasePartner 現在是唯一的入口，負責處理所有前置檢查
     releasePartner(partnerId) {
-        // 直接呼叫權威的移除函式
-        this.removePartner(partnerId);
+        const partner = this.partners.find(p => p.id === partnerId);
+        if (!partner) return;
+
+        const itemsToReturn = Object.values(partner.equipment).filter(item => item !== null);
+        
+        // 檢查是否有裝備需要處理
+        if (itemsToReturn.length > 0) {
+            const availableSpace = (this.warehouseCapacity - this.warehouseInventory.length) + (this.backpackCapacity - this.player.inventory.length);
+            
+            // 檢查空間是否不足
+            if (itemsToReturn.length > availableSpace) {
+                // 空間不足：彈出視窗，並設定好回呼函式
+                this.modals.itemManagement = {
+                    isOpen: true,
+                    title: `處理 ${partner.name} 的裝備`,
+                    message: `倉庫與背包空間不足！請先處理以下裝備，直到剩餘數量小於等於 ${availableSpace}。`,
+                    items: [...itemsToReturn],
+                    capacity: availableSpace,
+                    // 確認按鈕的回呼是「再次嘗試驅逐」，形成一個檢查迴圈
+                    onConfirm: () => this.releasePartner(partnerId) 
+                };
+                return; // 中斷本次執行，等待玩家處理
+            } else {
+                // 空間足夠：自動轉移裝備
+                itemsToReturn.forEach(item => {
+                    if (this.warehouseInventory.length < this.warehouseCapacity) {
+                        this.warehouseInventory.push(item);
+                    } else {
+                        this.player.inventory.push(item);
+                    }
+                });
+                this.logMessage('tribe', `已將 ${partner.name} 的 ${itemsToReturn.length} 件裝備自動移至倉庫/背包。`, 'info');
+            }
+        }
+        
+        // 所有前置條件都已滿足 (無裝備，或有裝備但空間足夠)，執行最終的移除
+        this._finalizePartnerRemoval(partnerId);
     },
 
     cleanupDispatchLists() {
@@ -1842,7 +1975,7 @@ const gameLogic = {
             else if (qualityRoll <= 93) qualityKey = 'common';    // 35%
 
             // 決定材質
-            const isMetal = roll(50);
+            const isMetal = rollPercentage(50);
             const tier = randomInt(possibleTiers[0], possibleTiers[1]);
             const materialType = isMetal ? 'metal' : 'wood';
             const materialKey = Object.keys(EQUIPMENT_MATERIALS).find(key => 
@@ -1943,7 +2076,7 @@ const gameLogic = {
         for (const unitType in composition.knights) {
             for (let i = 0; i < composition.knights[unitType]; i++) {
                 const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
-                const unit = roll(50) 
+                const unit = rollPercentage(50) 
                     ? new FemaleKnightOrderUnit(unitType, totalStatPoints, difficulty)
                     // 修正：將參數傳遞給父類別
                     : new KnightOrderUnit(unitType, totalStatPoints, difficulty);
@@ -1957,7 +2090,7 @@ const gameLogic = {
             const totalStatPoints = randomInt(residentStatRange[0], residentStatRange[1]);
             let unit; 
 
-            if (roll(50)) {
+            if (rollPercentage(50)) {
                 const profession = PROFESSIONS[randomInt(0, PROFESSIONS.length - 1)];
                 unit = new FemaleHuman(
                     FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)],
@@ -2055,7 +2188,7 @@ const gameLogic = {
         let allGuards = Array.from({ length: totalGuards }, () => {
             const statRange = ENEMY_STAT_RANGES[difficulty].guard;
             const totalStatPoints = randomInt(statRange[0], statRange[1]);
-            const isFemale = roll(50);
+            const isFemale = rollPercentage(50);
             
             let guard; // 先宣告一個變數來存放守軍
             if (isFemale) {
@@ -2071,7 +2204,7 @@ const gameLogic = {
         
         let allResidents = Array.from({ length: totalResidents }, () => {
             const statRange = ENEMY_STAT_RANGES[difficulty].resident;
-            const isFemale = roll(50);
+            const isFemale = rollPercentage(50);
             if (isFemale) {
                 const profession = PROFESSIONS[randomInt(0, PROFESSIONS.length - 1)];
                 return new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)], distributeStats(randomInt(statRange[0], statRange[1]), ['strength', 'agility', 'intelligence', 'luck', 'charisma']), profession, generateVisuals(), difficulty);
@@ -2140,17 +2273,17 @@ const gameLogic = {
         const allInnerBuildings = innerZones.flatMap(z => z.buildings);
         allResidents.forEach(resident => {
             let finalUnit = resident;
-            if(roll(5)) {
+            if(rollPercentage(5)) {
                 const knightStatRange = cityConfig.knightStats;
                 const knightTypes = Object.keys(KNIGHT_ORDER_UNITS);
                 const randomKnightType = knightTypes[randomInt(0, knightTypes.length - 1)];
                 const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
-                finalUnit = roll(50) ? new FemaleKnightOrderUnit(randomKnightType, totalStatPoints, difficulty) : new KnightOrderUnit(randomKnightType, totalStatPoints);
+                finalUnit = rollPercentage(50) ? new FemaleKnightOrderUnit(randomKnightType, totalStatPoints, difficulty) : new KnightOrderUnit(randomKnightType, totalStatPoints);
             }
 
             this.equipEnemy(finalUnit, difficulty);
 
-            if (roll(80) && allInnerBuildings.length > 0) {
+            if (rollPercentage(80) && allInnerBuildings.length > 0) {
                 const randomBuilding = allInnerBuildings[randomInt(0, allInnerBuildings.length - 1)];
                 randomBuilding.occupants.push(finalUnit);
             } else if (innerZones.length > 0) {
@@ -2178,7 +2311,7 @@ const gameLogic = {
                 if (!KNIGHT_ORDER_UNITS[unitType]) return; // 避免未定義的兵種
                 const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
                 // 50% 機率生成女性騎士 [cite: 89]
-                const knight = roll(50) 
+                const knight = rollPercentage(50) 
                     ? new FemaleKnightOrderUnit(unitType, totalStatPoints) 
                     : new KnightOrderUnit(unitType, totalStatPoints);
                 castleOccupants.push(knight);
@@ -2286,33 +2419,64 @@ const gameLogic = {
         this.modals.throneScout.isOpen = false;
         this.startCombat(this.throneRoomUnits, true);
     },
+
     scoutEnvironment() {
-        const allPartyMembers = [this.player, ...this.player.party];
-        const playerPartyIntel = allPartyMembers.reduce((sum, unit) => sum + (unit.getTotalStat('intelligence') || 0), 0);
-        const playerPartyAvgIntel = playerPartyIntel / allPartyMembers.length;
+        // --- 核心修改：使用新的「解除迷霧」邏輯 ---
+        // 此動作必定成功，效果與隊伍人數掛鉤。
+        const playerParty = [this.player, ...this.player.party];
+        const zone = this.currentRaid.currentZone;
+        const targetsToRevealCount = playerParty.length; // 要揭露的目標數量 = 隊伍人數
 
-        const allEnemies = this.currentRaid.currentZone.enemies.flat();
-        const unscoutedEnemies = allEnemies.filter(e => !this.isTargetScouted(e.id));
+        // 根據新規則，固定消耗 2 分鐘
+        this.currentRaid.timeRemaining -= 2;
+        this.logMessage('raid', `你開始仔細偵查周遭環境... (-2 分鐘)`, 'info');
 
-        let enemyAvgIntel = 0;
-        if (unscoutedEnemies.length > 0) {
-            const enemyTotalIntel = unscoutedEnemies.reduce((sum, unit) => sum + (unit.stats.intelligence || 0), 0);
-            enemyAvgIntel = enemyTotalIntel / unscoutedEnemies.length;
+        // 1. 找出所有尚未被偵查過的目標（建築或敵方隊伍）
+        const unScoutedBuildings = zone.buildings.filter(b => !this.isTargetScouted(b.id));
+        const unScoutedEnemies = zone.enemies.filter(group => !this.isTargetScouted(group[0].id));
+        // 將所有可偵查目標放入一個陣列中，以便隨機選取
+        let availableTargets = [...unScoutedBuildings, ...unScoutedEnemies];
+        
+        const revealedTargetNames = []; // 用來記錄本次發現了哪些目標
+
+        // 2. 根據隊伍人數，迴圈揭露目標
+        for (let i = 0; i < targetsToRevealCount; i++) {
+            // 如果已經沒有可偵查的目標，就提前結束迴圈
+            if (availableTargets.length === 0) {
+                break;
+            }
+
+            // 從可用目標中隨機抽取一個
+            const randomIndex = randomInt(0, availableTargets.length - 1);
+            const [targetToReveal] = availableTargets.splice(randomIndex, 1); // splice 會取出並從原陣列移除
+
+            let targetName = '';
+            // 3. 根據目標類型（建築或敵方隊伍）進行處理並記錄名稱
+            if (Array.isArray(targetToReveal)) { // 敵方隊伍
+                const representativeEnemy = targetToReveal[0];
+                this.currentRaid.currentZone.scouted.targets.add(representativeEnemy.id);
+                targetName = `一支由 ${representativeEnemy.name} 帶領的隊伍`;
+            } else { // 建築
+                targetToReveal.scouted = true;
+                this.currentRaid.currentZone.scouted.targets.add(targetToReveal.id);
+                targetName = `一棟 ${targetToReveal.type}`;
+            }
+            revealedTargetNames.push(targetName);
         }
-
-        // Apply formula: (player_avg_intel * 2) - (unscouted_enemies_count * enemy_avg_intel * 0.2)
-        let successChance = (playerPartyAvgIntel * 2) - (unscoutedEnemies.length * enemyAvgIntel * 0.2);
-        successChance = Math.max(5, Math.min(100, successChance));
-
-        if(roll(successChance)) {
-            this.currentRaid.timeRemaining -= 3;
-            this.currentRaid.currentZone.scouted.environment = true;
-            this.logMessage('raid', `環境偵查成功！(-3 分鐘)`, 'success');
+        
+        // 4. 根據最終結果，產生統一的日誌訊息
+        if (revealedTargetNames.length > 0) {
+            this.updateBuildingScoutText();
+            this.logMessage('raid', `偵查成功！在隊伍的努力下，你們發現了 ${revealedTargetNames.join('、')} 的位置。`, 'success');
         } else {
-            this.currentRaid.timeRemaining -= 6;
-            this.logMessage('raid', `環境偵查失敗！(-6 分鐘)`, 'enemy');
+            this.logMessage('raid', '你已經將此區域偵查完畢，沒有新的發現。', 'info');
+            // 如果所有目標都已被偵查過，且地圖尚未完全顯示，則將其完全顯示
+            if (!zone.scouted.environment) {
+                zone.scouted.environment = true;
+            }
         }
-        this.checkRaidTime();
+
+        this.checkRaidTime(); // 檢查時間是否耗盡
     },
    
     scoutTarget(targetOrGroup) {
@@ -2320,66 +2484,49 @@ const gameLogic = {
             this.showCustomAlert("偵查目標無效！");
             return;
         }
-
         const isGroup = Array.isArray(targetOrGroup);
         const representativeTarget = isGroup ? targetOrGroup[0] : targetOrGroup;
-        // 統一獲取目標名稱給日誌使用
         const targetNameForLog = isGroup ? '一個隊伍' : (representativeTarget.type || representativeTarget.name);
-
-        // 優先判斷目標是不是一個「空的建築」，無論之前是否偵查過
+        
         if (!isGroup && representativeTarget.occupants && representativeTarget.occupants.length === 0) {
-            // 因為建築已經是空的，偵查成本很低
-            this.currentRaid.timeRemaining -= 1;
-            this.logMessage('raid', `偵查成功！你發現 ${targetNameForLog} 是空的。(-1 分鐘)`, 'success');
-            
-            // 確保偵查狀態和文字被更新
+            this.currentRaid.timeRemaining -= 2;
+            this.logMessage('raid', `偵查成功！你發現 ${targetNameForLog} 是空的。(-2 分鐘)`, 'success');
             representativeTarget.scouted = true;
-            this.updateBuildingScoutText(); // 呼叫新的輔助函式更新文字
-            
-            // 準備並打開「空建築」專用的情報視窗
+            this.currentRaid.currentZone.scouted.targets.add(representativeTarget.id);
+            this.updateBuildingScoutText();
             this.modals.scoutInfo.target = [];
-            this.modals.scoutInfo.emptyBuildingMessage = representativeTarget.looted
-                ? '這棟建築是空的，你已搜刮過。'
-                : '這棟建築是空的，看來可以搜刮一番。';
+            this.modals.scoutInfo.emptyBuildingMessage = representativeTarget.looted ? '這棟建築是空的，你已搜刮過。' : '這棟建築是空的，看來可以搜刮一番。';
             this.modals.scoutInfo.isOpen = true;
             this.checkRaidTime();
-            return; 
+            return;
         }
-
-        // 如果之前偵查過，且裡面還有敵人
         if (this.isTargetScouted(representativeTarget.id)) {
             this.modals.scoutInfo.target = isGroup ? targetOrGroup : representativeTarget.occupants;
             this.modals.scoutInfo.isOpen = true;
-            // 使用正確的目標名稱
             this.logMessage('raid', `你再次查看了 ${targetNameForLog} 的情報。`, 'info');
             return;
         }
 
-        // --- 首次偵查的邏輯 (維持不變) ---
-        const allPartyMembers = [this.player, ...this.player.party];
-        const playerPartyIntel = allPartyMembers.reduce((sum, unit) => sum + (unit.getTotalStat('intelligence') || 0), 0);
-        const playerPartyAvgIntel = playerPartyIntel / allPartyMembers.length;
-
+        // --- 核心修改：呼叫通用的對抗擲骰函式 ---
+        const playerParty = [this.player, ...this.player.party];
         const enemiesToScout = isGroup ? targetOrGroup : representativeTarget.occupants;
-        const enemyTotalIntel = enemiesToScout.reduce((sum, unit) => sum + (unit.stats.intelligence || 0), 0);
-        const enemyAvgIntel = enemyTotalIntel / enemiesToScout.length;
 
-        let successChance = 70 + (playerPartyAvgIntel - enemyAvgIntel) * 2 + allPartyMembers.length;
-        successChance = Math.max(5, Math.min(100, successChance));
+        const contestResult = this.performAbilityContest(playerParty, enemiesToScout);
 
-        if (roll(successChance)) {
-            this.currentRaid.timeRemaining -= 3;
-            representativeTarget.scouted = true; // 標記建築本身為已偵查
+        this.logMessage('raid', `我方偵查擲骰: ${contestResult.partyA_Details.roll} (基於 ${contestResult.partyA_Details.diceCount}d10) + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
+        this.logMessage('raid', `敵方隱蔽擲骰: ${contestResult.partyB_Details.roll} (基於 ${contestResult.partyB_Details.diceCount}d10) + 人數 ${contestResult.partyB_Details.partySize} = ${contestResult.partyB_Value}`, 'info');
+
+        if (contestResult.partyA_Value > contestResult.partyB_Value) { 
+            this.currentRaid.timeRemaining -= 2;
+            representativeTarget.scouted = true;
             this.currentRaid.currentZone.scouted.targets.add(representativeTarget.id);
-
-            this.updateBuildingScoutText(); // 偵查成功後也更新一次文字
-            this.logMessage('raid', `你成功偵查了 ${targetNameForLog} 的詳細情報！(-3 分鐘)`, 'success');
-
-            this.modals.scoutInfo.target = isGroup ? targetOrGroup : representativeTarget.occupants;
+            this.updateBuildingScoutText();
+            this.logMessage('raid', `你成功偵查了 ${targetNameForLog} 的詳細情報！(-2 分鐘)`, 'success');
+            this.modals.scoutInfo.target = enemiesToScout;
             this.modals.scoutInfo.isOpen = true;
         } else {
-            this.currentRaid.timeRemaining -= 6;
-            this.logMessage('raid', `偵查 ${targetNameForLog} 失敗！(-6 分鐘)`, 'enemy');
+            this.currentRaid.timeRemaining -= 4;
+            this.logMessage('raid', `偵查 ${targetNameForLog} 失敗！(-4 分鐘)`, 'enemy');
         }
         this.checkRaidTime();
     },
@@ -2388,6 +2535,7 @@ const gameLogic = {
         if (!this.currentRaid) return false;
         return this.currentRaid.currentZone.scouted.targets.has(targetId);
     },
+
     lootBuilding(building) {
         if(building.looted) return;
 
@@ -2405,7 +2553,7 @@ const gameLogic = {
                 // 根據 GDD 公式計算發現機率
                 const discoveryChance = (patrolGroupCount / (totalBuildingCount * 4)) * 100;
 
-                if (roll(discoveryChance)) {
+                if (rollPercentage(discoveryChance)) {
                     this.logMessage('raid', `你搜刮 ${building.type} 的聲音太大，驚動了附近的一支巡邏隊！`, 'enemy');
                     
                     // 隨機選擇一支巡邏隊進行戰鬥
@@ -2441,7 +2589,7 @@ const gameLogic = {
         this.logMessage('raid', `搜刮了 ${building.type} (-3 分鐘)，找到食物 ${foodFound}, 木材 ${woodFound}, 礦石 ${stoneFound}。`, 'success');
         
         const finalDropRate = 20 * (1 + this.player.getTotalStat('luck') / 100 * 0.5);
-        if (roll(finalDropRate)) {
+        if (rollPercentage(finalDropRate)) {
             if (this.player.inventory.length >= this.backpackCapacity) {
                 this.logMessage('raid', `你的背包已滿，無法拾取新的裝備！`, 'enemy');
                 this.checkRaidTime(); // 即使背包滿了也要檢查時間
@@ -2455,7 +2603,7 @@ const gameLogic = {
             };
             const raidDifficulty = this.currentRaid.difficulty;
             const possibleTiers = materialTiers[raidDifficulty];
-            const isMetal = roll(50);
+            const isMetal = rollPercentage(50);
             const tierRange = isMetal ? possibleTiers.metal : possibleTiers.wood;
             const tier = randomInt(tierRange[0], tierRange[1]);
             const materialType = isMetal ? 'metal' : 'wood';
@@ -2465,18 +2613,36 @@ const gameLogic = {
                 this.checkRaidTime();
                 return;
             }
-
             const qualityKey = ['common', 'uncommon'][randomInt(0, 1)];
-            
             const randomItemType = this.craftableTypes[randomInt(0, this.craftableTypes.length - 1)];
             const newItem = this.createEquipment(materialKey, qualityKey, randomItemType.baseName);
+            
+            if (this.player.inventory.length >= this.backpackCapacity) {
+                this.logMessage('raid', `背包已滿！你在廢墟中發現了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>，但需要整理背包。`, 'warning');
+                
+                this.modals.itemManagement = {
+                    isOpen: true,
+                    title: `搜刮管理 (背包已滿)`,
+                    message: `請處理裝備，直到數量符合背包上限 (${this.backpackCapacity})。`,
+                    items: [...this.player.inventory, newItem],
+                    capacity: this.backpackCapacity,
+                    onConfirm: () => {
+                        this.player.inventory = [...this.modals.itemManagement.items];
+                        this.logMessage('raid', `你整理完畢，繼續搜刮。`, 'success');
+                        this.checkRaidTime(); // 在這裡檢查時間
+                    }
+                };
+                return; // 中斷函式，等待玩家決策
+            }
 
+            // 如果背包未滿，則正常拾取
             this.player.inventory.push(newItem);
             this.logMessage('raid', `你在廢墟中找到了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
         }
         
         this.checkRaidTime();
     },
+
     canAdvance() {
         if (this.currentRaid && this.currentRaid.currentZone.name === '王城') {
             const castle = this.currentRaid.currentZone.buildings.find(b => b.isFinalChallenge);
@@ -2513,7 +2679,7 @@ const gameLogic = {
         const enemyAvgAgility = outerGuards.reduce((sum, e) => sum + e.stats.agility, 0) / outerGuards.length;
         const successChance = 50 + (playerAgility - enemyAvgAgility) * 1.5 - ((this.player.party.length + 1) - outerGuards.length) * 2;
 
-        if (roll(successChance)) {
+        if (rollPercentage(successChance)) {
             this.currentRaid.timeRemaining -= 3;
             this.logMessage('raid', `潛行成功！你花費了 3 分鐘，悄悄地繞過了守軍。`, 'success');
             this.advanceToNextZone(true);
@@ -2709,7 +2875,7 @@ const gameLogic = {
                 for (let i = 0; i < composition[unitType]; i++) {
                     const totalStatPoints = randomInt(statRange[0], statRange[1]);
                     let knight; // <--- 宣告變數
-                    if (roll(50)) {
+                    if (rollPercentage(50)) {
                         knight = new FemaleKnightOrderUnit(unitType, totalStatPoints);
                     } else {
                         knight = new KnightOrderUnit(unitType, totalStatPoints);
@@ -2727,67 +2893,55 @@ const gameLogic = {
         this.startCombat(knightSquad, true); 
     },
 
-    sneakKidnap(target, group) {
-        // 找出群組中所有符合條件的女性，而不僅僅是第一個
+    async sneakKidnap(target, group) {
         const femalesInGroup = group.filter(unit => unit.visual && unit.isAlive());
-
-        // 如果隊伍中沒有可擄走的女性，則不執行任何操作 (安全檢查)
         if (femalesInGroup.length === 0) {
             this.showCustomAlert('該隊伍中沒有可下手的目標。');
             return;
         }
 
-        // --- 潛行成功率計算 (維持不變，仍以第一個目標為計算基準) ---
-        const primaryTarget = femalesInGroup[0]; // 以第一個女性作為計算潛行難度的對象
+        const primaryTarget = femalesInGroup[0];
         if (this.currentRaid.failedSneakTargets.has(primaryTarget.id)) {
             this.showCustomAlert(`你已經對 ${primaryTarget.name} 所在的隊伍潛行失敗過，再次嘗試會被直接發現！`);
-            this.startCombat(group, true); // 直接觸發戰鬥
+            this.startCombat(group, true);
             return;
         }
-        const playerAgility = this.player.getTotalStat('agility', this.isStarving);
-        const enemyAgility = primaryTarget.stats.agility;
-        const sneakChance = 50 + (playerAgility - enemyAgility) * 1.5 - (this.player.party.length + 1 - 1) * 2;
-        const successChance = sneakChance - 15;
 
-        if (roll(successChance)) {
-            // --- 潛行成功 ---
+        const playerParty = [this.player, ...this.player.party];
+        const contestResult = this.performAbilityContest(playerParty, group);
+
+        // 【觸發擲骰動畫】
+        await this.showDiceRollAnimation('潛行擄走判定', 
+            [{ sides: 10, result: contestResult.partyA_Details.roll }], 
+            [{ sides: 10, result: contestResult.partyB_Details.roll }]
+        );
+
+        this.logMessage('raid', `我方潛行擲骰: ${contestResult.partyA_Details.roll} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
+        this.logMessage('raid', `敵方警覺擲骰: ${contestResult.partyB_Details.roll} + 人數 ${contestResult.partyB_Details.partySize} = ${contestResult.partyB_Value}`, 'info');
+
+        if (contestResult.partyA_Value > contestResult.partyB_Value) {
             this.currentRaid.timeRemaining -= 3;
             this.logMessage('raid', `潛行成功！你將 ${femalesInGroup.map(f => f.name).join('、')} 全部擄走！(-3 分鐘)`, 'success');
 
-            // 遍歷所有找到的女性
             femalesInGroup.forEach(femaleUnit => {
-                // 1. 為每一位女性創建一個全新的、乾淨的俘虜物件，確保獲得唯一的 new ID
                 const newCaptive = new FemaleHuman(
-                    femaleUnit.name,
-                    femaleUnit.stats,
-                    femaleUnit.profession,
-                    femaleUnit.visual,
-                    femaleUnit.originDifficulty
+                    femaleUnit.name, femaleUnit.stats, femaleUnit.profession,
+                    femaleUnit.visual, femaleUnit.originDifficulty
                 );
                 newCaptive.maxHp = newCaptive.calculateMaxHp();
                 newCaptive.currentHp = newCaptive.maxHp;
-
-                // 2. 將這個全新的俘虜物件加入攜帶列表
-                this.addCaptiveToCarry(newCaptive); // addCaptiveToCarry 內部有容量檢查，很安全
-                
-                // 3. 從敵人身上獲取資源 (可選，但保持了原有邏輯)
+                this.addCaptiveToCarry(newCaptive);
                 this.gainResourcesFromEnemy(femaleUnit);
-
-                // 4. 呼叫我們之前創建的統一移除函式，將原始的敵人物件從地圖上徹底清除
                 this.removeUnitFromRaidZone(femaleUnit.id);
             });
 
             this.updateBuildingScoutText();
-
             this.checkRaidTime();
-
         } else {
-            // --- 潛行失敗 (邏輯不變) ---
             this.currentRaid.timeRemaining -= 6;
-            // 將整個隊伍標記為失敗，避免對同一個隊伍的不同女性反覆嘗試
             femalesInGroup.forEach(f => this.currentRaid.failedSneakTargets.add(f.id));
             this.logMessage('raid', `潛行擄走 ${primaryTarget.name} 失敗，你被整個隊伍發現了！(-6 分鐘)`, 'enemy');
-            this.startCombat(group, true); // 觸發與整個隊伍的戰鬥
+            this.startCombat(group, true);
             this.checkRaidTime();
         }
     },
@@ -3048,97 +3202,109 @@ const gameLogic = {
         await new Promise(res => setTimeout(res, 300));
     },
 
-    async processAttack(attacker, target, isMultiHit = false) {
+    async processAttack(attacker, target) {
         const isAllyAttacking = this.combat.allies.some(a => a.id === attacker.id);
+        const logType = isAllyAttacking ? 'player' : 'enemy';
         const enemyTeam = isAllyAttacking ? this.combat.enemies : this.combat.allies;
         let currentTarget = target;
 
-        // --- 嘲諷檢查 ---
         const taunter = enemyTeam.find(e => e.statusEffects.some(s => s.type === 'taunt'));
         if (taunter && taunter.id !== currentTarget.id && taunter.isAlive()) {
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${taunter.name} 吸引了！`, 'info');
             currentTarget = taunter;
         }
 
-        // --- 格擋判定 ---
-        const targetHasShield = currentTarget.equipment?.offHand?.baseName === '盾';
-        if (targetHasShield && currentTarget.isAlive()) {
-            const luckConversionRate = 0.1; // 幸運轉換率 (10%)
-            const blockEfficiency = 0.5; // 格擋效率 (減傷50%)
-            
-            const baseBlockChance = currentTarget.equipment.offHand.stats.blockChance || 0;
-            const luckValue = currentTarget.getTotalStat('luck', this.isStarving);
-            const finalBlockChance = baseBlockChance + (luckValue / 100) * (luckConversionRate * 100);
+        const weapon = attacker.equipment.mainHand;
+        const weaponType = weapon ? weapon.baseName : '徒手';
+        
+        this.logMessage('combat', `${attacker.name} 使用 [${weaponType}] 攻擊 ${currentTarget.name}！`, logType);
 
-            if (roll(finalBlockChance)) {
-                let originalDamage = attacker.calculateDamage(this.isStarving);
-                let reducedDamage = Math.floor(originalDamage * (1 - blockEfficiency));
-                
-                this.logMessage('combat', `${currentTarget.name} 成功格擋了攻擊！`, 'skill');
-                this.logMessage('combat', `${attacker.name} 對 ${currentTarget.name} 造成了 ${reducedDamage} 點被格擋的傷害。`, isAllyAttacking ? 'player' : 'enemy');
+        // --- 命中判定 ---
+        const weaponJudgementMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence', '徒手': 'strength' };
+        const judgementStat = weaponJudgementMap[weaponType] || 'strength';
 
-                currentTarget.currentHp = Math.max(0, currentTarget.currentHp - reducedDamage);
-                if (!currentTarget.isAlive()) {
-                    this.logMessage('combat', `${currentTarget.name} 被擊敗了！`, 'system');
-                }
-                // 格擋成功後，攻擊流程直接結束
-                return; 
-            }
-        }
+        const attackerStatValue = attacker.getTotalStat(judgementStat, this.isStarving);
+        const attackerDiceCount = Math.max(1, Math.floor(attackerStatValue / 10)); 
+        const attackerRoll = rollDice(`${attackerDiceCount}d10`);
+        const accuracyBonus = (weapon && weapon.material.type === 'wood') ? (weapon.stats.accuracy || 0) : 0; 
+        const attackerTotal = attackerRoll + accuracyBonus; 
 
-        // --- 如果格擋未發生，則進行正常的命中與傷害計算 ---
-        const isChargingNuke = currentTarget.statusEffects.some(e => e.type === 'charge_nuke');
-        const hitChance = 75 + (attacker.getTotalStat('agility', this.isStarving) - currentTarget.getTotalStat('agility', this.isStarving)) * 2;
-        const logType = isAllyAttacking ? 'player' : 'enemy';
+        const defenderStatValue = currentTarget.getTotalStat(judgementStat, this.isStarving);
+        const defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 10)); 
+        const defenderRoll = rollDice(`${defenderDiceCount}d10`);
+        const armor = currentTarget.equipment.chest;
+        const defenseDice = (armor && (armor.material.type === 'wood' || armor.type === 'leather' || armor.type === 'cloth')) ? (armor.stats.defenseDice || '0d6') : '0d6'; 
+        const defenseDiceRoll = rollDice(defenseDice);
+        const defenderTotal = defenderRoll + defenseDiceRoll; 
 
-        if (isChargingNuke || roll(hitChance)) {
-            if (isChargingNuke) {
-                this.logMessage('combat', `${currentTarget.name} 正在詠唱，無法閃避！`, 'info');
-            }
+        // 【觸發擲骰動畫】
+        await this.showDiceRollAnimation('命中判定', 
+            [{ sides: 10, result: attackerRoll }], 
+            [{ sides: 10, result: defenderRoll }]
+        );
 
-            let damage = attacker.calculateDamage(this.isStarving);
-            const critChance = 5 + 10 * Math.log10(attacker.getTotalStat('luck', this.isStarving) || 1);
-            let isCrit = roll(critChance);
-            let critMultiplier = 1.5;
-            const devastatingAffix = Object.values(attacker.equipment || {}).flatMap(i => i ? i.affixes : []).find(a => a.key === 'devastating');
-            
-            if (isCrit && devastatingAffix) {
-                critMultiplier = devastatingAffix.procInfo.value;
-                this.logMessage('combat', `${attacker.name} 的 [毀滅] 詞綴觸發了！爆擊更為致命！`, 'skill');
-            }
+        this.logMessage('combat', `> 攻擊方 (${judgementStat}): ${attackerRoll} (擲骰) + ${accuracyBonus} (命中加成) = ${attackerTotal}`, 'info');
+        this.logMessage('combat', `> 防守方 (${judgementStat}): ${defenderRoll} (擲骰) + ${defenseDiceRoll} (防禦骰) = ${defenderTotal}`, 'info');
 
-            if(isCrit) {
-                damage = Math.floor(damage * critMultiplier); 
-                this.logMessage('combat', `幸運觸發！ ${attacker.name} 攻擊 ${currentTarget.name}，造成 ${damage} 點爆擊傷害。`, 'crit');
-            } else {
-                this.logMessage('combat', `${attacker.name} 攻擊 ${currentTarget.name}，造成 ${damage} 點傷害。`, logType);
-            }
-            
-            // 後續的反傷、吸血等詞綴邏輯...
-            currentTarget.currentHp = Math.max(0, currentTarget.currentHp - damage);
-
-            if (!currentTarget.isAlive()) {
-                this.logMessage('combat', `${currentTarget.name} 被擊敗了！`, 'system');
-                if (!this.combat.allies.some(a => a.id === currentTarget.id)) {
-                    this.gainResourcesFromEnemy(currentTarget);
-                    this.handleLootDrop(currentTarget);
-                } else if (currentTarget.id !== this.player.id) {
-                    this.handlePartnerDeath(currentTarget.id);
-                }
-            }
-        } else {
+        if (attackerTotal <= defenderTotal) { 
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${currentTarget.name} 閃過了！`, logType === 'player' ? 'enemy' : 'player');
+            return;
         }
         
-        // 後續的連擊等詞綴邏輯...
-        if (attacker.isAlive() && currentTarget.isAlive() && !isMultiHit) {
-            if (attacker.equipment) {
-                const multiHitAffix = Object.values(attacker.equipment).flatMap(i => i ? i.affixes : []).find(a => a.key === 'multi_hit');
-                if (multiHitAffix && roll(this.calculateProcChance(multiHitAffix.procInfo.baseRate))) {
-                    this.logMessage('combat', `${attacker.name} 的 [連擊] 詞綴觸發，發動了額外攻擊！`, 'skill');
-                    await new Promise(res => setTimeout(res, 400));
-                    await this.processAttack(attacker, currentTarget, true);
-                }
+        this.logMessage('combat', `攻擊命中！`, 'success');
+
+        // --- 格擋判定 ---
+        let isBlocked = false;
+        const shield = currentTarget.equipment.offHand;
+        if (shield && shield.baseName === '盾') {
+            const blockRoll = rollDice('1d20');
+            const blockTarget = 15; // 假設目標值15
+            
+            // 【觸發格擋擲骰動畫】
+            const isPlayerBlocking = this.combat.allies.some(a => a.id === currentTarget.id);
+                await this.showDiceRollAnimation('格擋判定',
+                    isPlayerBlocking ? [{ sides: 20, result: blockRoll }] : [],
+                    !isPlayerBlocking ? [{ sides: 20, result: blockRoll }] : []
+                );
+
+            this.logMessage('combat', `> ${currentTarget.name} 進行格擋判定: 擲出 ${blockRoll} (目標值 >= ${blockTarget})`, 'info');
+            if (blockRoll >= blockTarget) {
+                isBlocked = true; 
+                this.logMessage('combat', `${currentTarget.name} 成功格擋了攻擊！`, 'skill');
+            }
+        }
+
+        // --- 最終傷害計算 ---
+        let damage = weapon ? (weapon.stats.damage || 0) : attacker.getTotalStat('strength');
+        const attackerShield = attacker.equipment.offHand;
+        if (attackerShield && attackerShield.baseName === '盾' && attackerShield.material.type === 'metal') {
+            damage += attackerShield.stats.damage || 0;
+        }
+
+        if (armor && armor.material.type === 'metal') {
+            const soakDice = armor.stats.soakDice || '0d6';
+            const soakValue = rollDice(soakDice); 
+            this.logMessage('combat', `> ${currentTarget.name} 的金屬甲吸收了 ${soakValue} 點傷害 (${soakDice})`, 'info');
+            damage -= soakValue; 
+        }
+        
+        if (isBlocked) {
+            damage = Math.floor(damage * 0.5); 
+        }
+        
+        const finalDamage = Math.max(0, damage); 
+        
+        currentTarget.currentHp = Math.max(0, currentTarget.currentHp - finalDamage);
+        
+        this.logMessage('combat', `${attacker.name} 對 ${currentTarget.name} 造成了 ${finalDamage} 點傷害。`, isAllyAttacking ? 'player' : 'enemy');
+
+        if (!currentTarget.isAlive()) {
+            this.logMessage('combat', `${currentTarget.name} 被擊敗了！`, 'system');
+            if (!isAllyAttacking) {
+                this.gainResourcesFromEnemy(currentTarget);
+                this.handleLootDrop(currentTarget);
+            } else if (currentTarget.id !== this.player.id) {
+                this.handlePartnerDeath(currentTarget.id);
             }
         }
     },
@@ -3182,12 +3348,11 @@ const gameLogic = {
 
         const finalDropRate = baseDropRate * (1 + (this.player.getTotalStat('luck') / 100) * 0.5);
 
-        if (roll(finalDropRate)) {
+        if (rollPercentage(finalDropRate)) {
             if (this.player.inventory.length >= this.backpackCapacity) {
                 this.logMessage('raid', `你的背包已滿，無法拾取新的裝備！`, 'enemy');
                 return;
             }
-
             // 【核心修正】智能判斷難度來源
             let encounterDifficulty = 'easy'; // 設定一個安全的預設值
             if (this.currentRaid) {
@@ -3197,7 +3362,6 @@ const gameLogic = {
                 // 如果是非掠奪戰（如復仇小隊），使用敵人自身的難度屬性
                 encounterDifficulty = enemy.originDifficulty;
             }
-
             const materialTiers = {
                 easy: { metal: [1, 3], wood: [1, 3] },
                 normal: { metal: [2, 4], wood: [2, 4] },
@@ -3210,10 +3374,8 @@ const gameLogic = {
                 '城市守軍': ['uncommon', 'rare'],
                 'knight': ['epic', 'legendary']
             };
-
             const possibleTiers = materialTiers[encounterDifficulty]; // 使用修正後的難度變數
-            
-            const isMetal = roll(50);
+            const isMetal = rollPercentage(50);
             const tierRange = isMetal ? possibleTiers.metal : possibleTiers.wood;
             const tier = randomInt(tierRange[0], tierRange[1]);
             const materialType = isMetal ? 'metal' : 'wood';
@@ -3224,12 +3386,29 @@ const gameLogic = {
             const qualitySource = isKnight ? 'knight' : enemy.profession;
             const possibleQualities = qualityTiers[qualitySource] || ['worn'];
             const qualityKey = possibleQualities[randomInt(0, possibleQualities.length - 1)];
-
             const randomItemType = this.craftableTypes[randomInt(0, this.craftableTypes.length - 1)];
             const newItem = this.createEquipment(materialKey, qualityKey, randomItemType.baseName);
             
+            if (this.player.inventory.length >= this.backpackCapacity) {
+                this.logMessage('raid', `背包已滿！你發現了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>，但需要先整理背包才能拾取。`, 'warning');
+                
+                // 暫停遊戲流程，並打開裝備管理介面
+                this.modals.itemManagement = {
+                    isOpen: true,
+                    title: `戰利品管理 (背包已滿)`,
+                    message: `請處理裝備，直到數量符合背包上限 (${this.backpackCapacity})。`,
+                    items: [...this.player.inventory, newItem], // 將現有背包物品和新物品都放進去
+                    capacity: this.backpackCapacity,
+                    onConfirm: () => {
+                        // 當玩家在介面中處理完畢後，用介面中剩餘的物品更新背包
+                        this.player.inventory = [...this.modals.itemManagement.items];
+                        this.logMessage('raid', `你整理完畢，繼續掠奪。`, 'success');
+                    }
+                };
+                return; // 中斷函式，等待玩家決策
+            }
+            // 如果背包未滿，則正常拾取
             this.player.inventory.push(newItem);
-            
             if (this.tutorial.active && !this.tutorial.finishedEquipping) {
                 this.triggerTutorial('firstLoot');
             }
@@ -3256,7 +3435,7 @@ const gameLogic = {
                 };
                 const possibleTiers = materialTiers[difficulty] || materialTiers['easy'];
                 
-                const materialType = type || (roll(50) ? 'metal' : 'wood');
+                const materialType = type || (rollPercentage(50) ? 'metal' : 'wood');
                 const tierRange = possibleTiers[materialType];
                 const tier = randomInt(tierRange[0], tierRange[1]);
                 
@@ -3280,7 +3459,7 @@ const gameLogic = {
             switch (enemy.profession) {
                 case '士兵':
                     createAndEquip('mainHand', '劍');
-                    if (roll(50)) { // 50%機率雙持
+                    if (rollPercentage(50)) { // 50%機率雙持
                         createAndEquip('offHand', '劍');
                     } else { // 50%機率劍盾
                         createAndEquip('offHand', '盾');
@@ -3292,7 +3471,7 @@ const gameLogic = {
                     break;
                 case '槍兵':
                     createAndEquip('mainHand', '長槍');
-                    if (roll(50)) { // 50%機率持盾
+                    if (rollPercentage(50)) { // 50%機率持盾
                         createAndEquip('offHand', '盾');
                     }
                     break;
@@ -3307,7 +3486,7 @@ const gameLogic = {
                     createAndEquip('offHand', '盾', 'wood'); // 副手必為木盾
                     break;
                 case '騎士':
-                    if (roll(50)) { // 50%機率劍盾
+                    if (rollPercentage(50)) { // 50%機率劍盾
                         createAndEquip('mainHand', '劍');
                     } else { // 50%機率槍盾
                         createAndEquip('mainHand', '長槍');
@@ -3328,7 +3507,7 @@ const gameLogic = {
                 numPieces = randomInt(1, 2);
                 qualityKey = 'uncommon';
             } else if (enemy.profession.includes('居民')) {
-                if (roll(50)) {
+                if (rollPercentage(50)) {
                     numPieces = 1;
                     qualityKey = 'worn';
                 } else {
@@ -3354,7 +3533,7 @@ const gameLogic = {
                 if (slot === 'offHand') baseItem = this.craftableTypes.find(t => t.baseName === '盾');
                 if (!baseItem) continue;
 
-                const isMetal = roll(50);
+                const isMetal = rollPercentage(50);
                 const tierRange = isMetal ? possibleTiers.metal : possibleTiers.wood;
                 const tier = randomInt(tierRange[0], tierRange[1]);
                 const materialType = isMetal ? 'metal' : 'wood';
@@ -3383,13 +3562,40 @@ const gameLogic = {
         
         const newItem = new Equipment(baseItem.baseName, baseItem.type, baseItem.slot, material, quality, specialAffix);
         
-        const baseStats = BASE_EQUIPMENT_STATS[material.type][baseItem.baseName][material.tier];
-        
-        // 1. 計算基礎屬性
+        // --- 核心修改開始 ---
+        let baseStats = {};
+        // 根據物品類型和材質，從新的 GDD 數據中獲取基礎屬性
+        if (baseItem.type === 'weapon') {
+            if (material.type === 'metal') {
+                baseStats = METAL_WEAPON_STATS[baseName]?.[material.tier] || {};
+            } else if (material.type === 'wood') {
+                baseStats = WOOD_WEAPON_STATS[baseName]?.[material.tier] || {};
+            }
+        } else if (baseItem.type === 'armor') {
+            // 這裡我們假設 '鎧甲' 根據材質決定其類型
+            if (material.type === 'metal') {
+                baseStats = METAL_ARMOR_STATS[material.tier] || {};
+            } else if (material.type === 'wood') {
+                baseStats = WOOD_ARMOR_STATS[material.tier] || {};
+            }
+            // 未來若新增皮甲/布甲，可以在此擴充邏輯
+        }
+
+        // - 如果是數字 (如 damage, allStats)，則乘以品質係數
+        // - 如果是字串 (如 defenseDice)，則直接賦值
         for (const stat in baseStats) {
-            newItem.stats[stat] = Math.floor(baseStats[stat] * quality.multiplier);
-        }                    
-        // 2. 如果不是特殊詛咒裝備，就生成標準詞綴
+            const value = baseStats[stat];
+            if (typeof value === 'number') {
+                // 使用新的 bonus 屬性進行加減，並確保屬性值至少為 1
+                newItem.stats[stat] = Math.max(1, value + quality.bonus);
+            } else {
+                // 對於非數字屬性 (如 '2d6')，則直接賦值
+                newItem.stats[stat] = value;
+            }
+        }
+        // --- 核心修改結束 ---
+                               
+        // 如果不是特殊詛咒裝備，就生成標準詞綴 (此部分邏輯維持不變)
         if (!specialAffix && !forceNoAffix) {
             const affixCountRange = quality.affixes;
             const affixCount = randomInt(affixCountRange[0], affixCountRange[1]);
@@ -3398,11 +3604,10 @@ const gameLogic = {
             
             for (let i = 0; i < affixCount && availableAffixes.length > 0; i++) {
                 const randomAffixKey = availableAffixes[randomInt(0, availableAffixes.length - 1)];
-                const selectedAffix = { ...STANDARD_AFFIXES[randomAffixKey], key: randomAffixKey }; // 複製一份並加上key
+                const selectedAffix = { ...STANDARD_AFFIXES[randomAffixKey], key: randomAffixKey };
                 
                 newItem.affixes.push(selectedAffix);
                 
-                // 移除已選中的和所有衝突的詞綴，防止再次選中
                 availableAffixes = availableAffixes.filter(key => {
                     if (key === randomAffixKey) return false;
                     if (selectedAffix.conflicts && selectedAffix.conflicts.includes(key)) return false;
@@ -3412,11 +3617,12 @@ const gameLogic = {
                 });
             }
         }                  
-        // 3. 更新最終名稱
+        
         newItem.name = newItem.generateName();
         
         return newItem;
     },
+
     handlePartnerDeath(partnerId) {
         const partner = this.partners.find(p => p.id === partnerId);
         if (partner) {
@@ -3426,25 +3632,33 @@ const gameLogic = {
             this.player.updateHp(this.isStarving);
         }
     },
-    async attemptSneakEscape() {
-        return new Promise(resolve => {
-            const playerAgility = this.player.getTotalStat('agility', this.isStarving);
-            const enemyAvgAgility = this.combat.enemies.reduce((sum, e) => sum + e.stats.agility, 0) / this.combat.enemies.length;
-            const successChance = 50 + (playerAgility - enemyAvgAgility) * 1.5 - (this.combat.allies.length - this.combat.enemies.length) * 2;
-        
-            this.logMessage('combat', '你嘗試潛行脫離戰鬥...', 'player');
 
-            setTimeout(() => {
-                if (roll(successChance)) {
-                    this.logMessage('combat', '脫離成功！', 'success');
-                    this.finishCombatCleanup();
-                    resolve('escaped');
-                } else {
-                    this.logMessage('combat', '脫離失敗！', 'enemy');
-                    resolve('failed');
-                }
-            }, 500);
-        });
+    async attemptSneakEscape() {
+        this.logMessage('combat', '你嘗試潛行脫離戰鬥...', 'player');
+        
+        const playerParty = this.combat.allies;
+        const enemyParty = this.combat.enemies.filter(e => e.isAlive());
+
+        const contestResult = this.performAbilityContest(playerParty, enemyParty);
+
+        // 【觸發擲骰動畫】
+        await this.showDiceRollAnimation('脫離判定', 
+            [{ sides: 10, result: contestResult.partyA_Details.roll }], 
+            [{ sides: 10, result: contestResult.partyB_Details.roll }]
+        );
+
+        this.logMessage('combat', `我方脫離擲骰: ${contestResult.partyA_Details.roll} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
+        this.logMessage('combat', `敵方追擊擲骰: ${contestResult.partyB_Details.roll} + 人數 ${contestResult.partyB_Details.partySize} = ${contestResult.partyB_Value}`, 'info');
+        
+        // Promise 已由 showDiceRollAnimation 處理，這裡直接返回結果
+        if (contestResult.partyA_Value > contestResult.partyB_Value) { 
+            this.logMessage('combat', '脫離成功！', 'success');
+            this.finishCombatCleanup();
+            return 'escaped';
+        } else {
+            this.logMessage('combat', '脫離失敗！', 'enemy');
+            return 'failed';
+        }
     },
 
     endCombat(victory) {
@@ -4558,67 +4772,97 @@ const gameLogic = {
     },
     getSkillStatus(skill) {
         if (!this.player) return 'locked';
-        const isLearned = this.player.learnedSkills.hasOwnProperty(skill.id);
-        if (isLearned) return 'learned';
 
-        const canAfford = this.player.skillPoints >= skill.levels[0].cost;
+        const currentLevel = this.player.learnedSkills[skill.id] || 0;
+
+        // 狀態一：已滿級
+        if (skill.maxLevel && currentLevel >= skill.maxLevel) {
+            return 'maxed';
+        }
+
+        // 計算下一級所需花費
+        // 如果是 0 級，則花費是第 1 級的 cost；如果是 1 級，則是第 2 級的 cost，以此類推。
+        const nextLevelCost = skill.levels[currentLevel]?.cost; 
+        if (nextLevelCost === undefined) {
+            return 'locked'; // 如果找不到下一級的資料，視為鎖定
+        }
+
+        const canAfford = this.player.skillPoints >= nextLevelCost;
         const dependenciesMet = this.areSkillDependenciesMet(skill);
 
-        if (canAfford && dependenciesMet) {
+        // 狀態二：可升級
+        if (currentLevel > 0 && canAfford) {
+            return 'upgradeable';
+        }
+
+        // 狀態三：可學習
+        if (currentLevel === 0 && canAfford && dependenciesMet) {
             return 'learnable';
         }
+
+        // 狀態四：已鎖定
         return 'locked';
     },
 
     getSkillDisplayInfo(skill) {
         if (!this.player) return '';
 
-        // 獲取技能的當前等級，如果未學習則為0級
         const currentLevel = this.player.learnedSkills[skill.id] || 0;
-        // 獲取對應等級的資料。如果未學習，則顯示第1級的資料
-        const levelData = currentLevel > 0 ? skill.levels[currentLevel - 1] : skill.levels[0];
-        
-        let infoParts = []; // 用來存放要顯示的各項資訊
+        let infoParts = [];
 
-        // 1. 產生「效果」文字
+        // --- 顯示當前等級或第一級的效果 ---
+        const displayLevel = Math.max(1, currentLevel);
+        const levelData = skill.levels[displayLevel - 1];
+        
         if (levelData && levelData.effect) {
-            let effectString = '效果: ';
+            let effectString = currentLevel > 0 ? `當前效果: ` : `效果: `;
             switch (skill.id) {
                 case 'combat_powerful_strike':
-                    const multiplier = levelData.effect.multiplier;
-                    effectString += `+${Math.round(multiplier * 100)}% 力量傷害`;
+                    effectString += `+${Math.round(levelData.effect.multiplier * 100)}% 力量傷害`;
                     break;
                 case 'combat_quick_cooldown':
-                    const reduction = levelData.effect.value;
-                    effectString += `-${reduction} 回合冷卻`;
+                    effectString += `-${levelData.effect.value} 回合冷卻`;
                     break;
-
                 case 'tribe_01':
-                    const passivePercent = Math.round(levelData.passive * 100);
-                    const activePercent = Math.round(levelData.active * 100);
-                    effectString = `被動: +${passivePercent}% | 主動: +${activePercent}%`;
+                    effectString = `被動: +${Math.round(levelData.passive * 100)}% | 主動: +${Math.round(levelData.active * 100)}%`;
                     break;
-                // 未來可以在此處為其他技能新增效果描述
                 default:
-                    effectString = ''; // 如果沒有特別格式，暫不顯示
+                    effectString = '';
             }
             if (effectString) infoParts.push(effectString);
         }
 
-        // 2. 產生「冷卻時間」文字 (僅對主動技)
         if (skill.baseCooldown) {
-            const finalCd = this.player.getFinalCooldown(skill);
-            infoParts.push(`冷卻: ${finalCd} 回合`);
+            infoParts.push(`冷卻: ${this.player.getFinalCooldown(skill)} 回合`);
         }
-        
-        // 3. 產生「持續時間」文字 (僅對有持續時間的技能)
-        if (skill.baseDuration) { // 雖然目前技能沒有，但為未來擴充
+        if (skill.baseDuration) {
             const finalDuration = skill.baseDuration + Math.floor(this.player.getEffectiveIntelligence() / 80);
             infoParts.push(`持續: ${finalDuration} 回合`);
         }
+        
+        let mainInfo = infoParts.join(' | ');
 
-        // 將所有資訊用 " | " 串聯起來回傳
-        return infoParts.join(' | ');
+        // --- 如果技能還沒滿級，則顯示下一級的效果 ---
+        if (currentLevel > 0 && currentLevel < skill.maxLevel) {
+            const nextLevelData = skill.levels[currentLevel];
+            let nextLevelEffect = '';
+            switch (skill.id) {
+                case 'combat_powerful_strike':
+                    nextLevelEffect = `+${Math.round(nextLevelData.effect.multiplier * 100)}%`;
+                    break;
+                case 'combat_quick_cooldown':
+                    nextLevelEffect = `-${nextLevelData.effect.value} 回合`;
+                    break;
+                case 'tribe_01':
+                    nextLevelEffect = `+${Math.round(nextLevelData.passive * 100)}% / +${Math.round(nextLevelData.active * 100)}%`;
+                    break;
+            }
+            if (nextLevelEffect) {
+                mainInfo += `<br><span class="text-gray-400 text-xs">(下一級: ${nextLevelEffect})</span>`;
+            }
+        }
+
+        return mainInfo;
     },
 
     areSkillDependenciesMet(skill) {
@@ -4636,24 +4880,35 @@ const gameLogic = {
         if (!skill) return;
 
         const status = this.getSkillStatus(skill);
-        if (status !== 'learnable') {
-            this.showCustomAlert('不滿足學習條件！');
+        // 只有在「可學習」或「可升級」時才繼續
+        if (status !== 'learnable' && status !== 'upgradeable') {
+            this.showCustomAlert('不滿足條件！');
             return;
         }
+        
+        const currentLevel = this.player.learnedSkills[skill.id] || 0;
+        const cost = skill.levels[currentLevel].cost;
 
-        this.player.skillPoints -= skill.levels[0].cost;
-        this.player.learnedSkills[skill.id] = 1;
+        // 扣除技能點
+        this.player.skillPoints -= cost;
 
-        if (skill.combatActive) {
-            // 將技能資料複製一份，並加入冷卻狀態
-            const newActiveSkill = JSON.parse(JSON.stringify(skill));
-            newActiveSkill.currentCooldown = 0;
-            this.player.skills.push(newActiveSkill);
+        // 判斷是學習還是升級
+        if (currentLevel === 0) {
+            // 第一次學習
+            this.player.learnedSkills[skill.id] = 1;
+            if (skill.combatActive && !this.player.skills.some(s => s.id === skillId)) {
+                const newActiveSkill = JSON.parse(JSON.stringify(skill));
+                newActiveSkill.currentCooldown = 0;
+                this.player.skills.push(newActiveSkill);
+            }
+            this.logMessage('tribe', `你學會了新技能：[${skill.name}]！`, 'success');
+            this.showCustomAlert(`成功學習 [${skill.name}]！`);
+        } else {
+            // 升級
+            this.player.learnedSkills[skill.id]++;
+            this.logMessage('tribe', `你的技能 [${skill.name}] 升級了！`, 'success');
+            this.showCustomAlert(`[${skill.name}] 已升至 ${this.player.learnedSkills[skill.id]} 級！`);
         }
-
-        this.logMessage('tribe', `你學會了新技能：[${skill.name}]！`, 'success');
-        this.showCustomAlert(`成功學習 [${skill.name}]！`);
-
     },
 
     assignToDispatch(partnerId, task) {
@@ -4753,5 +5008,35 @@ const gameLogic = {
         // 這一步是為了確保即使只是文字變動，畫面也能強制刷新
         this.currentRaid.currentZone = { ...this.currentRaid.currentZone };
     },
-    
+
+    closeDiceModal() {
+        if (typeof this.modals.dice.onComplete === 'function') {
+            this.modals.dice.onComplete();
+        }
+        this.modals.dice.isOpen = false;
+        this.modals.dice.onComplete = null; // 清理回呼
+    },
+
+    // 這是新的視覺化擲骰核心，它只負責“播動畫”，不處理“算結果”
+    showDiceRollAnimation(title, playerRolls = [], opponentRolls = []) {
+        return new Promise(resolve => {
+            const allRolls = [...playerRolls, ...opponentRolls];
+            
+            this.modals.dice.sides.player = playerRolls.map(r => ({ ...r, isRolling: true }));
+            this.modals.dice.sides.opponent = opponentRolls.map(r => ({ ...r, isRolling: true }));
+            this.modals.dice.title = title;
+            this.modals.dice.isOpen = true;
+            this.modals.dice.onComplete = resolve;
+
+            setTimeout(() => {
+                this.modals.dice.sides.player.forEach(r => r.isRolling = false);
+                this.modals.dice.sides.opponent.forEach(r => r.isRolling = false);
+                
+                setTimeout(() => {
+                    this.closeDiceModal();
+                }, 1200);
+
+            }, 1000);
+        });
+    },
 };
