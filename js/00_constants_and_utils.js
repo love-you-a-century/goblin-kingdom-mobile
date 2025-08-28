@@ -75,14 +75,10 @@ const KNIGHT_ORDER_UNITS = {
     '祭司': { ratio: [1, 1, 4, 4], skill: { name: '聖光', cd: 10, type: 'team_heal', triggerHp: 0.8, description: '當騎士團隊伍總血量低於80%時施放，恢復所有團員生命。' } },
 };
 
-/**********************************************************************
- * * 第一階段：新增通用擲骰函式
- * **********************************************************************/
-
 /**
- * 根據傳入的骰子字串 (例如 "3d6") 進行擲骰並返回總和。
- * @param {string} diceString - 格式為 "數量d面數" 的字串，例如 "1d20" 或 "2d6"。
- * @returns {number} - 擲骰結果的總和。
+ * 根據傳入的骰子字串 (例如 "3d6") 進行擲骰。
+ * @param {string} diceString - 格式為 "數量d面數" 的字串。
+ * @returns {{total: number, rolls: number[], count: number, sides: number}} - 包含總和、每次擲骰結果陣列、骰子數量和面數的物件。
  */
 function rollDice(diceString) {
   const [countStr, sidesStr] = diceString.toLowerCase().split('d');
@@ -91,14 +87,17 @@ function rollDice(diceString) {
 
   if (isNaN(count) || isNaN(sides) || count < 0 || sides <= 0) {
     console.error("無效的擲骰字串:", diceString);
-    return 0;
+    return { total: 0, rolls: [], count: 0, sides: 0 };
   }
 
   let total = 0;
+  const rolls = [];
   for (let i = 0; i < count; i++) {
-    total += Math.floor(Math.random() * sides) + 1;
+    const roll = Math.floor(Math.random() * sides) + 1;
+    rolls.push(roll);
+    total += roll;
   }
-  return total;
+  return { total, rolls, count, sides };
 }
 
 // --- 工具 & 常數 ---

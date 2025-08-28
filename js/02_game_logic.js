@@ -40,24 +40,21 @@ const gameLogic = {
     },
 
     performAbilityContest(partyA, partyB) {
-        // 1. 計算 A 方的對抗值
         const partyA_Stats = this.getPartyAverageStats(partyA);
         const partyA_DiceCount = Math.max(1, Math.floor(partyA_Stats.average / 10));
-        const partyA_Roll = rollDice(`${partyA_DiceCount}d10`);
-        const partyA_Value = partyA_Roll + partyA.length;
+        const partyA_RollResult = rollDice(`${partyA_DiceCount}d10`); // <-- 變數改名
+        const partyA_Value = partyA_RollResult.total + partyA.length; // <-- 使用 .total
 
-        // 2. 計算 B 方的對抗值
         const partyB_Stats = this.getPartyAverageStats(partyB);
         const partyB_DiceCount = Math.max(1, Math.floor(partyB_Stats.average / 10));
-        const partyB_Roll = rollDice(`${partyB_DiceCount}d10`);
-        const partyB_Value = partyB_Roll + partyB.length;
+        const partyB_RollResult = rollDice(`${partyB_DiceCount}d10`); // <-- 變數改名
+        const partyB_Value = partyB_RollResult.total + partyB.length; // <-- 使用 .total
 
-        // 3. 返回一個包含所有計算細節的物件，方便日誌記錄
         return {
             partyA_Value,
             partyB_Value,
-            partyA_Details: { roll: partyA_Roll, diceCount: partyA_DiceCount, partySize: partyA.length },
-            partyB_Details: { roll: partyB_Roll, diceCount: partyB_DiceCount, partySize: partyB.length }
+            partyA_Details: { rolls: partyA_RollResult.rolls, partySize: partyA.length }, // <-- 傳遞 .rolls
+            partyB_Details: { rolls: partyB_RollResult.rolls, partySize: partyB.length }  // <-- 傳遞 .rolls
         };
     },
 
@@ -2910,34 +2907,31 @@ const gameLogic = {
         const playerParty = [this.player, ...this.player.party];
         const contestResult = this.performAbilityContest(playerParty, group);
 
-        // 【觸發擲骰動畫】
+        // 【核心修改】根據 rolls 陣列來產生骰子
         await this.showDiceRollAnimation('潛行擄走判定', 
-            [{ sides: 10, result: contestResult.partyA_Details.roll }], 
-            [{ sides: 10, result: contestResult.partyB_Details.roll }]
+            contestResult.partyA_Details.rolls.map(r => ({ sides: 10, result: r })), 
+            contestResult.partyB_Details.rolls.map(r => ({ sides: 10, result: r }))
         );
 
-        this.logMessage('raid', `我方潛行擲骰: ${contestResult.partyA_Details.roll} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
-        this.logMessage('raid', `敵方警覺擲骰: ${contestResult.partyB_Details.roll} + 人數 ${contestResult.partyB_Details.partySize} = ${contestResult.partyB_Value}`, 'info');
+        this.logMessage('raid', `我方潛行擲骰: ${contestResult.partyA_Value - contestResult.partyA_Details.partySize} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
+        this.logMessage('raid', `敵方警覺擲骰: ${contestResult.partyB_Value - contestResult.partyB_Details.partySize} + 人數 ${contestResult.partyB_Details.partySize} = ${contestResult.partyB_Value}`, 'info');
 
         if (contestResult.partyA_Value > contestResult.partyB_Value) {
+            // ... 成功邏輯維持不變 ...
             this.currentRaid.timeRemaining -= 3;
             this.logMessage('raid', `潛行成功！你將 ${femalesInGroup.map(f => f.name).join('、')} 全部擄走！(-3 分鐘)`, 'success');
-
             femalesInGroup.forEach(femaleUnit => {
-                const newCaptive = new FemaleHuman(
-                    femaleUnit.name, femaleUnit.stats, femaleUnit.profession,
-                    femaleUnit.visual, femaleUnit.originDifficulty
-                );
+                const newCaptive = new FemaleHuman(femaleUnit.name, femaleUnit.stats, femaleUnit.profession, femaleUnit.visual, femaleUnit.originDifficulty);
                 newCaptive.maxHp = newCaptive.calculateMaxHp();
                 newCaptive.currentHp = newCaptive.maxHp;
                 this.addCaptiveToCarry(newCaptive);
                 this.gainResourcesFromEnemy(femaleUnit);
                 this.removeUnitFromRaidZone(femaleUnit.id);
             });
-
             this.updateBuildingScoutText();
             this.checkRaidTime();
         } else {
+            // ... 失敗邏輯維持不變 ...
             this.currentRaid.timeRemaining -= 6;
             femalesInGroup.forEach(f => this.currentRaid.failedSneakTargets.add(f.id));
             this.logMessage('raid', `潛行擄走 ${primaryTarget.name} 失敗，你被整個隊伍發現了！(-6 分鐘)`, 'enemy');
@@ -3219,32 +3213,33 @@ const gameLogic = {
         
         this.logMessage('combat', `${attacker.name} 使用 [${weaponType}] 攻擊 ${currentTarget.name}！`, logType);
 
-        // --- 命中判定 ---
         const weaponJudgementMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence', '徒手': 'strength' };
         const judgementStat = weaponJudgementMap[weaponType] || 'strength';
 
         const attackerStatValue = attacker.getTotalStat(judgementStat, this.isStarving);
         const attackerDiceCount = Math.max(1, Math.floor(attackerStatValue / 10)); 
-        const attackerRoll = rollDice(`${attackerDiceCount}d10`);
+        const attackerRollResult = rollDice(`${attackerDiceCount}d10`); // <-- 變數改名
         const accuracyBonus = (weapon && weapon.material.type === 'wood') ? (weapon.stats.accuracy || 0) : 0; 
-        const attackerTotal = attackerRoll + accuracyBonus; 
+        const attackerTotal = attackerRollResult.total + accuracyBonus; // <-- 使用 .total
 
         const defenderStatValue = currentTarget.getTotalStat(judgementStat, this.isStarving);
         const defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 10)); 
-        const defenderRoll = rollDice(`${defenderDiceCount}d10`);
+        const defenderRollResult = rollDice(`${defenderDiceCount}d10`); // <-- 變數改名
         const armor = currentTarget.equipment.chest;
-        const defenseDice = (armor && (armor.material.type === 'wood' || armor.type === 'leather' || armor.type === 'cloth')) ? (armor.stats.defenseDice || '0d6') : '0d6'; 
-        const defenseDiceRoll = rollDice(defenseDice);
-        const defenderTotal = defenderRoll + defenseDiceRoll; 
+        const defenseDiceString = (armor && (armor.material.type === 'wood' || armor.type === 'leather' || armor.type === 'cloth')) ? (armor.stats.defenseDice || '0d6') : '0d6'; 
+        const defenseDiceResult = rollDice(defenseDiceString); // <-- 變數改名
+        const defenderTotal = defenderRollResult.total + defenseDiceResult.total; // <-- 使用 .total
 
-        // 【觸發擲骰動畫】
-        await this.showDiceRollAnimation('命中判定', 
-            [{ sides: 10, result: attackerRoll }], 
-            [{ sides: 10, result: defenderRoll }]
-        );
+        if (attacker.id === this.player.id || currentTarget.id === this.player.id) {
+            // 【核心修改】根據 rolls 陣列來產生骰子
+            await this.showDiceRollAnimation('命中判定', 
+                attackerRollResult.rolls.map(r => ({ sides: 10, result: r })), 
+                defenderRollResult.rolls.map(r => ({ sides: 10, result: r }))
+            );
+        }
 
-        this.logMessage('combat', `> 攻擊方 (${judgementStat}): ${attackerRoll} (擲骰) + ${accuracyBonus} (命中加成) = ${attackerTotal}`, 'info');
-        this.logMessage('combat', `> 防守方 (${judgementStat}): ${defenderRoll} (擲骰) + ${defenseDiceRoll} (防禦骰) = ${defenderTotal}`, 'info');
+        this.logMessage('combat', `> 攻擊方 (${judgementStat}): ${attackerRollResult.total} (擲骰) + ${accuracyBonus} (命中加成) = ${attackerTotal}`, 'info');
+        this.logMessage('combat', `> 防守方 (${judgementStat}): ${defenderRollResult.total} (擲骰) + ${defenseDiceResult.total} (防禦骰) = ${defenderTotal}`, 'info');
 
         if (attackerTotal <= defenderTotal) { 
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${currentTarget.name} 閃過了！`, logType === 'player' ? 'enemy' : 'player');
@@ -3253,28 +3248,28 @@ const gameLogic = {
         
         this.logMessage('combat', `攻擊命中！`, 'success');
 
-        // --- 格擋判定 ---
         let isBlocked = false;
         const shield = currentTarget.equipment.offHand;
         if (shield && shield.baseName === '盾') {
-            const blockRoll = rollDice('1d20');
-            const blockTarget = 15; // 假設目標值15
+            const blockRollResult = rollDice('1d20'); // <-- 變數改名
+            const blockTarget = 15;
             
-            // 【觸發格擋擲骰動畫】
-            const isPlayerBlocking = this.combat.allies.some(a => a.id === currentTarget.id);
+            if (currentTarget.id === this.player.id) {
+                const isPlayerBlocking = this.combat.allies.some(a => a.id === currentTarget.id);
+                // 【核心修改】根據 rolls 陣列來產生骰子
                 await this.showDiceRollAnimation('格擋判定',
-                    isPlayerBlocking ? [{ sides: 20, result: blockRoll }] : [],
-                    !isPlayerBlocking ? [{ sides: 20, result: blockRoll }] : []
+                    isPlayerBlocking ? blockRollResult.rolls.map(r => ({ sides: 20, result: r })) : [],
+                    !isPlayerBlocking ? blockRollResult.rolls.map(r => ({ sides: 20, result: r })) : []
                 );
+            }
 
-            this.logMessage('combat', `> ${currentTarget.name} 進行格擋判定: 擲出 ${blockRoll} (目標值 >= ${blockTarget})`, 'info');
-            if (blockRoll >= blockTarget) {
+            this.logMessage('combat', `> ${currentTarget.name} 進行格擋判定: 擲出 ${blockRollResult.total} (目標值 >= ${blockTarget})`, 'info');
+            if (blockRollResult.total >= blockTarget) { // <-- 使用 .total
                 isBlocked = true; 
                 this.logMessage('combat', `${currentTarget.name} 成功格擋了攻擊！`, 'skill');
             }
         }
 
-        // --- 最終傷害計算 ---
         let damage = weapon ? (weapon.stats.damage || 0) : attacker.getTotalStat('strength');
         const attackerShield = attacker.equipment.offHand;
         if (attackerShield && attackerShield.baseName === '盾' && attackerShield.material.type === 'metal') {
@@ -3282,10 +3277,10 @@ const gameLogic = {
         }
 
         if (armor && armor.material.type === 'metal') {
-            const soakDice = armor.stats.soakDice || '0d6';
-            const soakValue = rollDice(soakDice); 
-            this.logMessage('combat', `> ${currentTarget.name} 的金屬甲吸收了 ${soakValue} 點傷害 (${soakDice})`, 'info');
-            damage -= soakValue; 
+            const soakDiceString = armor.stats.soakDice || '0d6';
+            const soakResult = rollDice(soakDiceString); // <-- 變數改名
+            this.logMessage('combat', `> ${currentTarget.name} 的金屬甲吸收了 ${soakResult.total} 點傷害 (${soakDiceString})`, 'info');
+            damage -= soakResult.total; // <-- 使用 .total
         }
         
         if (isBlocked) {
@@ -3293,9 +3288,7 @@ const gameLogic = {
         }
         
         const finalDamage = Math.max(0, damage); 
-        
         currentTarget.currentHp = Math.max(0, currentTarget.currentHp - finalDamage);
-        
         this.logMessage('combat', `${attacker.name} 對 ${currentTarget.name} 造成了 ${finalDamage} 點傷害。`, isAllyAttacking ? 'player' : 'enemy');
 
         if (!currentTarget.isAlive()) {
@@ -3641,16 +3634,15 @@ const gameLogic = {
 
         const contestResult = this.performAbilityContest(playerParty, enemyParty);
 
-        // 【觸發擲骰動畫】
+        // 【核心修改】根據 rolls 陣列來產生骰子
         await this.showDiceRollAnimation('脫離判定', 
-            [{ sides: 10, result: contestResult.partyA_Details.roll }], 
-            [{ sides: 10, result: contestResult.partyB_Details.roll }]
+            contestResult.partyA_Details.rolls.map(r => ({ sides: 10, result: r })), 
+            contestResult.partyB_Details.rolls.map(r => ({ sides: 10, result: r }))
         );
 
-        this.logMessage('combat', `我方脫離擲骰: ${contestResult.partyA_Details.roll} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
-        this.logMessage('combat', `敵方追擊擲骰: ${contestResult.partyB_Details.roll} + 人數 ${contestResult.partyB_Details.partySize} = ${contestResult.partyB_Value}`, 'info');
+        this.logMessage('combat', `我方脫離擲骰: ${contestResult.partyA_Value - contestResult.partyA_Details.partySize} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
+        this.logMessage('combat', `敵方追擊擲骰: ${contestResult.partyB_Value - contestResult.partyB_Details.partySize} + 人數 ${contestResult.partyB_Details.partySize} = ${contestResult.partyB_Value}`, 'info');
         
-        // Promise 已由 showDiceRollAnimation 處理，這裡直接返回結果
         if (contestResult.partyA_Value > contestResult.partyB_Value) { 
             this.logMessage('combat', '脫離成功！', 'success');
             this.finishCombatCleanup();
