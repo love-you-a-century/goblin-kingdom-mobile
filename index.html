@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.18</title>
+    <title>哥布林王國v5.25</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,6 +16,43 @@
 </head>
 
 <body class="p-4 md:p-6" x-data="game()">
+
+    <div class="dice-tray-container" :class="{ 'visible': modals.dice.isOpen }">
+        <h2 class="text-2xl font-medieval text-amber-200 mb-4" x-text="modals.dice.title"></h2>
+        
+        <div class="dice-contest-grid">
+            
+            <div class="dice-column">
+                <h3 class="text-xl font-bold text-green-400">我方</h3>
+                <div class="dice-items-grid">
+                    <template x-for="(roll, index) in modals.dice.sides.player" :key="'p' + index">
+                        <div class="dice-container">
+                            <div :class="['dice-display', `d${roll.sides}`, roll.isRolling ? 'rolling' : '']"
+                                x-text="roll.isRolling ? '?' : roll.result">
+                            </div>
+                            <p class="text-md h-6" x-text="roll.isRolling ? '滾動中...' : `擲出 ${roll.result} 點！`"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            
+            <div class="dice-column">
+                <h3 class="text-xl font-bold text-red-400">敵方</h3>
+                <div class="dice-items-grid">
+                    <template x-for="(roll, index) in modals.dice.sides.opponent" :key="'o' + index">
+                        <div class="dice-container">
+                            <div :class="['dice-display', `d${roll.sides}`, roll.isRolling ? 'rolling' : '']"
+                                x-text="roll.isRolling ? '?' : roll.result">
+                            </div>
+                            <p class="text-md h-6" x-text="roll.isRolling ? '滾動中...' : `擲出 ${roll.result} 點！`"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
     <div class="max-w-7xl mx-auto">
 
         <audio x-ref="audioPlayer" loop></audio>
@@ -1848,44 +1885,58 @@
                                 <button @click="modals.skillTree.activeTab = 'breeding'" :class="{ 'bg-gray-700 text-white': modals.skillTree.activeTab === 'breeding' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">繁衍</button>
                             </div>
 
-                            <div class="space-y-3 pr-2 min-h-[400px] max-h-[60vh] overflow-y-auto">
-                                <template x-for="skill in SKILL_TREES[modals.skillTree.activeTab]" :key="skill.id">
-                                    <div class="p-4 border rounded-lg transition-all"
-                                        :class="{
-                                            'border-gray-600 opacity-50': getSkillStatus(skill) === 'locked',
-                                            'border-green-400 bg-green-900/20': getSkillStatus(skill) === 'learnable',
-                                            'border-yellow-400 bg-yellow-900/20': getSkillStatus(skill) === 'learned'
-                                        }">
-                                        <div class="flex justify-between items-start">
-                                            <div class="flex-grow">
-                                                <h4 class="text-lg font-bold"
-                                                    :class="{
-                                                        'text-green-300': getSkillStatus(skill) === 'learnable',
-                                                        'text-yellow-300': getSkillStatus(skill) === 'learned'
-                                                    }"
-                                                    x-text="skill.name"></h4>
-                                                <p class="text-sm text-gray-300 mt-1" x-text="skill.description"></p>
+                            <template x-if="player">
+                                <div class="space-y-3 pr-2 min-h-[400px] max-h-[60vh] overflow-y-auto">
+                                    <template x-for="skill in SKILL_TREES[modals.skillTree.activeTab]" :key="skill.id">
 
-                                                <p class="text-sm text-cyan-400 mt-2 font-semibold" x-html="getSkillDisplayInfo(skill)"></p>
-                                                
-                                                <p class="text-xs text-gray-500 mt-2">
-                                                    <template x-if="skill.dependencies.length > 0">
-                                                        <span>前置: <span x-text="skill.dependencies.map(id => SKILL_TREES.combat.find(s=>s.id===id)?.name || '').join(', ')"></span></span>
-                                                    </template>
-                                                </p>
-                                            </div>
-                                            <div class="flex-shrink-0 ml-4 text-right">
-                                                <p class="font-bold">花費: <span x-text="skill.levels[0].cost"></span> 點</p>
-                                                <button @click="learnSkill(skill.id)"
-                                                        class="btn btn-sm btn-primary mt-2"
-                                                        :disabled="getSkillStatus(skill) !== 'learnable'">
-                                                    學習
-                                                </button>
+                                        <div class="p-4 border rounded-lg transition-all"
+                                            :class="{
+                                                'border-gray-600 opacity-60': getSkillStatus(skill) === 'locked',
+                                                'border-green-400 bg-green-900/20': getSkillStatus(skill) === 'learnable',
+                                                'border-blue-400 bg-blue-900/20': getSkillStatus(skill) === 'upgradeable',
+                                                'border-yellow-400 bg-yellow-900/20': getSkillStatus(skill) === 'maxed'
+                                            }">
+                                            <div class="flex justify-between items-start">
+                                                <div class="flex-grow">
+                                                    <h4 class="text-lg font-bold"
+                                                        :class="{
+                                                            'text-green-300': getSkillStatus(skill) === 'learnable',
+                                                            'text-blue-300': getSkillStatus(skill) === 'upgradeable',
+                                                            'text-yellow-300': getSkillStatus(skill) === 'maxed'
+                                                        }">
+                                                        <span x-text="skill.name"></span>
+                                                        <template x-if="player.learnedSkills[skill.id]">
+                                                            <span x-text="` (Lv.${player.learnedSkills[skill.id]} / ${skill.maxLevel})`"></span>
+                                                        </template>
+                                                    </h4>
+                                                    <p class="text-sm text-gray-300 mt-1" x-text="skill.description"></p>
+                                                    <p class="text-sm text-cyan-400 mt-2 font-semibold" x-html="getSkillDisplayInfo(skill)"></p>
+                                                    <p class="text-xs text-gray-500 mt-2">
+                                                        <template x-if="skill.dependencies.length > 0">
+                                                            <span>前置: <span x-text="skill.dependencies.map(id => Object.values(SKILL_TREES).flat().find(s => s.id === id)?.name || '').join(', ')"></span></span>
+                                                        </template>
+                                                    </p>
+                                                </div>
+                                                <div class="flex-shrink-0 ml-4 text-right">
+                                                    <p class="font-bold" x-show="getSkillStatus(skill) !== 'maxed'">
+                                                        花費: <span x-text="skill.levels[player.learnedSkills[skill.id] || 0]?.cost"></span> 點
+                                                    </p>
+                                                    <button @click="learnSkill(skill.id)"
+                                                            class="btn btn-sm mt-2"
+                                                            :class="{
+                                                                'btn-primary': getSkillStatus(skill) === 'learnable',
+                                                                'btn-success': getSkillStatus(skill) === 'upgradeable',
+                                                                'btn-secondary': ['locked', 'maxed'].includes(getSkillStatus(skill))
+                                                            }"
+                                                            :disabled="!['learnable', 'upgradeable'].includes(getSkillStatus(skill))">
+                                                        <span x-text="{learnable: '學習', upgradeable: '升級', maxed: '已滿級', locked: '鎖定'}[getSkillStatus(skill)]"></span>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </template>
-                            </div>
+                                    </template>
+                                </div>
+                            </template>
 
                             <div class="text-right mt-6">
                                 <button @click="modals.skillTree.isOpen = false" class="btn btn-secondary">關閉</button>

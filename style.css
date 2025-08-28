@@ -392,3 +392,135 @@
         #partner-management-modal {
             z-index: 110;
         }
+
+        .dice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); /* 彈性網格佈局 */
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+            justify-items: center;
+        }
+
+        .dice-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dice-tray-container {
+            position: fixed; /* 固定在畫面上 */
+            top: 20px; /* 距離頂部 20px */
+            left: 50%;
+            transform: translateX(-50%); /* 水平置中 */
+            z-index: 999; /* 確保在最上層 */
+            
+            background-color: rgba(26, 32, 44, 0.9); /* 半透明深色背景 */
+            border: 2px solid var(--accent-color);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+            
+            /* 轉場動畫效果 */
+            transition: opacity 0.5s, transform 0.5s;
+            
+            /* 預設為隱藏狀態 */
+            opacity: 0;
+            transform: translate(-50%, -200%); /* 從上方滑入 */
+            pointer-events: none; /* 隱藏時不可點擊 */
+        }
+
+        /* 當容器顯示時的狀態 */
+        .dice-tray-container.visible {
+            opacity: 1;
+            transform: translate(-50%, 0);
+            pointer-events: auto;
+        }
+
+        .dice-contest-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* 建立兩個等寬的欄位 */
+            gap: 2rem; /* 欄位之間的間距 */
+            align-items: start;
+            min-width: 300px; /* 給定一個最小寬度 */
+        }
+
+        .dice-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem; /* 欄位內骰子之間的間距 */
+        }
+
+        .dice-column h3 {
+            border-bottom: 2px solid var(--dice-border-color);
+            padding-bottom: 0.5rem;
+            width: 100%;
+            text-align: center;
+        }
+
+        .dice-display {
+            width: 50px; /*骰子寬*/
+            height: 50px; /*骰子長*/
+            background-color: var(--dice-face-bg, #F0E6D2); /* 使用變數，若未定義則用預設值 */
+            border: 3px solid var(--dice-border-color, #5A4429);
+            color: var(--dice-text-color, #5A4429);
+            font-family: 'MedievalSharp', cursive;
+            font-size: 30px; /*文字大小*/
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s;
+        }
+
+        /* 擲骰動畫 */
+        .dice-display.rolling {
+            animation: shake 0.5s infinite;
+        }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+
+        /* 使用 clip-path 製作不同形狀 */
+        .d4 {
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            border-radius: 0;
+        }
+        .d6 {
+            border-radius: 10px;
+        }
+        .d8 {
+            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+            border-radius: 0;
+        }
+        .d10 {
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+            border-radius: 0;
+        }
+        .d12 {
+            clip-path: polygon(50% 0%, 80% 20%, 100% 50%, 80% 80%, 50% 100%, 20% 80%, 0% 50%, 20% 20%);
+            border-radius: 0;
+        }
+        .d20 {
+            border-radius: 50%;
+        }
+
+        .dice-items-grid {
+            display: grid;
+            /* 創建多個欄位，每欄最小寬度為100px，會自動填滿並換行 */
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 1rem; /* 骰子之間的間距 */
+            width: 100%; /* 佔滿父容器寬度 */
+            justify-items: center; /* 確保骰子在網格單元中置中 */
+        }
