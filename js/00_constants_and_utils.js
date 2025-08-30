@@ -1,6 +1,7 @@
 // --- 技能樹資料 ---
 const SKILL_TREES = {
     combat: [
+        // --- 主動技能 ---
         {
             id: 'combat_powerful_strike',
             name: '強力一擊',
@@ -20,6 +21,115 @@ const SKILL_TREES = {
             ]
         },
         {
+            id: 'combat_agile_strike',
+            name: '迅捷一擊',
+            description: '玩家計算完普通攻擊傷害後，額外增加哥布林王總敏捷的百分比傷害。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'active',
+            combatActive: true,
+            baseCooldown: 12,
+            minCooldown: 5,
+            levels: [
+                { cost: 2, effect: { multiplier: 1.4, stat: 'agility' } },
+                { cost: 4, effect: { multiplier: 1.8, stat: 'agility' } },
+                { cost: 6, effect: { multiplier: 2.2, stat: 'agility' } },
+                { cost: 8, effect: { multiplier: 2.6, stat: 'agility' } },
+                { cost: 10, effect: { multiplier: 3.0, stat: 'agility' } }
+            ]
+        },
+        {
+            id: 'combat_enchanted_strike',
+            name: '附魔一擊',
+            description: '玩家計算完普通攻擊傷害後，額外增加哥布林王總智力的百分比傷害。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'active',
+            combatActive: true,
+            baseCooldown: 12,
+            minCooldown: 5,
+            levels: [
+                { cost: 2, effect: { multiplier: 1.4, stat: 'intelligence' } },
+                { cost: 4, effect: { multiplier: 1.8, stat: 'intelligence' } },
+                { cost: 6, effect: { multiplier: 2.2, stat: 'intelligence' } },
+                { cost: 8, effect: { multiplier: 2.6, stat: 'intelligence' } },
+                { cost: 10, effect: { multiplier: 3.0, stat: 'intelligence' } }
+            ]
+        },
+        {
+            id: 'combat_lucky_strike',
+            name: '幸運一擊',
+            description: '玩家計算完普通攻擊傷害後，額外增加哥布林王總幸運的百分比傷害。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'active',
+            combatActive: true,
+            baseCooldown: 12,
+            minCooldown: 5,
+            levels: [
+                { cost: 2, effect: { multiplier: 1.4, stat: 'luck' } },
+                { cost: 4, effect: { multiplier: 1.8, stat: 'luck' } },
+                { cost: 6, effect: { multiplier: 2.2, stat: 'luck' } },
+                { cost: 8, effect: { multiplier: 2.6, stat: 'luck' } },
+                { cost: 10, effect: { multiplier: 3.0, stat: 'luck' } }
+            ]
+        },
+        {
+            id: 'combat_symbiosis',
+            name: '共生關係',
+            description: '施放後，所有受到的傷害將由哥布林王與全體夥伴平均分攤，並額外獲得傷害減免。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'active',
+            combatActive: true,
+            baseDuration: 3,
+            baseCooldown: 18,
+            minCooldown: 1,
+            levels: [
+                { cost: 5, effect: { damageReduction: 0.05 } },
+                { cost: 10, effect: { damageReduction: 0.10 } },
+                { cost: 15, effect: { damageReduction: 0.15 } },
+                { cost: 20, effect: { damageReduction: 0.20 } },
+                { cost: 25, effect: { damageReduction: 0.25 } }
+            ]
+        },
+        {
+            id: 'combat_kings_pressure',
+            name: '王之威壓',
+            description: '降低全體敵人所有能力值。削弱的百分比為 我方哥布林夥伴總數 * 技能百分比。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'active',
+            combatActive: true,
+            baseDuration: 3,
+            baseCooldown: 18,
+            minCooldown: 1,
+            levels: [
+                { cost: 5, effect: { debuff_per_partner: 0.005 } },
+                { cost: 10, effect: { debuff_per_partner: 0.010 } },
+                { cost: 15, effect: { debuff_per_partner: 0.015 } },
+                { cost: 20, effect: { debuff_per_partner: 0.020 } },
+                { cost: 25, effect: { debuff_per_partner: 0.025 } }
+            ]
+        },
+        // --- 被動技能 ---
+        {
+            id: 'tribe_01',
+            name: '集團戰略',
+            description: '你將夥伴的力量化為己用。被動地將所有夥伴總能力的百分比，轉化為哥布林王自身的額外能力。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'passive',
+            combatActive: false,
+            levels: [
+                { cost: 5,  passive: 0.1 },
+                { cost: 10, passive: 0.2 },
+                { cost: 15, passive: 0.3 },
+                { cost: 20, passive: 0.4 },
+                { cost: 25, passive: 0.5 }
+            ]
+        },
+        {
             id: 'combat_quick_cooldown',
             name: '快速冷卻',
             description: '被動：永久減少所有主動技能的冷卻時間。',
@@ -35,26 +145,195 @@ const SKILL_TREES = {
             ]
         },
         {
-            id: 'tribe_01',
-            name: '集團戰略',
-            description: '你將夥伴的力量化為己用。被動地將所有夥伴總能力的百分比，轉化為哥布林王自身的額外能力。', // <-- 更新描述
-            maxLevel: 5,
-            dependencies: [],
-            type: 'passive', // <-- 從 'hybrid' 改為 'passive'
-            combatActive: false, // <-- 從 true 改為 false
-            // 移除了 baseDuration, baseCooldown, minCooldown
-            levels: [
-                { cost: 5,  passive: 0.1 },
-                { cost: 10, passive: 0.2 },
-                { cost: 15, passive: 0.3 },
-                { cost: 20, passive: 0.4 },
-                { cost: 25, passive: 0.5 }
-            ]
+            id: 'combat_zero_authority',
+            name: '歸零的權能',
+            description: '施放任何主動技能後，有 10% 機率立即清除該技能的冷卻時間。',
+            maxLevel: 1,
+            dependencies: ['post_final_boss'], // 特殊依賴
+            type: 'passive',
+            levels: [{ cost: 50, effect: { chance: 0.1 } }]
         },
     ],
-    raiding: [],
-    tribe: [],
-    breeding: []
+    tribe: [
+        {
+            id: 'tribe_forced_labor',
+            name: '強制勞動',
+            description: '立即完成所有派遣任務，並獲得該次派遣的全部資源，不消耗遊戲天數。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'active',
+            combatActive: false, // 這是在部落畫面使用的主動技能
+            baseCooldown: 9,
+            minCooldown: 5,
+            levels: [
+                { cost: 2, effect: { cooldown_override: 9 } },
+                { cost: 4, effect: { cooldown_override: 8 } },
+                { cost: 6, effect: { cooldown_override: 7 } },
+                { cost: 8, effect: { cooldown_override: 6 } },
+                { cost: 10, effect: { cooldown_override: 5 } }
+            ]
+        },
+        {
+            id: 'tribe_efficient_gathering',
+            name: '高效採集',
+            description: '增加派遣任務獲得的各類資源量。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'passive',
+            levels: [
+                { cost: 2, effect: { multiplier: 1.05 } },
+                { cost: 4, effect: { multiplier: 1.10 } },
+                { cost: 6, effect: { multiplier: 1.15 } },
+                { cost: 8, effect: { multiplier: 1.20 } },
+                { cost: 10, effect: { multiplier: 1.25 } }
+            ]
+        },
+        {
+            id: 'tribe_architecture',
+            name: '建築學',
+            description: '降低所有建築升級所需的資源成本。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'passive',
+            levels: [
+                { cost: 2, effect: { cost_reduction: 0.05 } },
+                { cost: 4, effect: { cost_reduction: 0.10 } },
+                { cost: 6, effect: { cost_reduction: 0.15 } },
+                { cost: 8, effect: { cost_reduction: 0.20 } },
+                { cost: 10, effect: { cost_reduction: 0.25 } }
+            ]
+        },
+        {
+            id: 'tribe_negotiation',
+            name: '談判技巧',
+            description: '與旅行商人「世紀」交易時，降低所有商品所需的「俘虜價值」。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'passive',
+            levels: [
+                { cost: 2, effect: { price_reduction: 0.05 } },
+                { cost: 4, effect: { price_reduction: 0.10 } },
+                { cost: 6, effect: { price_reduction: 0.15 } },
+                { cost: 8, effect: { price_reduction: 0.20 } },
+                { cost: 10, effect: { price_reduction: 0.25 } }
+            ]
+        },
+        {
+            id: 'tribe_spiral_authority',
+            name: '螺旋的權能',
+            description: '當哥布林夥伴在戰鬥中陣亡時，有 25% 機率不會消失，而是以全滿生命值的狀態返回部落寢室。',
+            maxLevel: 1,
+            dependencies: ['post_final_boss'],
+            type: 'passive',
+            levels: [{ cost: 50, effect: { chance: 0.25 } }]
+        }
+    ],
+    raiding: [
+        {
+            id: 'raid_scout_spread',
+            name: '散開偵查',
+            description: '在掠奪地圖上使用。所有出擊隊伍中的夥伴將各自選擇一個未偵查的目標進行偵查。此期間，哥布林王的夥伴加成會暫時失效。當玩家進行下一個行動後，夥伴會回歸，並結算所有偵查結果。',
+            maxLevel: 1,
+            dependencies: [],
+            type: 'active',
+            combatActive: false, // 這是在掠奪地圖使用的主動技能
+            cooldown: 1, // 每個區域一次
+            levels: [{ cost: 10 }]
+        },
+        {
+            id: 'raid_deep_scavenging',
+            name: '深度搜刮',
+            description: '搜刮建築時，增加獲得的各類資源量。',
+            maxLevel: 5,
+            dependencies: [],
+            type: 'passive',
+            levels: [
+                { cost: 2, effect: { multiplier: 1.05 } },
+                { cost: 4, effect: { multiplier: 1.10 } },
+                { cost: 6, effect: { multiplier: 1.15 } },
+                { cost: 8, effect: { multiplier: 1.20 } },
+                { cost: 10, effect: { multiplier: 1.25 } }
+            ]
+        },
+        {
+            id: 'raid_dispersed_escape',
+            name: '散開脫逃',
+            description: '降低因我方人數多於敵方而導致的潛行/脫逃成功率懲罰。',
+            maxLevel: 3,
+            dependencies: [],
+            type: 'passive',
+            levels: [
+                { cost: 4, effect: { penalty_reduction: 0.25 } },
+                { cost: 8, effect: { penalty_reduction: 0.50 } },
+                { cost: 12, effect: { penalty_reduction: 0.75 } }
+            ]
+        },
+        {
+            id: 'raid_reappearing_authority',
+            name: '重現的權能',
+            description: '每次成功搜刮一棟建築後，有 10% 機率可以對該建築再次進行搜刮。',
+            maxLevel: 1,
+            dependencies: ['post_final_boss'],
+            type: 'passive',
+            levels: [{ cost: 50, effect: { chance: 0.1 } }]
+        }
+    ],
+    breeding: [
+        {
+            id: 'breed_vigorous',
+            name: '精力旺盛',
+            description: '立即恢復當日已消耗的繁衍次數。',
+            maxLevel: 5,
+            dependencies: ['post_apostle_boss'], // 使徒
+            type: 'active',
+            combatActive: false,
+            baseCooldown: 3, // 單位: 天
+            minCooldown: 3,
+            levels: [
+                { cost: 5, effect: { charges: 1 } },
+                { cost: 10, effect: { charges: 2 } },
+                { cost: 15, effect: { charges: 3 } },
+                { cost: 20, effect: { charges: 4 } },
+                { cost: 25, effect: { charges: 5 } }
+            ]
+        },
+        {
+            id: 'breed_eugenics',
+            name: '優生學',
+            description: '新誕生的哥布林夥伴，有一定機率獲得額外的初始能力點。額外點數為 Floor(哥布林王原始能力值 / 10)。',
+            maxLevel: 5,
+            dependencies: ['post_apostle_boss'],
+            type: 'passive',
+            levels: [
+                { cost: 2, effect: { chance: 0.05 } },
+                { cost: 4, effect: { chance: 0.10 } },
+                { cost: 6, effect: { chance: 0.15 } },
+                { cost: 8, effect: { chance: 0.20 } },
+                { cost: 10, effect: { chance: 0.25 } }
+            ]
+        },
+        {
+            id: 'breed_polyspermy',
+            name: '多精卵',
+            description: '懷孕的俘虜在生產時，有一定機率生下雙胞胎或三胞胎。',
+            maxLevel: 2,
+            dependencies: ['post_apostle_boss'],
+            type: 'passive',
+            levels: [
+                { cost: 15, effect: { twins_chance: 0.05 } },
+                { cost: 30, effect: { twins_chance: 0.10, triplets_chance: 0.01 } }
+            ]
+        },
+        {
+            id: 'breed_breeding_authority',
+            name: '繁衍的權能',
+            description: '懷孕的俘虜在每日結算時，有 5% 機率立即完成懷孕週期，直接生產哥布林夥伴。',
+            maxLevel: 1,
+            dependencies: ['post_final_boss'],
+            type: 'passive',
+            levels: [{ cost: 50, effect: { chance: 0.05 } }]
+        }
+    ]
 };
 
 // --- 地圖尺寸設定 ---

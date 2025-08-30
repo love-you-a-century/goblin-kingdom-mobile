@@ -599,16 +599,21 @@
                 this.currentHp = Math.max(0, this.currentHp);
             }
             calculateDamage(isStarving = false) {
-                // 步驟 1: 使用 super 關鍵字，直接呼叫父類別(Unit)的通用傷害計算方法來取得基礎傷害
+                // 步驟 1: 呼叫父類別的通用傷害計算方法來取得基礎傷害
                 let finalDamage = super.calculateDamage(isStarving);
 
-                // 步驟 2: 在基礎傷害上，疊加玩家特有的技能效果
-                if (this.activeSkillBuff && this.activeSkillBuff.id === 'combat_powerful_strike') {
-                    const totalStrength = this.getTotalStat('strength', isStarving);
-                    const bonusDamage = Math.floor(totalStrength * this.activeSkillBuff.multiplier);
+                // 步驟 2: 檢查並應用來自任何屬性攻擊技能的強化效果
+                if (this.activeSkillBuff) {
+                    // 從 buff 中讀取要使用的屬性，預設為力量
+                    const statToUse = this.activeSkillBuff.stat || 'strength';
+                    // 取得該屬性的總值
+                    const totalStatValue = this.getTotalStat(statToUse, isStarving);
+                    // 計算額外傷害
+                    const bonusDamage = Math.floor(totalStatValue * this.activeSkillBuff.multiplier);
+                    
                     finalDamage += bonusDamage;
                     
-                    // 在 gameLogic 中會 log 訊息，這裡先清除 buff
+                    // 套用後立即清除 buff，確保它只生效一次
                     this.activeSkillBuff = null; 
                 }
                 

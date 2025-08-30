@@ -41,20 +41,34 @@ const gameLogic = {
 
     performAbilityContest(partyA, partyB) {
         const partyA_Stats = this.getPartyAverageStats(partyA);
-        const partyA_DiceCount = Math.max(1, Math.floor(partyA_Stats.average / 20)); // <-- 修改為 / 20
-        const partyA_RollResult = rollDice(`${partyA_DiceCount}d20`); // <-- 修改為 d20
-        const partyA_Value = partyA_RollResult.total + partyA.length;
+        const partyA_DiceCount = Math.max(1, Math.floor(partyA_Stats.average / 20));
+        const partyA_RollResult = rollDice(`${partyA_DiceCount}d20`);
+        let partyA_Value = partyA_RollResult.total + partyA.length;
 
         const partyB_Stats = this.getPartyAverageStats(partyB);
-        const partyB_DiceCount = Math.max(1, Math.floor(partyB_Stats.average / 20)); // <-- 修改為 / 20
-        const partyB_RollResult = rollDice(`${partyB_DiceCount}d20`); // <-- 修改為 d20
+        const partyB_DiceCount = Math.max(1, Math.floor(partyB_Stats.average / 20));
+        const partyB_RollResult = rollDice(`${partyB_DiceCount}d20`);
         const partyB_Value = partyB_RollResult.total + partyB.length;
+
+        // --- 應用「散開脫逃」技能效果 ---
+        let penalty = (partyA.length - partyB.length) * 2;
+        if (penalty > 0) { // 只有當我方人數較多，可能產生懲罰時才計算
+            const skillId = 'raid_dispersed_escape';
+            if (this.player && this.player.learnedSkills[skillId]) {
+                const skillLevel = this.player.learnedSkills[skillId];
+                const skillData = SKILL_TREES.raiding.find(s => s.id === skillId);
+                const reduction = skillData.levels[skillLevel - 1].effect.penalty_reduction;
+                const mitigatedPenalty = penalty * (1 - reduction);
+                const bonus = penalty - mitigatedPenalty; // 將被減免的懲罰值，轉化為對我方的加值
+                partyA_Value += bonus;
+            }
+        }
 
         return {
             partyA_Value,
             partyB_Value,
-            partyA_Details: { rolls: partyA_RollResult.rolls, partySize: partyA.length, sides: partyA_RollResult.sides }, // <-- 新增 sides
-            partyB_Details: { rolls: partyB_RollResult.rolls, partySize: partyB.length, sides: partyB_RollResult.sides }  // <-- 新增 sides
+            partyA_Details: { rolls: partyA_RollResult.rolls, partySize: partyA.length, sides: 20 },
+            partyB_Details: { rolls: partyB_RollResult.rolls, partySize: partyB.length, sides: 20 }
         };
     },
 
@@ -706,22 +720,39 @@ const gameLogic = {
         // 根據GDD: 俘虜價值 = 該俘虜當前總生命值 × 1.5
         return Math.floor(hp * 1.5);
     },
-    //  重新命名並修改邏輯以處理陣列
+
     get selectedItems() {
         if (!this.merchant.selectedItemIds || this.merchant.selectedItemIds.length === 0) return [];
         const selectedSet = new Set(this.merchant.selectedItemIds);
         return this.merchant.goods.filter(g => selectedSet.has(g.id));
     },
-    //  重新命名並修改邏輯以計算總和
+
     get selectedItemsValue() {
-        return this.selectedItems.reduce((total, item) => total + this.calculateEquipmentValue(item), 0);
+        let totalValue = this.selectedItems.reduce((total, item) => total + this.calculateEquipmentValue(item), 0);
+        
+        // --- 應用「談判技巧」技能效果 ---
+        const skillId = 'tribe_negotiation';
+        if (this.player && this.player.learnedSkills[skillId]) {
+            const skillLevel = this.player.learnedSkills[skillId];
+            const skillData = SKILL_TREES.tribe.find(s => s.id === skillId);
+            const reduction = skillData.levels[skillLevel - 1].effect.price_reduction;
+            totalValue = Math.floor(totalValue * (1 - reduction));
+        }
+
+        return totalValue;
     },
+
+    get selectedCaptives() {
+        if (!this.merchant.selectedCaptiveIds || this.merchant.selectedCaptiveIds.length === 0) return [];
+        const selectedSet = new Set(this.merchant.selectedCaptiveIds);
+        // 從總俘虜名單中尋找
+        return this.captives.filter(c => selectedSet.has(c.id));
+    },
+
     get selectedCaptivesValue() {
-        return this.merchant.selectedCaptiveIds.reduce((total, id) => {
-            const captive = this.dungeonCaptives.find(c => c.id === id);
-            return total + (captive ? this.calculateCaptiveValue(captive) : 0);
-        }, 0);
+        return this.selectedCaptives.reduce((total, captive) => total + this.calculateCaptiveValue(captive), 0);
     },
+
     get canExecuteTrade() {
         //  更新判斷條件以適應複選
         return this.merchant.selectedItemIds.length > 0 && this.merchant.selectedCaptiveIds.length > 0 && this.selectedCaptivesValue >= this.selectedItemsValue;
@@ -827,7 +858,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.27 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.32 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1234,9 +1265,24 @@ const gameLogic = {
         // 修正後的懷孕與生產邏輯
         this.captives.forEach(c => {
             if (c.isPregnant) {
-                c.pregnancyTimer--;
-                if (c.pregnancyTimer <= 0) {
-                    this.giveBirth(c);
+                // --- 應用「繁衍的權能」技能效果 ---
+                let gaveBirthEarly = false;
+                const skillId = 'breed_breeding_authority';
+                if (this.player && this.player.learnedSkills[skillId]) {
+                    const skillData = SKILL_TREES.breeding.find(s => s.id === skillId);
+                    if (rollPercentage(skillData.levels[0].effect.chance * 100)) {
+                        this.logMessage('tribe', `在「繁衍的權能」影響下，${c.name} 的生產週期瞬間完成了！`, 'crit');
+                        this.giveBirth(c);
+                        gaveBirthEarly = true;
+                    }
+                }
+
+                // 如果沒有提早生產，才正常計算懷孕天數
+                if (!gaveBirthEarly) {
+                    c.pregnancyTimer--;
+                    if (c.pregnancyTimer <= 0) {
+                        this.giveBirth(c);
+                    }
                 }
             }
         });
@@ -1350,38 +1396,61 @@ const gameLogic = {
     
     getBuildingUpgradeCost(type) {
         const building = this.buildings[type];
-        if (!building) return { food: 0, wood: 0, stone: 0};
+        if (!building) return { food: 0, wood: 0, stone: 0 };
         const level = building.level;
-        const multiplier = Math.pow(2, level); // GDD註：地牢、倉庫、寢室、產房升級費用為前一級的兩倍
+        const multiplier = Math.pow(2, level);
+        let cost = { food: 0, wood: 0, stone: 0 };
 
-        switch(type) {
+        switch (type) {
             case 'dungeon':
                 if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
-                return { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
+                cost = { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
+                break;
             case 'maternity':
                 if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
-                return { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
+                cost = { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
+                break;
             case 'warehouse':
                 if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
-                return { food: 0, wood: 100 * multiplier, stone: 100 * multiplier }; // 初始花費 100木, 100礦
+                cost = { food: 0, wood: 100 * multiplier, stone: 100 * multiplier };
+                break;
             case 'barracks':
                 if (level >= 5) return { food: Infinity, wood: Infinity, stone: Infinity };
-                if (level === 0) return { food: 100, wood: 150, stone: 150 }; // 初始花費
-                    return { food: 100 * multiplier, wood: 150 * multiplier, stone: 150 * multiplier }; // 升級花費
+                cost = (level === 0)
+                    ? { food: 100, wood: 150, stone: 150 }
+                    : { food: 100 * multiplier, wood: 150 * multiplier, stone: 150 * multiplier };
+                break;
             case 'armory':
                 if (level >= 4) return { food: Infinity, wood: Infinity, stone: Infinity };
-                if (level === 0) return { food: 0, wood: 150, stone: 150 };
-                return { food: 0, wood: 150 * multiplier, stone: 150 * multiplier }; // 兵工廠升級費用沒有明確規則，暫定為兩倍
+                cost = (level === 0)
+                    ? { food: 0, wood: 150, stone: 150 }
+                    : { food: 0, wood: 150 * multiplier, stone: 150 * multiplier };
+                break;
             case 'trainingGround':
                 if (level === 0) return { food: 200, wood: 150, stone: 150 };
-                return { food: Infinity, wood: Infinity, stone: Infinity }; // 訓練場無法升級
+                return { food: Infinity, wood: Infinity, stone: Infinity };
             case 'merchantCamp':
-                    if (level >= 4) return { food: Infinity, wood: Infinity, stone: Infinity };
-                if (level === 0) return { food: 200, wood: 200, stone: 200 };
-                return { food: 200 * multiplier, wood: 200 * multiplier, stone: 200 * multiplier }; // 商人營地升級費用沒有明確規則，暫定為兩倍
+                if (level >= 4) return { food: Infinity, wood: Infinity, stone: Infinity };
+                cost = (level === 0)
+                    ? { food: 200, wood: 200, stone: 200 }
+                    : { food: 200 * multiplier, wood: 200 * multiplier, stone: 200 * multiplier };
+                break;
             default:
-                return {food: 0, wood: 0, stone: 0};
+                return cost;
         }
+
+        // --- 應用「建築學」技能效果 ---
+        const skillId = 'tribe_architecture';
+        if (this.player && this.player.learnedSkills[skillId]) {
+            const skillLevel = this.player.learnedSkills[skillId];
+            const skillData = SKILL_TREES.tribe.find(s => s.id === skillId);
+            const reduction = skillData.levels[skillLevel - 1].effect.cost_reduction;
+            cost.food = Math.floor(cost.food * (1 - reduction));
+            cost.wood = Math.floor(cost.wood * (1 - reduction));
+            cost.stone = Math.floor(cost.stone * (1 - reduction));
+        }
+        
+        return cost;
     },
     canAffordBuildingUpgrade(type) {
         const cost = this.getBuildingUpgradeCost(type);
@@ -1669,37 +1738,72 @@ const gameLogic = {
     giveBirth(mother) {
         if (!mother || !mother.stats) {
             this.logMessage('tribe', `一名孕母的資料異常，本次生產失敗！`, 'enemy');
-            if(mother) {
-                mother.isPregnant = false;
-                mother.pregnancyTimer = 0;
-            }
+            if(mother) { mother.isPregnant = false; mother.pregnancyTimer = 0; }
             return;
         }
 
-        const pStats = this.player.stats;
-        const mStats = mother.stats;
-        const newStats = {
-            strength: Math.floor(((pStats.strength || 0) + (mStats.strength || 0)) / 4 + (mStats.charisma || 0) / 4),
-            agility: Math.floor(((pStats.agility || 0) + (mStats.agility || 0)) / 4 + (mStats.charisma || 0) / 4),
-            intelligence: Math.floor(((pStats.intelligence || 0) + (mStats.intelligence || 0)) / 4 + (mStats.charisma || 0) / 4),
-            luck: Math.floor(((pStats.luck || 0) + (mStats.luck || 0)) / 4 + (mStats.charisma || 0) / 4)
-        };
-        const newName = `(${(mother.profession || '未知')}${(mother.name || '無名')}之子)哥布林`;
-        const newPartner = new Goblin(newName, newStats);
-        newPartner.maxHp = newPartner.calculateMaxHp(this.isStarving);
-        newPartner.currentHp = newPartner.maxHp;
+        let numberOfBirths = 1;
+        // --- 處理「多精卵」技能 ---
+        const polyspermySkillId = 'breed_polyspermy';
+        if (this.player && this.player.learnedSkills[polyspermySkillId]) {
+            const skillLevel = this.player.learnedSkills[polyspermySkillId];
+            const skillData = SKILL_TREES.breeding.find(s => s.id === polyspermySkillId);
+            const effect = skillData.levels[skillLevel - 1].effect;
+            
+            const roll = Math.random(); // 產生一個 0 到 1 之間的亂數
+            if (effect.triplets_chance && roll < effect.triplets_chance) {
+                numberOfBirths = 3;
+                this.logMessage('tribe', `奇蹟發生了！在「多精卵」的影響下，${mother.name} 誕下了三胞胎！`, 'crit');
+            } else if (roll < (effect.triplets_chance || 0) + effect.twins_chance) {
+                numberOfBirths = 2;
+                this.logMessage('tribe', `在「多精卵」的影響下，${mother.name} 誕下了雙胞胎！`, 'success');
+            }
+        }
 
-        // 【核心修改】直接將生產事件（包含母親和新生兒資訊）暫存起來，交給每日結算函式統一處理
-        this.postBattleBirths.push({ mother: mother, newborn: newPartner });
+        for (let i = 0; i < numberOfBirths; i++) {
+            const pStats = this.player.stats;
+            const mStats = mother.stats;
+            let newStats = {
+                strength: Math.floor(((pStats.strength || 0) + (mStats.strength || 0)) / 4 + (mStats.charisma || 0) / 4),
+                agility: Math.floor(((pStats.agility || 0) + (mStats.agility || 0)) / 4 + (mStats.charisma || 0) / 4),
+                intelligence: Math.floor(((pStats.intelligence || 0) + (mStats.intelligence || 0)) / 4 + (mStats.charisma || 0) / 4),
+                luck: Math.floor(((pStats.luck || 0) + (mStats.luck || 0)) / 4 + (mStats.charisma || 0) / 4)
+            };
 
-        // 更新母親的狀態
+            // --- 處理「優生學」技能 ---
+            const eugenicsSkillId = 'breed_eugenics';
+            if (this.player && this.player.learnedSkills[eugenicsSkillId]) {
+                const skillLevel = this.player.learnedSkills[eugenicsSkillId];
+                const skillData = SKILL_TREES.breeding.find(s => s.id === eugenicsSkillId);
+                const chance = skillData.levels[skillLevel - 1].effect.chance;
+
+                if (Math.random() < chance) {
+                    const rawStatSum = pStats.strength + pStats.agility + pStats.intelligence + pStats.luck;
+                    const bonusPoints = Math.floor(rawStatSum / 10);
+                    if (bonusPoints > 0) {
+                        this.logMessage('tribe', '在「優生學」的影響下，一名後代獲得了額外的潛力！', 'success');
+                        for (let j = 0; j < bonusPoints; j++) {
+                            const randomStat = ['strength', 'agility', 'intelligence', 'luck'][randomInt(0, 3)];
+                            newStats[randomStat]++;
+                        }
+                    }
+                }
+            }
+
+            const newName = `(${(mother.profession || '未知')}${(mother.name || '無名')}之子)哥布林`;
+            const newPartner = new Goblin(newName, newStats);
+            newPartner.maxHp = newPartner.calculateMaxHp(this.isStarving);
+            newPartner.currentHp = newPartner.maxHp;
+
+            this.postBattleBirths.push({ mother: mother, newborn: newPartner });
+        }
+
         mother.isPregnant = false;
         mother.pregnancyTimer = 0;
         mother.isMother = true;
         this.logMessage('tribe', `${mother.name} 現在開始在產房為部落貢獻奶水。`, 'info');
     },
 
-    //  這個全新的函式
     releaseCarriedCaptive(captiveId) {
         if (!this.currentRaid) return;
 
@@ -2538,40 +2642,37 @@ const gameLogic = {
     lootBuilding(building) {
         if(building.looted) return;
 
-        // --- 搜刮時被巡邏隊發現的機制 ---
         const zone = this.currentRaid.currentZone;
         const isInnerCity = zone.name.includes('內城') || zone.name === '王城';
         const patrolsExist = zone.enemies && zone.enemies.length > 0;
-
-        // 規則：只在內城/王城，且還有巡邏隊時，才進行此判斷
         if (isInnerCity && patrolsExist) {
             const patrolGroupCount = zone.enemies.length;
             const totalBuildingCount = zone.buildings.length;
-            
             if (totalBuildingCount > 0) {
-                // 根據 GDD 公式計算發現機率
                 const discoveryChance = (patrolGroupCount / (totalBuildingCount * 4)) * 100;
-
                 if (rollPercentage(discoveryChance)) {
                     this.logMessage('raid', `你搜刮 ${building.type} 的聲音太大，驚動了附近的一支巡邏隊！`, 'enemy');
-                    
-                    // 隨機選擇一支巡邏隊進行戰鬥
                     const patrolToFight = zone.enemies[randomInt(0, patrolGroupCount - 1)];
-                    
-                    // 開始一場強制戰鬥（敵人先攻）
                     this.startCombat(patrolToFight, true);
-                    
-                    // 中斷搜刮，玩家不會獲得資源
                     return; 
                 }
             }
         }
 
         this.currentRaid.timeRemaining -= 3;
+        let foodFound = building.resources.food;
+        let woodFound = building.resources.wood;
+        let stoneFound = building.resources.stone;
 
-        const foodFound = building.resources.food;
-        const woodFound = building.resources.wood;
-        const stoneFound = building.resources.stone;
+        const deepScavengingId = 'raid_deep_scavenging';
+        if (this.player && this.player.learnedSkills[deepScavengingId]) {
+            const skillLevel = this.player.learnedSkills[deepScavengingId];
+            const skillData = SKILL_TREES.raiding.find(s => s.id === deepScavengingId);
+            const multiplier = skillData.levels[skillLevel - 1].effect.multiplier;
+            foodFound = Math.floor(foodFound * multiplier);
+            woodFound = Math.floor(woodFound * multiplier);
+            stoneFound = Math.floor(stoneFound * multiplier);
+        }
         
         this.resources.food = Math.min(this.foodCapacity, this.resources.food + foodFound);
         this.resources.wood = Math.min(this.woodCapacity, this.resources.wood + woodFound);
@@ -2586,19 +2687,28 @@ const gameLogic = {
         this.currentRaid.currentZone.resources.stone -= stoneFound;
         
         this.logMessage('raid', `搜刮了 ${building.type} (-3 分鐘)，找到食物 ${foodFound}, 木材 ${woodFound}, 礦石 ${stoneFound}。`, 'success');
-        
+
+        // --- 【新增】應用「重現的權能」技能效果 ---
+        const reappearingAuthId = 'raid_reappearing_authority';
+        if (this.player && this.player.learnedSkills[reappearingAuthId]) {
+            const skillData = SKILL_TREES.raiding.find(s => s.id === reappearingAuthId);
+            if (rollPercentage(skillData.levels[0].effect.chance * 100)) {
+                building.looted = false; // 關鍵：將搜刮狀態重置
+                building.postScoutText = ' (可再次搜刮)'; // 更新地圖提示文字
+                this.logMessage('raid', `在「重現的權能」影響下，${building.type} 內的資源似乎又重新出現了！`, 'crit');
+            }
+        }
+            
         const finalDropRate = 20 * (1 + this.player.getTotalStat('luck') / 100 * 0.5);
         if (rollPercentage(finalDropRate)) {
             if (this.player.inventory.length >= this.backpackCapacity) {
                 this.logMessage('raid', `你的背包已滿，無法拾取新的裝備！`, 'enemy');
-                this.checkRaidTime(); // 即使背包滿了也要檢查時間
+                this.checkRaidTime();
                 return;
             }
             const materialTiers = {
-                easy: { metal: [1, 3], wood: [1, 3] },
-                normal: { metal: [2, 4], wood: [2, 4] },
-                hard: { metal: [3, 5], wood: [3, 5] },
-                hell: { metal: [4, 6], wood: [4, 6] },
+                easy: { metal: [1, 3], wood: [1, 3] }, normal: { metal: [2, 4], wood: [2, 4] },
+                hard: { metal: [3, 5], wood: [3, 5] }, hell: { metal: [4, 6], wood: [4, 6] },
             };
             const raidDifficulty = this.currentRaid.difficulty;
             const possibleTiers = materialTiers[raidDifficulty];
@@ -2608,37 +2718,29 @@ const gameLogic = {
             const materialType = isMetal ? 'metal' : 'wood';
             const materialKey = Object.keys(EQUIPMENT_MATERIALS).find(key => EQUIPMENT_MATERIALS[key].tier === tier && EQUIPMENT_MATERIALS[key].type === materialType);
             
-            if (!materialKey) {
-                this.checkRaidTime();
-                return;
-            }
+            if (!materialKey) { this.checkRaidTime(); return; }
             const qualityKey = ['common', 'uncommon'][randomInt(0, 1)];
             const randomItemType = this.craftableTypes[randomInt(0, this.craftableTypes.length - 1)];
             const newItem = this.createEquipment(materialKey, qualityKey, randomItemType.baseName);
             
             if (this.player.inventory.length >= this.backpackCapacity) {
                 this.logMessage('raid', `背包已滿！你在廢墟中發現了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>，但需要整理背包。`, 'warning');
-                
                 this.modals.itemManagement = {
-                    isOpen: true,
-                    title: `搜刮管理 (背包已滿)`,
+                    isOpen: true, title: `搜刮管理 (背包已滿)`,
                     message: `請處理裝備，直到數量符合背包上限 (${this.backpackCapacity})。`,
-                    items: [...this.player.inventory, newItem],
-                    capacity: this.backpackCapacity,
+                    items: [...this.player.inventory, newItem], capacity: this.backpackCapacity,
                     onConfirm: () => {
                         this.player.inventory = [...this.modals.itemManagement.items];
                         this.logMessage('raid', `你整理完畢，繼續搜刮。`, 'success');
-                        this.checkRaidTime(); // 在這裡檢查時間
+                        this.checkRaidTime();
                     }
                 };
-                return; // 中斷函式，等待玩家決策
+                return;
             }
-
-            // 如果背包未滿，則正常拾取
             this.player.inventory.push(newItem);
             this.logMessage('raid', `你在廢墟中找到了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
         }
-        
+            
         this.checkRaidTime();
     },
 
@@ -2665,6 +2767,7 @@ const gameLogic = {
         this.currentRaid.currentZoneIndex++;
         this.logMessage('raid', `你深入到了 ${this.currentRaid.currentZone.name}。(-5 分鐘)`, 'player');
     },
+
     sneakPastGuards() {
         if (!this.currentRaid || this.currentRaid.currentZoneIndex !== 0) return;
         const guardPost = this.currentRaid.currentZone.buildings.find(b => b.type === '衛兵所');
@@ -2676,7 +2779,20 @@ const gameLogic = {
         const outerGuards = guardPost.occupants;
         const playerAgility = this.player.getTotalStat('agility', this.isStarving);
         const enemyAvgAgility = outerGuards.reduce((sum, e) => sum + e.stats.agility, 0) / outerGuards.length;
-        const successChance = 50 + (playerAgility - enemyAvgAgility) * 1.5 - ((this.player.party.length + 1) - outerGuards.length) * 2;
+        
+        // --- 計算「散開脫逃」技能效果 ---
+        let penalty = ((this.player.party.length + 1) - outerGuards.length) * 2;
+        if (penalty > 0) { // 只在有人數懲罰時才計算減免
+            const skillId = 'raid_dispersed_escape';
+            if (this.player && this.player.learnedSkills[skillId]) {
+                const skillLevel = this.player.learnedSkills[skillId];
+                const skillData = SKILL_TREES.raiding.find(s => s.id === skillId);
+                const reduction = skillData.levels[skillLevel - 1].effect.penalty_reduction;
+                penalty *= (1 - reduction);
+            }
+        }
+
+        const successChance = 50 + (playerAgility - enemyAvgAgility) * 1.5 - penalty;
 
         if (rollPercentage(successChance)) {
             this.currentRaid.timeRemaining -= 3;
@@ -2690,6 +2806,7 @@ const gameLogic = {
             this.checkRaidTime();
         }
     },
+
     handleRetreatAction() {
         if (!this.currentRaid) return;
 
@@ -2942,6 +3059,8 @@ const gameLogic = {
     },
 
     startCombat(enemyGroup, enemyFirstStrike = false, alliesOverride = null) {
+        this.resetAllSkillCooldowns();
+
         let combatAllies;
 
         // 檢查這是否為一場部落保衛戰 (非掠奪期間的戰鬥)
@@ -2978,42 +3097,70 @@ const gameLogic = {
         }
     },
 
+    resetAllSkillCooldowns() {
+        if (!this.player || !this.player.skills) return;
+        this.player.skills.forEach(skillInstance => {
+            skillInstance.currentCooldown = 0;
+        });
+    },
+
     async useSkill(skillId) {
         if (this.combat.isProcessing || this.combat.playerActionTaken) return;
-
+        
         const skillData = this.learnedActiveSkills.find(s => s.id === skillId);
         if (!skillData || skillData.currentCooldown > 0) {
-            this.showCustomAlert('技能尚未冷卻！');
+            this.showCustomAlert('技能尚未冷卻或無法使用！');
             return;
         }
-
+        
         this.combat.playerActionTaken = true;
         this.modals.combatSkills.isOpen = false;
+        this.logMessage('combat', `${this.player.name} 施放了技能 [${skillData.name}]！`, 'skill');
 
-        // 找到玩家技能列表中的對應技能來設定冷卻
+        // 1. 立即設定技能冷卻
         const playerSkillInstance = this.player.skills.find(s => s.id === skillId);
         if (playerSkillInstance) {
             playerSkillInstance.currentCooldown = this.player.getFinalCooldown(skillData);
         }
 
-        this.logMessage('combat', `${this.player.name} 施放了技能 [${skillData.name}]！`, 'skill');
+        // 2. 檢查「歸零的權能」
+        const zeroAuthId = 'combat_zero_authority';
+        if (this.player && this.player.learnedSkills[zeroAuthId] && playerSkillInstance) {
+            const zeroAuthData = SKILL_TREES.combat.find(s => s.id === zeroAuthId);
+            if (rollPercentage(zeroAuthData.levels[0].effect.chance * 100)) {
+                playerSkillInstance.currentCooldown = 0;
+                this.logMessage('combat', `「歸零的權能」觸發！[${skillData.name}] 的冷卻時間被立即清除了！`, 'crit');
+            }
+        }
 
-        // --- 處理不同技能的效果 ---
-        switch (skillId) {
-            case 'combat_powerful_strike':
-                const skillLevel = this.player.learnedSkills[skillId];
-                const multiplier = skillData.levels[skillLevel - 1].effect.multiplier;
-                
-                this.player.activeSkillBuff = {
-                    id: skillId,
-                    multiplier: multiplier
-                };
-                this.logMessage('combat', `${this.player.name} 的武器灌注了力量，下一次攻擊將造成毀滅性打擊！`, 'system');
-                
-                // 重要：施放強力一擊後，輪到敵人行動
-                await new Promise(res => setTimeout(res, 300));
-                this.executeTurn(false);
-                break;
+        // 3. 判斷是否為屬性攻擊技能，並立即執行攻擊
+        const strikeSkills = ['combat_powerful_strike', 'combat_agile_strike', 'combat_enchanted_strike', 'combat_lucky_strike'];
+        if (strikeSkills.includes(skillId)) {
+            const skillLevel = this.player.learnedSkills[skillId];
+            const effect = skillData.levels[skillLevel - 1].effect;
+            
+            // 設定一次性的 buff，供 calculateDamage 函式使用
+            this.player.activeSkillBuff = {
+                id: skillId,
+                multiplier: effect.multiplier,
+                stat: effect.stat || 'strength'
+            };
+
+            // 立即對隨機敵人發動攻擊
+            const livingEnemies = this.combat.enemies.filter(t => t.isAlive());
+            if (livingEnemies.length > 0) {
+                const target = livingEnemies[randomInt(0, livingEnemies.length - 1)];
+                await this.processAttack(this.player, target);
+            }
+        } 
+        // 未來其他主動技能的 'else if' 邏輯可以加在這裡
+
+        // 4. 技能施放完畢，輪到敵人行動
+        if (this.combat.enemies.filter(e => e.isAlive()).length > 0) {
+            await this.executeTurn(false);
+        } else {
+            // 如果敵人全滅，直接結束戰鬥
+            this.endCombat(true);
         }
     },
 
@@ -3614,12 +3761,25 @@ const gameLogic = {
 
     handlePartnerDeath(partnerId) {
         const partner = this.partners.find(p => p.id === partnerId);
-        if (partner) {
-            this.logMessage('combat', `你的夥伴 ${partner.name} 在戰鬥中陣亡了！他將永遠離開你...`, 'enemy');
-            this.partners = this.partners.filter(p => p.id !== partnerId);
-            this.player.party = this.player.party.filter(p => p.id !== partnerId);
-            this.player.updateHp(this.isStarving);
+        if (!partner) return;
+
+        // --- 應用「螺旋的權能」技能效果 ---
+        const skillId = 'tribe_spiral_authority';
+        if (this.player && this.player.learnedSkills[skillId]) {
+            const skillData = SKILL_TREES.tribe.find(s => s.id === skillId);
+            if (rollPercentage(skillData.levels[0].effect.chance * 100)) {
+                partner.currentHp = partner.maxHp; // 恢復滿血
+                this.logMessage('combat', `在「螺旋的權能」的守護下，${partner.name} 奇蹟般地從死亡邊緣歸來！`, 'crit');
+                // 直接 return，中斷後續的死亡移除邏輯
+                return; 
+            }
         }
+
+        // 如果技能沒觸發，則執行正常的死亡邏輯
+        this.logMessage('combat', `你的夥伴 ${partner.name} 在戰鬥中陣亡了！他將永遠離開你...`, 'enemy');
+        this.partners = this.partners.filter(p => p.id !== partnerId);
+        this.player.party = this.player.party.filter(p => p.id !== partnerId);
+        this.player.updateHp(this.isStarving);
     },
 
     async attemptSneakEscape() {
@@ -4021,6 +4181,8 @@ const gameLogic = {
 
     // 1. 在函式定義中，加入一個帶有「預設值」的參數
     finishCombatCleanup(returnToTribe = false) {
+        this.resetAllSkillCooldowns();
+
         if (this.currentRaid) {
             
             const defeatedEnemyIds = this.combat.enemies.filter(e => !e.isAlive()).map(e => e.id);// 找出所有戰敗的敵人ID
@@ -4980,27 +5142,39 @@ const gameLogic = {
     getGoblinYield(goblin, task) {
         if (!goblin) return 0;
 
-        const totalStats = goblin.getTotalStat('strength', this.isStarving) +  // 使用 getTotalStat 來計算包含裝備加成的總四圍
+        const totalStats = goblin.getTotalStat('strength', this.isStarving) +
                         goblin.getTotalStat('agility', this.isStarving) +
                         goblin.getTotalStat('intelligence', this.isStarving) +
                         goblin.getTotalStat('luck', this.isStarving);
         
-        const equipmentHp = goblin.getEquipmentBonus('hp');  // 統一獲取裝備血量加成
+        const equipmentHp = goblin.getEquipmentBonus('hp');
+        let yieldAmount = 0;
 
         switch (task) {
             case 'hunting': {
-                // 打獵的產量 = (總四圍 * 0.2) + (總傷害 * 0.2) + (裝備血量 * 0.05)
                 const damage = goblin.calculateDamage(this.isStarving);
-                return Math.floor(totalStats * 0.2 + damage * 0.2 + equipmentHp * 0.05);
+                yieldAmount = Math.floor(totalStats * 0.2 + damage * 0.2 + equipmentHp * 0.05);
+                break;
             }
             case 'logging':
             case 'mining': {
-                // 伐木和採礦的產量 = (總四圍 * 0.2) + (裝備血量 * 0.05)
-                return Math.floor(totalStats * 0.2 + equipmentHp * 0.05);
+                yieldAmount = Math.floor(totalStats * 0.2 + equipmentHp * 0.05);
+                break;
             }
             default:
                 return 0;
         }
+
+        // --- 應用「高效採集」技能效果 ---
+        const skillId = 'tribe_efficient_gathering';
+        if (this.player && this.player.learnedSkills[skillId]) {
+            const skillLevel = this.player.learnedSkills[skillId];
+            const skillData = SKILL_TREES.tribe.find(s => s.id === skillId);
+            const multiplier = skillData.levels[skillLevel - 1].effect.multiplier;
+            yieldAmount = Math.floor(yieldAmount * multiplier);
+        }
+        
+        return yieldAmount;
     },
 
     calculateDispatchYields() {
