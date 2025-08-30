@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.25</title>
+    <title>哥布林王國v5.27</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1009,15 +1009,20 @@
                                             </select>
                                         </div>
                                         <div>
-                                            <label>材質:</label>
-                                            <select x-model="modals.armory.craftingMaterial" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 w-full">
-                                                <template x-for="mat in availableMaterials" :key="mat.key">
-                                                    <option :value="mat.key" x-text="mat.name"></option>
+                                            <label>階級:</label>
+                                            <select x-model.number="modals.armory.craftingTier" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 w-full">
+                                                <template x-for="option in availableCraftingOptions" :key="option.tier">
+                                                    <option :value="option.tier" x-text="`${option.name} (第 ${option.tier} 階)`"></option>
                                                 </template>
                                             </select>
                                         </div>
-                                        <div x-show="modals.armory.craftingMaterial">
-                                            <p>花費: <span x-text="getCraftingCost().amount"></span> <span x-text="getCraftingCost().type"></span></p>
+                                        <div x-show="modals.armory.craftingTier > 0">
+                                            <p>
+                                                花費: 
+                                                <span class="text-green-400">食物 <span x-text="getCraftingCost().food"></span></span>, 
+                                                <span class="text-yellow-500">木材 <span x-text="getCraftingCost().wood"></span></span>, 
+                                                <span class="text-gray-400">礦石 <span x-text="getCraftingCost().stone"></span></span>
+                                            </p>
                                         </div>
                                         <button @click="craftItem()" class="btn btn-primary w-full" :disabled="!canAffordCraft">製作</button>
                                     </div>
@@ -1370,15 +1375,15 @@
                             </p>
                             <div class="space-y-4">
                                 <template x-for="partner in modals.partnerManagement.list" :key="partner.id">
-                                    <div class="p-3 border rounded" :class="partner.id === modals.partnerManagement.newbornId ? 'border-yellow-400 bg-gray-700/50' : 'border-gray-600'">
+                                    <div class="p-3 border rounded" :class="modals.partnerManagement.newbornId.includes(partner.id) ? 'border-yellow-400 bg-gray-700/50' : 'border-gray-600'">
                                         <div class="flex justify-between items-start">
                                             <div>
                                                 <p class="text-lg font-bold text-amber-200" x-text="partner.name"></p>
-                                                <p class="text-sm text-yellow-400" x-show="partner.id === modals.partnerManagement.newbornId">（新生兒）</p>
+                                                <p class="text-sm text-yellow-400" x-show="modals.partnerManagement.newbornId.includes(partner.id)">（新生兒）</p>
                                             </div>
                                             <input type="checkbox" :value="partner.id" x-model="modals.partnerManagement.selectedIds"
-                                                    :disabled="!modals.partnerManagement.selectedIds.includes(partner.id) && modals.partnerManagement.selectedIds.length >= modals.partnerManagement.limit"
-                                                    class="form-checkbox h-5 w-5 bg-gray-800 border-gray-500 text-green-500 focus:ring-green-500">
+                                                :disabled="!modals.partnerManagement.selectedIds.includes(partner.id) && modals.partnerManagement.selectedIds.length >= modals.partnerManagement.limit"
+                                                class="form-checkbox h-5 w-5 bg-gray-800 border-gray-500 text-green-500 focus:ring-green-500">
                                         </div>
                                         <div class="mt-2 pt-2 border-t border-gray-700 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                                             <div><strong>力量:</strong> <span x-text="partner.stats.strength"></span></div>
@@ -1457,7 +1462,7 @@
 
                 <!-- Raid Status Modal -->
                 <template x-if="currentlyEditingPartner">
-                    <div class="modal" x-show="modals.partnerEquipment.isOpen" x-cloak >
+                    <div id="partner-equipment-modal" class="modal" x-show="modals.partnerEquipment.isOpen" x-cloak >
                         <div class="modal-content !max-w-4xl game-container relative p-6 rounded-lg">
                             <h2 class="game-title font-medieval" x-text="`管理裝備 - ${currentlyEditingPartner.name}`"></h2>
                             <div class="pt-10 max-h-[80vh] overflow-y-auto">
@@ -1489,10 +1494,11 @@
                                             <button @click="modals.partnerEquipment.activeFilter = 'shield'" class="btn btn-xs" :class="{ 'btn-primary': modals.partnerEquipment.activeFilter === 'shield', 'btn-secondary': modals.partnerEquipment.activeFilter !== 'shield' }">盾牌</button>
                                             <button @click="modals.partnerEquipment.activeFilter = 'armor'" class="btn btn-xs" :class="{ 'btn-primary': modals.partnerEquipment.activeFilter === 'armor', 'btn-secondary': modals.partnerEquipment.activeFilter !== 'armor' }">鎧甲</button>
                                         </div>
-                                        <div>
+
+                                        <div x-show="screen !== 'raid'">
                                             <h3 class="text-xl font-bold mb-2 text-amber-200">部落倉庫 (<span x-text="filteredPartnerWarehouse.length"></span> / <span x-text="warehouseCapacity"></span>)</h3>
-                                                <div class="space-y-2 max-h-60 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
-                                                    <template x-for="item in filteredPartnerWarehouse" :key="item.id">
+                                            <div class="space-y-2 max-h-60 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
+                                                <template x-for="item in filteredPartnerWarehouse" :key="item.id">
                                                     <div class="p-3 border border-gray-600 rounded flex justify-between items-center">
                                                         <div>
                                                             <p :style="{ color: item.quality.color }" x-text="item.name"></p>
@@ -1581,6 +1587,7 @@
                                         <div class="p-3 border border-gray-700 rounded">
                                             <p class="font-bold text-amber-200" x-text="partner.name"></p>
                                             <p><strong>生命值:</strong> <span x-text="partner.currentHp"></span> / <span x-text="partner.calculateMaxHp(isStarving)"></span></p>
+                                            
                                             <div class="mt-2 pt-2 border-t border-gray-600 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                                                 <template x-for="stat in ['strength', 'agility', 'intelligence', 'luck']" :key="stat">
                                                     <div>
@@ -1589,10 +1596,14 @@
                                                     </div>
                                                 </template>
                                             </div>
+
                                             <div class="mt-2 pt-2 border-t border-gray-600 space-y-1 text-sm">
-                                                <p class="font-bold text-amber-200">裝備:</p>
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <p class="font-bold text-amber-200">裝備:</p>
+                                                    <button @click="openPartnerEquipment(partner.id)" class="btn btn-xs btn-secondary">管理裝備</button>
+                                                </div>
                                                 <template x-for="slot in Object.keys(partner.equipment)" :key="slot">
-                                                    <div>
+                                                    <div class="pl-2">
                                                         <span class="capitalize" x-text="EQUIPMENT_SLOTS[slot] || slot"></span>:
                                                         <span x-show="partner.equipment[slot]" :style="{ color: partner.equipment[slot]?.quality.color }" x-text="partner.equipment[slot]?.name"></span>
                                                         <span x-show="!partner.equipment[slot]" class="text-gray-500">-- 無 --</span>
@@ -1602,7 +1613,7 @@
                                         </div>
                                     </template>
                                     <p x-show="!player.party || player.party.length === 0" class="text-center text-gray-400">你沒有帶任何夥伴同行。</p>
-                                </div>    
+                                </div>
                                 <!-- equipment Tab -->    
                                 <div x-show="modals.raidStatus.activeTab === 'equipment'">
                                         <div class="grid grid-cols-2 gap-4">
