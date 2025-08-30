@@ -124,42 +124,9 @@
             }
 
             calculateDamage(isStarving = false) {
-                // 對於非玩家單位，傷害預設為其總力量值
-                return this.getTotalStat('strength', isStarving);
-            }
-        }
-
-        class Goblin extends Unit {
-            constructor(name, stats) {
-                super(name, stats, '哥布林');
-                this.hasBeenTrained = false;
-                this.equipment = {
-                    mainHand: null,
-                    offHand: null,
-                    chest: null,
-                };
-            }
-            getEquipmentBonus(stat) {
-                if (!this.equipment) return 0;
-                return Object.values(this.equipment).reduce((sum, item) => {
-                    return sum + (item && item.stats && item.stats[stat] ? item.stats[stat] : 0);
-                }, 0);
-            }
-
-            calculateMaxHp(isStarving = false) {
-                const totalStr = this.getTotalStat('strength', isStarving);
-                const totalAgi = this.getTotalStat('agility', isStarving);
-                const totalInt = this.getTotalStat('intelligence', isStarving);
-                const totalLuc = this.getTotalStat('luck', isStarving);
-                let maxHp = (totalStr + totalAgi + totalInt + totalLuc) * 6 + this.getEquipmentBonus('hp');
-                 if (this.equipment && this.equipment.mainHand && this.equipment.mainHand.baseName === '雙手劍') {
-                    maxHp = Math.floor(maxHp * 0.85);
-                }
-                return Math.max(1, maxHp);
-            }
-            calculateDamage(isStarving = false) {
                 const mainHand = this.equipment.mainHand;
                 let weaponDamage = 0;
+
                 if (mainHand) {
                     const baseDamage = mainHand.stats.damage || 0;
                     const weaponType = mainHand.baseName;
@@ -193,18 +160,55 @@
 
                     // 單手持有懲罰邏輯
                     if (hasShield && (weaponType === '長槍' || weaponType === '法杖')) {
-                        // 這就是您可以隨時調整的平衡係數
                         const oneHandedPenalty = 0.7; // 傷害變為 70%
                         weaponDamage = Math.floor(weaponDamage * oneHandedPenalty);
                     }
 
                 } else {
-                    weaponDamage = this.getTotalStat('strength', isStarving);
+                    // 徒手傷害邏輯
+                    const totalStats = this.getTotalStat('strength', isStarving) +
+                                    this.getTotalStat('agility', isStarving) +
+                                    this.getTotalStat('intelligence', isStarving) +
+                                    this.getTotalStat('luck', isStarving);
+                    weaponDamage = Math.floor(totalStats / 10);
                 }
+
                 const shieldBonus = this.equipment.offHand?.stats?.damage || 0;
                 const armorBonus = this.equipment.chest?.stats?.damage || 0;
+                
                 return weaponDamage + shieldBonus + armorBonus;
             }
+        }
+
+        class Goblin extends Unit {
+            constructor(name, stats) {
+                super(name, stats, '哥布林');
+                this.hasBeenTrained = false;
+                this.equipment = {
+                    mainHand: null,
+                    offHand: null,
+                    chest: null,
+                };
+            }
+            getEquipmentBonus(stat) {
+                if (!this.equipment) return 0;
+                return Object.values(this.equipment).reduce((sum, item) => {
+                    return sum + (item && item.stats && item.stats[stat] ? item.stats[stat] : 0);
+                }, 0);
+            }
+
+            calculateMaxHp(isStarving = false) {
+                const totalStr = this.getTotalStat('strength', isStarving);
+                const totalAgi = this.getTotalStat('agility', isStarving);
+                const totalInt = this.getTotalStat('intelligence', isStarving);
+                const totalLuc = this.getTotalStat('luck', isStarving);
+                let maxHp = (totalStr + totalAgi + totalInt + totalLuc) * 6 + this.getEquipmentBonus('hp');
+                 if (this.equipment && this.equipment.mainHand && this.equipment.mainHand.baseName === '雙手劍') {
+                    maxHp = Math.floor(maxHp * 0.85);
+                }
+                return Math.max(1, maxHp);
+            }
+            
             updateHp(isStarving = false) {
                 const oldMaxHp = this.maxHp;
                 this.maxHp = this.calculateMaxHp(isStarving);
@@ -261,6 +265,14 @@
                 const finalCd = skill.baseCooldown - intReduction - quickCooldownLevel;
 
                 return Math.max(skill.minCooldown || 1, finalCd);
+            }
+
+            getFinalDuration(skill) {
+                if (!skill || !skill.baseDuration) return 0;
+                // 根據GDD：最終持續時間 = 基礎持續時間 + floor(有效智力 / 80)
+                const effectiveInt = this.getEffectiveIntelligence();
+                const intBonus = Math.floor(effectiveInt / 80);
+                return skill.baseDuration + intBonus;
             }
 
             getPartyBonus(stat) {
@@ -510,20 +522,6 @@
                 
                 // 4. 計算最終總值
                 let total = Math.floor((baseValue + flatBonus) * multiplier);
-
-                // 檢查「集團戰略」主動 BUFF
-                if (this.statusEffects) { 
-                    const groupTacticsBuff = this.statusEffects.find(e => e.type === 'group_tactics_buff');
-                    if (groupTacticsBuff) {
-                        const skillData = SKILL_TREES.combat.find(s => s.id === 'tribe_01');
-                        const skillLevelData = skillData.levels[groupTacticsBuff.level - 1];
-                        if (skillLevelData) {
-                            const partyRawBonus = this.party.reduce((sum, p) => sum + (p.stats[stat] || 0), 0);
-                            const activeBonus = Math.floor(partyRawBonus * skillLevelData.active);
-                            total += activeBonus; // 將主動加成疊加上去
-                        }
-                    }
-                }
                 
                 total = Math.max(0, total);
 
@@ -601,53 +599,10 @@
                 this.currentHp = Math.max(0, this.currentHp);
             }
             calculateDamage(isStarving = false) {
-                const mainHand = this.equipment.mainHand;
-                let weaponDamage = 0;
-                if (mainHand) {
-                    const baseDamage = mainHand.stats.damage || 0;
-                    const weaponType = mainHand.baseName;
-                    let mainStatValue = 0;
-                    
-                    const hasShield = this.equipment.offHand?.baseName === '盾';
+                // 步驟 1: 使用 super 關鍵字，直接呼叫父類別(Unit)的通用傷害計算方法來取得基礎傷害
+                let finalDamage = super.calculateDamage(isStarving);
 
-                    switch (weaponType) {
-                        case '劍':
-                        case '雙手劍':
-                            mainStatValue = this.getTotalStat('strength', isStarving);
-                            weaponDamage = mainStatValue + baseDamage;
-                            if (weaponType === '雙手劍') weaponDamage = Math.floor(weaponDamage * 1.5);
-                            break;
-                        case '長槍':
-                            mainStatValue = this.getTotalStat('luck', isStarving);
-                            weaponDamage = mainStatValue + baseDamage;
-                            break;
-                        case '弓':
-                            mainStatValue = this.getTotalStat('agility', isStarving);
-                            weaponDamage = mainStatValue + baseDamage;
-                            break;
-                        case '法杖':
-                            mainStatValue = this.getTotalStat('intelligence', isStarving);
-                            weaponDamage = mainStatValue + baseDamage;
-                            break;
-                        default:
-                            mainStatValue = this.getTotalStat('strength', isStarving);
-                            weaponDamage = mainStatValue;
-                    }
-
-                    // 單手持有懲罰邏輯
-                    if (hasShield && (weaponType === '長槍' || weaponType === '法杖')) {
-                        // 這就是您可以隨時調整的平衡係數
-                        const oneHandedPenalty = 0.7; // 傷害變為 70%
-                        weaponDamage = Math.floor(weaponDamage * oneHandedPenalty);
-                    }
-
-                } else {
-                    weaponDamage = this.getTotalStat('strength', isStarving);
-                }
-                const shieldBonus = this.equipment.offHand?.stats?.damage || 0;
-                const armorBonus = this.equipment.chest?.stats?.damage || 0;
-                return weaponDamage + shieldBonus + armorBonus;
-                
+                // 步驟 2: 在基礎傷害上，疊加玩家特有的技能效果
                 if (this.activeSkillBuff && this.activeSkillBuff.id === 'combat_powerful_strike') {
                     const totalStrength = this.getTotalStat('strength', isStarving);
                     const bonusDamage = Math.floor(totalStrength * this.activeSkillBuff.multiplier);
@@ -656,6 +611,9 @@
                     // 在 gameLogic 中會 log 訊息，這裡先清除 buff
                     this.activeSkillBuff = null; 
                 }
+                
+                // 步驟 3: 返回最終計算結果
+                return finalDamage;
             }
         }
         
@@ -695,50 +653,6 @@
 
                 // 敵人不受飢餓影響，但保留 isStarving 參數以維持函式簽名一致
                 return isStarving ? Math.floor(total * 0.75) : total;
-            }
-
-            // 從 Goblin 類別複製過來的函式
-            calculateDamage(isStarving = false) {
-                const mainHand = this.equipment.mainHand;
-                let weaponDamage = 0;
-                if (mainHand) {
-                    const baseDamage = mainHand.stats.damage || 0;
-                    const weaponType = mainHand.baseName;
-                    let mainStatValue = 0;
-                    const hasShield = this.equipment.offHand?.baseName === '盾';
-
-                    switch (weaponType) {
-                        case '劍': case '雙手劍':
-                            mainStatValue = this.getTotalStat('strength', isStarving);
-                            weaponDamage = mainStatValue + baseDamage;
-                            if (weaponType === '雙手劍') weaponDamage = Math.floor(weaponDamage * 1.5);
-                            break;
-                        case '長槍':
-                            mainStatValue = this.getTotalStat('luck', isStarving);
-                            weaponDamage = mainStatValue + baseDamage;
-                            break;
-                        case '弓':
-                            mainStatValue = this.getTotalStat('agility', isStarving);
-                            weaponDamage = mainStatValue + baseDamage;
-                            break;
-                        case '法杖':
-                            mainStatValue = this.getTotalStat('intelligence', isStarving);
-                            weaponDamage = mainStatValue + baseDamage;
-                            break;
-                        default:
-                            mainStatValue = this.getTotalStat('strength', isStarving);
-                            weaponDamage = mainStatValue;
-                    }
-                    if (hasShield && (weaponType === '長槍' || weaponType === '法杖')) {
-                        const oneHandedPenalty = 0.7;
-                        weaponDamage = Math.floor(weaponDamage * oneHandedPenalty);
-                    }
-                } else {
-                    weaponDamage = this.getTotalStat('strength', isStarving);
-                }
-                const shieldBonus = this.equipment.offHand?.stats?.damage || 0;
-                const armorBonus = this.equipment.chest?.stats?.damage || 0;
-                return weaponDamage + shieldBonus + armorBonus;
             }
 
             // 一個簡易版的 updateHp

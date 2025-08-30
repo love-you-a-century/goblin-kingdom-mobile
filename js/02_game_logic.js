@@ -41,20 +41,20 @@ const gameLogic = {
 
     performAbilityContest(partyA, partyB) {
         const partyA_Stats = this.getPartyAverageStats(partyA);
-        const partyA_DiceCount = Math.max(1, Math.floor(partyA_Stats.average / 10));
-        const partyA_RollResult = rollDice(`${partyA_DiceCount}d10`); // <-- 變數改名
-        const partyA_Value = partyA_RollResult.total + partyA.length; // <-- 使用 .total
+        const partyA_DiceCount = Math.max(1, Math.floor(partyA_Stats.average / 20)); // <-- 修改為 / 20
+        const partyA_RollResult = rollDice(`${partyA_DiceCount}d20`); // <-- 修改為 d20
+        const partyA_Value = partyA_RollResult.total + partyA.length;
 
         const partyB_Stats = this.getPartyAverageStats(partyB);
-        const partyB_DiceCount = Math.max(1, Math.floor(partyB_Stats.average / 10));
-        const partyB_RollResult = rollDice(`${partyB_DiceCount}d10`); // <-- 變數改名
-        const partyB_Value = partyB_RollResult.total + partyB.length; // <-- 使用 .total
+        const partyB_DiceCount = Math.max(1, Math.floor(partyB_Stats.average / 20)); // <-- 修改為 / 20
+        const partyB_RollResult = rollDice(`${partyB_DiceCount}d20`); // <-- 修改為 d20
+        const partyB_Value = partyB_RollResult.total + partyB.length;
 
         return {
             partyA_Value,
             partyB_Value,
-            partyA_Details: { rolls: partyA_RollResult.rolls, partySize: partyA.length }, // <-- 傳遞 .rolls
-            partyB_Details: { rolls: partyB_RollResult.rolls, partySize: partyB.length }  // <-- 傳遞 .rolls
+            partyA_Details: { rolls: partyA_RollResult.rolls, partySize: partyA.length, sides: partyA_RollResult.sides }, // <-- 新增 sides
+            partyB_Details: { rolls: partyB_RollResult.rolls, partySize: partyB.length, sides: partyB_RollResult.sides }  // <-- 新增 sides
         };
     },
 
@@ -328,7 +328,7 @@ const gameLogic = {
         barracks: { subTab: 'manage', selectedPartyIds: [] },
         partnerEquipment: { isOpen: false, partnerId: null, activeFilter: 'all' },
         warehouse: { subTab: 'manage', activeFilter: 'all' },
-        armory: { subTab: 'craft', craftingType: '劍', craftingMaterial: 'iron' },
+        armory: { subTab: 'craft', craftingType: '劍', craftingTier: 1 },
         maternity: { subTab: 'manage' },
         merchant: { isOpen: false },
         scoutInfo: { isOpen: false, target: null, emptyBuildingMessage: '' },
@@ -827,7 +827,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.25 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.27 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1228,6 +1228,8 @@ const gameLogic = {
         // --- 日常事件 ---
         this.day++;
         this.logMessage('tribe', `--- 第 ${this.day} 天 ---`, 'system');
+
+        this.postBattleBirths = []; 
         
         // 修正後的懷孕與生產邏輯
         this.captives.forEach(c => {
@@ -1238,6 +1240,33 @@ const gameLogic = {
                 }
             }
         });
+
+        if (this.postBattleBirths.length > 0) {
+            const newborns = this.postBattleBirths.map(b => b.newborn);
+            if ((this.partners.length + newborns.length) > this.partnerCapacity) {
+                // 情況一：寢室已滿，建立一個包含所有舊夥伴與所有新夥伴的決策
+                this.logMessage('tribe', `有 ${newborns.length} 個新生命誕生了，但寢室已滿！您需要做出選擇...`, 'warning');
+                this.pendingDecisions.push({
+                    type: 'partner',
+                    list: [...this.partners, ...newborns],
+                    limit: this.partnerCapacity,
+                    context: { newborns: this.postBattleBirths } // 將所有新生兒資訊傳入
+                });
+            } else {
+                // 情況二：寢室空間足夠，將所有新生兒直接加入部落
+                this.postBattleBirths.forEach(birth => {
+                    this.partners.push(birth.newborn);
+                    this.player.skillPoints++;
+                    this.logMessage('tribe', `${birth.mother.name} 誕下了一個新的哥布林夥伴：${birth.newborn.name}！你獲得了 1 點技能點。`, 'success');
+                    // 觸發第一次教學
+                    if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
+                        this.triggerTutorial('firstBirth');
+                    }
+                });
+            }
+            // 無論如何，處理完後清空暫存列表
+            this.postBattleBirths = [];
+        }
 
         const milkProduced = this.mothers.filter(m => !m.isPregnant).reduce((total, mother) => {
             return total + Math.floor((mother.stats.charisma || 0) * 1);
@@ -1660,40 +1689,10 @@ const gameLogic = {
         newPartner.maxHp = newPartner.calculateMaxHp(this.isStarving);
         newPartner.currentHp = newPartner.maxHp;
 
-        // --- 核心修改開始 ---
-        // 檢查寢室是否已滿
-        const isBarracksFull = (this.partners.length + 1) > this.partnerCapacity;
+        // 【核心修改】直接將生產事件（包含母親和新生兒資訊）暫存起來，交給每日結算函式統一處理
+        this.postBattleBirths.push({ mother: mother, newborn: newPartner });
 
-        // 如果寢室已滿，並且當前正在一場復仇之戰中
-        if (isBarracksFull && this.combat.isUnescapable) {
-            // 則將這個出生事件暫存起來，等待戰後處理
-            this.logMessage('tribe', `${mother.name} 在戰鬥中誕下了一個孩子，但寢室已滿！戰鬥結束後需要您做出選擇...`, 'warning');
-            this.postBattleBirths.push({ mother: mother, newborn: newPartner });
-        } 
-        // 如果寢室已滿，但不在戰鬥中
-        else if (isBarracksFull) {
-            // 則按照原來的邏輯，立即加入待辦決策列表
-            this.logMessage('tribe', `${mother.name} 誕下了一個孩子，但寢室已滿！返回部落後需要您做出選擇...`, 'warning');
-            this.pendingDecisions.push({
-                type: 'partner',
-                list: [...this.partners, newPartner],
-                limit: this.partnerCapacity,
-                context: { mother: mother, newborn: newPartner }
-            });
-        } 
-        // 如果寢室空間充足
-        else {
-            // 直接加入夥伴列表
-            this.partners.push(newPartner);
-            this.player.skillPoints++;
-            this.logMessage('tribe', `${mother.name} 誕下了一個新的哥布林夥伴：${newName}！你獲得了 1 點技能點。`, 'success');
-            if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
-                this.triggerTutorial('firstBirth');
-            }
-        }
-        // --- 核心修改結束 ---
-
-        // 無論如何，母親的狀態都需要更新
+        // 更新母親的狀態
         mother.isPregnant = false;
         mother.pregnancyTimer = 0;
         mother.isMother = true;
@@ -1837,8 +1836,11 @@ const gameLogic = {
 
      // 一個純粹的內部函式，專門負責執行移除夥伴的最終動作
     _finalizePartnerRemoval(partnerId) {
-        const partnerName = this.getPartnerById(partnerId)?.name || '一名夥伴';
-        
+        // 【修正】直接在 partners 陣列中尋找夥伴，而不是呼叫不存在的函式
+        const partner = this.partners.find(p => p.id === partnerId);
+        if (!partner) return; // 如果找不到夥伴，就提前結束，增加程式碼穩健性
+        const partnerName = partner.name || '一名夥伴';
+
         // 1. 從所有隊伍指派中移除
         this._removePartnerFromAllAssignments(partnerId);
 
@@ -2907,10 +2909,9 @@ const gameLogic = {
         const playerParty = [this.player, ...this.player.party];
         const contestResult = this.performAbilityContest(playerParty, group);
 
-        // 【核心修改】根據 rolls 陣列來產生骰子
         await this.showDiceRollAnimation('潛行擄走判定', 
-            contestResult.partyA_Details.rolls.map(r => ({ sides: 10, result: r })), 
-            contestResult.partyB_Details.rolls.map(r => ({ sides: 10, result: r }))
+            contestResult.partyA_Details.rolls.map(r => ({ sides: contestResult.partyA_Details.sides, result: r })), 
+            contestResult.partyB_Details.rolls.map(r => ({ sides: contestResult.partyB_Details.sides, result: r }))
         );
 
         this.logMessage('raid', `我方潛行擲骰: ${contestResult.partyA_Value - contestResult.partyA_Details.partySize} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
@@ -3010,26 +3011,6 @@ const gameLogic = {
                 this.logMessage('combat', `${this.player.name} 的武器灌注了力量，下一次攻擊將造成毀滅性打擊！`, 'system');
                 
                 // 重要：施放強力一擊後，輪到敵人行動
-                await new Promise(res => setTimeout(res, 300));
-                this.executeTurn(false);
-                break;
-
-            case 'tribe_01': // 集團戰略的 ID
-                this.player.statusEffects.push({
-                    type: 'group_tactics_buff',
-                    duration: this.player.getFinalDuration(skillData), // 使用動態計算的持續時間
-                    level: this.player.learnedSkills[skillId] // 將當前技能等級也存入效果中
-                });
-                this.logMessage('combat', `${this.player.name} 的周身散發出領袖氣場，所有夥伴的能力都加持到了你身上！`, 'system');
-                
-                // 施放技能後，輪到敵人行動
-                await new Promise(res => setTimeout(res, 300));
-                this.executeTurn(false);
-                break;
-
-            // 未來可以在這裡添加其他技能的 case
-            default:
-                // 如果是其他類型的技能，可以在這裡處理，然後輪到敵人
                 await new Promise(res => setTimeout(res, 300));
                 this.executeTurn(false);
                 break;
@@ -3202,6 +3183,7 @@ const gameLogic = {
         const enemyTeam = isAllyAttacking ? this.combat.enemies : this.combat.allies;
         let currentTarget = target;
 
+        // 嘲諷判定 (邏輯不變)
         const taunter = enemyTeam.find(e => e.statusEffects.some(s => s.type === 'taunt'));
         if (taunter && taunter.id !== currentTarget.id && taunter.isAlive()) {
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${taunter.name} 吸引了！`, 'info');
@@ -3210,36 +3192,37 @@ const gameLogic = {
 
         const weapon = attacker.equipment.mainHand;
         const weaponType = weapon ? weapon.baseName : '徒手';
-        
         this.logMessage('combat', `${attacker.name} 使用 [${weaponType}] 攻擊 ${currentTarget.name}！`, logType);
 
+        // --- v2.5.1 命中判定 (修正骰子數量) ---
         const weaponJudgementMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence', '徒手': 'strength' };
         const judgementStat = weaponJudgementMap[weaponType] || 'strength';
 
+        // 攻擊方計算
         const attackerStatValue = attacker.getTotalStat(judgementStat, this.isStarving);
-        const attackerDiceCount = Math.max(1, Math.floor(attackerStatValue / 10)); 
-        const attackerRollResult = rollDice(`${attackerDiceCount}d10`); // <-- 變數改名
-        const accuracyBonus = (weapon && weapon.material.type === 'wood') ? (weapon.stats.accuracy || 0) : 0; 
-        const attackerTotal = attackerRollResult.total + accuracyBonus; // <-- 使用 .total
+        const attackerDiceCount = Math.max(1, Math.floor(attackerStatValue / 20)); // 屬性決定骰子數量
+        const attackerQualityBonus = attacker.equipment.mainHand?.qualityBonus || 0;
+        const attackerRoll = rollDice(`${attackerDiceCount}d20`); // 擲多顆骰子
+        const attackerTotal = attackerRoll.total + attackerQualityBonus; // 總和 + 品質加成
 
+        // 防守方計算
         const defenderStatValue = currentTarget.getTotalStat(judgementStat, this.isStarving);
-        const defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 10)); 
-        const defenderRollResult = rollDice(`${defenderDiceCount}d10`); // <-- 變數改名
-        const armor = currentTarget.equipment.chest;
-        const defenseDiceString = (armor && (armor.material.type === 'wood' || armor.type === 'leather' || armor.type === 'cloth')) ? (armor.stats.defenseDice || '0d6') : '0d6'; 
-        const defenseDiceResult = rollDice(defenseDiceString); // <-- 變數改名
-        const defenderTotal = defenderRollResult.total + defenseDiceResult.total; // <-- 使用 .total
+        const defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 20));
+        const defenderArmorBonus = currentTarget.equipment.chest?.qualityBonus || 0;
+        const defenderShieldBonus = currentTarget.equipment.offHand?.qualityBonus || 0;
+        const defenderRoll = rollDice(`${defenderDiceCount}d20`);
+        const defenderTotal = defenderRoll.total + defenderArmorBonus + defenderShieldBonus;
 
+        // 顯示擲骰動畫 (現在會傳入所有擲骰結果)
         if (attacker.id === this.player.id || currentTarget.id === this.player.id) {
-            // 【核心修改】根據 rolls 陣列來產生骰子
-            await this.showDiceRollAnimation('命中判定', 
-                attackerRollResult.rolls.map(r => ({ sides: 10, result: r })), 
-                defenderRollResult.rolls.map(r => ({ sides: 10, result: r }))
+            await this.showDiceRollAnimation('攻擊判定', 
+                attackerRoll.rolls.map(r => ({ sides: 20, result: r })), 
+                defenderRoll.rolls.map(r => ({ sides: 20, result: r }))
             );
         }
-
-        this.logMessage('combat', `> 攻擊方 (${judgementStat}): ${attackerRollResult.total} (擲骰) + ${accuracyBonus} (命中加成) = ${attackerTotal}`, 'info');
-        this.logMessage('combat', `> 防守方 (${judgementStat}): ${defenderRollResult.total} (擲骰) + ${defenseDiceResult.total} (防禦骰) = ${defenderTotal}`, 'info');
+        
+        this.logMessage('combat', `> 攻擊方 (${judgementStat}): ${attackerRoll.total}(擲骰) + ${attackerQualityBonus}(品質) = ${attackerTotal}`, 'info');
+        this.logMessage('combat', `> 防守方 (${judgementStat}): ${defenderRoll.total}(擲骰) + ${defenderArmorBonus}(防具) + ${defenderShieldBonus}(盾牌) = ${defenderTotal}`, 'info');
 
         if (attackerTotal <= defenderTotal) { 
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${currentTarget.name} 閃過了！`, logType === 'player' ? 'enemy' : 'player');
@@ -3248,49 +3231,47 @@ const gameLogic = {
         
         this.logMessage('combat', `攻擊命中！`, 'success');
 
-        let isBlocked = false;
+        // --- v2.5 傷害計算 (邏輯不變) ---
+        let damage = attacker.calculateDamage(this.isStarving);
+        const attackerArmorAttackBonus = attacker.equipment.chest?.stats.attackBonus || 0;
+        const attackerShieldAttackBonus = attacker.equipment.offHand?.stats.attackBonus || 0;
+        damage += attackerArmorAttackBonus + attackerShieldAttackBonus;
+
+        // --- v2.5 傷害減免 (邏輯不變) ---
+        const armor = currentTarget.equipment.chest;
+        if (armor && armor.stats.damageReduction) {
+            const reductionPercent = armor.stats.damageReduction;
+            damage = Math.floor(damage * (1 - reductionPercent / 100));
+            this.logMessage('combat', `> ${currentTarget.name} 的 ${armor.baseName} 減免了 ${reductionPercent}% 的傷害。`, 'info');
+        }
+
+        // --- v2.5.1 盾牌格擋 (新增動畫) ---
         const shield = currentTarget.equipment.offHand;
         if (shield && shield.baseName === '盾') {
-            const blockRollResult = rollDice('1d20'); // <-- 變數改名
-            const blockTarget = 15;
-            
-            if (currentTarget.id === this.player.id) {
-                const isPlayerBlocking = this.combat.allies.some(a => a.id === currentTarget.id);
-                // 【核心修改】根據 rolls 陣列來產生骰子
-                await this.showDiceRollAnimation('格擋判定',
-                    isPlayerBlocking ? blockRollResult.rolls.map(r => ({ sides: 20, result: r })) : [],
-                    !isPlayerBlocking ? blockRollResult.rolls.map(r => ({ sides: 20, result: r })) : []
+            const blockRoll = rollDice('1d20').total;
+            const blockTarget = shield.stats.blockTarget || 99;
+
+            // 【新增】顯示格擋擲骰動畫
+            if (attacker.id === this.player.id || currentTarget.id === this.player.id) {
+                await this.showDiceRollAnimation('格擋判定', 
+                    [], // 攻擊方沒有擲骰
+                    [{ sides: 20, result: blockRoll }] // 只有防守方擲骰
                 );
             }
-
-            this.logMessage('combat', `> ${currentTarget.name} 進行格擋判定: 擲出 ${blockRollResult.total} (目標值 >= ${blockTarget})`, 'info');
-            if (blockRollResult.total >= blockTarget) { // <-- 使用 .total
-                isBlocked = true; 
-                this.logMessage('combat', `${currentTarget.name} 成功格擋了攻擊！`, 'skill');
+            
+            this.logMessage('combat', `> ${currentTarget.name} 進行格擋判定: 擲出 ${blockRoll} (目標值 >= ${blockTarget})`, 'info');
+            
+            if (blockRoll >= blockTarget) {
+                damage = Math.floor(damage * 0.75);
+                this.logMessage('combat', `${currentTarget.name} 成功格擋了攻擊，傷害大幅降低！`, 'skill');
             }
         }
 
-        let damage = weapon ? (weapon.stats.damage || 0) : attacker.getTotalStat('strength');
-        const attackerShield = attacker.equipment.offHand;
-        if (attackerShield && attackerShield.baseName === '盾' && attackerShield.material.type === 'metal') {
-            damage += attackerShield.stats.damage || 0;
-        }
-
-        if (armor && armor.material.type === 'metal') {
-            const soakDiceString = armor.stats.soakDice || '0d6';
-            const soakResult = rollDice(soakDiceString); // <-- 變數改名
-            this.logMessage('combat', `> ${currentTarget.name} 的金屬甲吸收了 ${soakResult.total} 點傷害 (${soakDiceString})`, 'info');
-            damage -= soakResult.total; // <-- 使用 .total
-        }
-        
-        if (isBlocked) {
-            damage = Math.floor(damage * 0.5); 
-        }
-        
-        const finalDamage = Math.max(0, damage); 
+        const finalDamage = Math.max(0, Math.floor(damage)); 
         currentTarget.currentHp = Math.max(0, currentTarget.currentHp - finalDamage);
         this.logMessage('combat', `${attacker.name} 對 ${currentTarget.name} 造成了 ${finalDamage} 點傷害。`, isAllyAttacking ? 'player' : 'enemy');
 
+        // 後續處理 (邏輯不變)
         if (!currentTarget.isAlive()) {
             this.logMessage('combat', `${currentTarget.name} 被擊敗了！`, 'system');
             if (!isAllyAttacking) {
@@ -3548,47 +3529,62 @@ const gameLogic = {
             enemy.currentHp = enemy.maxHp;
         }
     },
+
     createEquipment(materialKey, qualityKey, baseName, specialAffix = null, forceNoAffix = false) {
         const material = EQUIPMENT_MATERIALS[materialKey];
         const quality = EQUIPMENT_QUALITIES[qualityKey];
+        // 從新的 craftableTypes 中查找物品基礎資訊
         const baseItem = this.craftableTypes.find(t => t.baseName === baseName);
         
+        // 建立一個基礎的 Equipment 物件
         const newItem = new Equipment(baseItem.baseName, baseItem.type, baseItem.slot, material, quality, specialAffix);
         
-        // --- 核心修改開始 ---
+        // 將品質加成直接儲存在裝備物件上，供戰鬥時使用
+        newItem.qualityBonus = quality.qualityBonus;
+
+        // --- v2.5 規則：根據類型和材質等級賦予基礎數值 ---
+        const tier = material.tier;
         let baseStats = {};
-        // 根據物品類型和材質，從新的 GDD 數據中獲取基礎屬性
+
         if (baseItem.type === 'weapon') {
-            if (material.type === 'metal') {
-                baseStats = METAL_WEAPON_STATS[baseName]?.[material.tier] || {};
-            } else if (material.type === 'wood') {
-                baseStats = WOOD_WEAPON_STATS[baseName]?.[material.tier] || {};
+            if (baseItem.baseName === '盾') {
+                // 從 SHIELD_STATS 獲取盾牌數值
+                baseStats = { 
+                    blockTarget: SHIELD_STATS[tier].blockTarget,
+                    attackBonus: SHIELD_STATS[tier].attackBonus
+                };
+            } else {
+                // 從 WEAPON_STATS 獲取武器傷害
+                baseStats = { damage: WEAPON_STATS[baseItem.baseName][tier] };
             }
         } else if (baseItem.type === 'armor') {
-            // 這裡我們假設 '鎧甲' 根據材質決定其類型
-            if (material.type === 'metal') {
-                baseStats = METAL_ARMOR_STATS[material.tier] || {};
-            } else if (material.type === 'wood') {
-                baseStats = WOOD_ARMOR_STATS[material.tier] || {};
+            // 根據 armorType 決定要查詢哪張表
+            switch(baseItem.armorType) {
+                case 'plate':
+                    baseStats = {
+                        attackBonus: PLATE_ARMOR_STATS[tier].attackBonus,
+                        damageReduction: PLATE_ARMOR_STATS[tier].damageReduction
+                    };
+                    break;
+                case 'leather':
+                    baseStats = {
+                        damageReduction: LEATHER_ARMOR_STATS[tier].damageReduction,
+                        allStats: LEATHER_ARMOR_STATS[tier].allStats
+                    };
+                    break;
+                case 'cloth':
+                    baseStats = {
+                        damageReduction: CLOTH_ARMOR_STATS[tier].damageReduction,
+                        allStats: CLOTH_ARMOR_STATS[tier].allStats
+                    };
+                    break;
             }
-            // 未來若新增皮甲/布甲，可以在此擴充邏輯
         }
+        
+        // 將查詢到的基礎數值賦予 newItem.stats
+        newItem.stats = { ...baseStats };
 
-        // - 如果是數字 (如 damage, allStats)，則乘以品質係數
-        // - 如果是字串 (如 defenseDice)，則直接賦值
-        for (const stat in baseStats) {
-            const value = baseStats[stat];
-            if (typeof value === 'number') {
-                // 使用新的 bonus 屬性進行加減，並確保屬性值至少為 1
-                newItem.stats[stat] = Math.max(1, value + quality.bonus);
-            } else {
-                // 對於非數字屬性 (如 '2d6')，則直接賦值
-                newItem.stats[stat] = value;
-            }
-        }
-        // --- 核心修改結束 ---
-                               
-        // 如果不是特殊詛咒裝備，就生成標準詞綴 (此部分邏輯維持不變)
+        // --- 詞綴生成邏輯 (維持不變) ---
         if (!specialAffix && !forceNoAffix) {
             const affixCountRange = quality.affixes;
             const affixCount = randomInt(affixCountRange[0], affixCountRange[1]);
@@ -3611,8 +3607,8 @@ const gameLogic = {
             }
         }                  
         
+        // 重新生成名稱並返回
         newItem.name = newItem.generateName();
-        
         return newItem;
     },
 
@@ -3636,8 +3632,8 @@ const gameLogic = {
 
         // 【核心修改】根據 rolls 陣列來產生骰子
         await this.showDiceRollAnimation('脫離判定', 
-            contestResult.partyA_Details.rolls.map(r => ({ sides: 10, result: r })), 
-            contestResult.partyB_Details.rolls.map(r => ({ sides: 10, result: r }))
+            contestResult.partyA_Details.rolls.map(r => ({ sides: 20, result: r })), 
+            contestResult.partyB_Details.rolls.map(r => ({ sides: 20, result: r }))
         );
 
         this.logMessage('combat', `我方脫離擲骰: ${contestResult.partyA_Value - contestResult.partyA_Details.partySize} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
@@ -3926,9 +3922,10 @@ const gameLogic = {
         modal.list = list;
         modal.limit = limit;
         modal.context = context;
-        modal.newbornId = context.newborn.id;
-        // 預設選取所有舊的夥伴，不選新生兒
-        modal.selectedIds = list.filter(p => p.id !== context.newborn.id).map(p => p.id);
+        modal.newbornId = context.newborns.map(nb => nb.newborn.id); // 'newbornId' 欄位現在儲存一個 ID 陣列
+        const newbornIdSet = new Set(modal.newbornId);
+        modal.selectedIds = list.filter(p => !newbornIdSet.has(p.id)).map(p => p.id);
+
         modal.isOpen = true;
     },
 
@@ -3956,8 +3953,8 @@ const gameLogic = {
                     items: [...itemsToReturn],
                     capacity: availableSpace,
                     onConfirm: () => {
-                        // 當玩家在物品管理視窗處理完畢後，再執行最終的夥伴確認
-                        this.finalizePartnerSelection();
+                        // 讓它重新呼叫自己，進行再次檢查
+                        this.confirmPartnerSelectionDecision();
                     }
                 };
                 // 暫時關閉夥伴選擇視窗，讓位給物品管理視窗
@@ -3979,41 +3976,44 @@ const gameLogic = {
         // 如果不需要處理裝備或已處理完畢，直接執行最終確認
         this.finalizePartnerSelection();
     },
-    //   用於新生兒決策的最終執行函式
+
     finalizePartnerSelection() {
         const modal = this.modals.partnerManagement;
         const selectedSet = new Set(modal.selectedIds);
-        const { mother, newborn } = modal.context;
+        const allNewbornsContext = modal.context.newborns;
 
-        // 找出被放棄的夥伴
+        // 找出被放棄的夥伴 (包含舊夥伴和新生兒)
         const discardedPartners = modal.list.filter(p => !selectedSet.has(p.id));
         
         // 呼叫權威的移除函式來逐出這些夥伴
         discardedPartners.forEach(p => {
-            this.removePartner(p.id);
+            this.releasePartner(p.id);
         });
 
-        // 更新夥伴總列表 (因為 removePartner 已經處理了，這裡確保最終狀態一致)
+        // 更新夥伴總列表 (因為 releasePartner 已經處理了，這裡確保最終狀態一致)
         this.partners = this.partners.filter(p => selectedSet.has(p.id));
         
-        const wasNewbornKept = selectedSet.has(newborn.id);
-        
-        // 如果新生兒被留下來，則將其正式加入部落
-        if (wasNewbornKept) {
-            this.partners.push(newborn);
-            this.player.skillPoints++;
-            this.logMessage('tribe', `你為 ${newborn.name} 在寢室中騰出了空間！你獲得了 1 點技能點。`, 'success');
-             if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
+        // 找出所有被留下來的新生兒
+        const keptNewborns = allNewbornsContext.filter(ctx => selectedSet.has(ctx.newborn.id));
+
+        // 如果有任何新生兒被留下來，則將他們正式加入部落並給予獎勵
+        if (keptNewborns.length > 0) {
+            keptNewborns.forEach(ctx => {
+                this.partners.push(ctx.newborn);
+                this.player.skillPoints++;
+                this.logMessage('tribe', `你為 ${ctx.newborn.name} 在寢室中騰出了空間！你獲得了 1 點技能點。`, 'success');
+            });
+            if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
                 this.triggerTutorial('firstBirth');
             }
-        } else {
-            this.logMessage('tribe', `你決定放棄 ${mother.name} 的孩子，為更強的夥伴保留了位置。`, 'info');
-        }                  
+        }
         
-        mother.isPregnant = false;
-        mother.pregnancyTimer = 0;
-        mother.isMother = true;
-        this.logMessage('tribe', `${mother.name} 現在開始在產房為部落貢獻奶水。`, 'info');
+        // 找出所有被放棄的新生兒並記錄日誌
+        const discardedNewborns = allNewbornsContext.filter(ctx => !selectedSet.has(ctx.newborn.id));
+        if (discardedNewborns.length > 0) {
+            const discardedNames = discardedNewborns.map(ctx => ctx.mother.name + "的孩子").join('、');
+            this.logMessage('tribe', `你決定放棄 ${discardedNames}，為更強的夥伴保留了位置。`, 'info');
+        }
 
         modal.isOpen = false;
         this.player.updateHp(this.isStarving);
@@ -4423,81 +4423,120 @@ const gameLogic = {
     },
     
     craftableTypes: [
-        { baseName: '劍', type: 'weapon', slot: 'mainHand' },
-        { baseName: '雙手劍', type: 'weapon', slot: 'mainHand' },
-        { baseName: '長槍', type: 'weapon', slot: 'mainHand' },
-        { baseName: '弓', type: 'weapon', slot: 'mainHand' },
-        { baseName: '法杖', type: 'weapon', slot: 'mainHand' },
-        { baseName: '盾', type: 'weapon', slot: 'offHand' },
-        { baseName: '鎧甲', type: 'armor', slot: 'chest' },
+        // 武器
+        { baseName: '劍', type: 'weapon', slot: 'mainHand', materialCategory: 'metal' },
+        { baseName: '雙手劍', type: 'weapon', slot: 'mainHand', materialCategory: 'metal' },
+        { baseName: '長槍', type: 'weapon', slot: 'mainHand', materialCategory: 'wood' },
+        { baseName: '弓', type: 'weapon', slot: 'mainHand', materialCategory: 'wood' },
+        { baseName: '法杖', type: 'weapon', slot: 'mainHand', materialCategory: 'wood' },
+        { baseName: '盾', type: 'weapon', slot: 'offHand', materialCategory: 'metal' },
+        // 防具
+        { baseName: '鎧甲', type: 'armor', slot: 'chest', armorType: 'plate', materialCategory: 'metal' },
+        { baseName: '皮甲', type: 'armor', slot: 'chest', armorType: 'leather', materialCategory: 'leather' },
+        { baseName: '布服', type: 'armor', slot: 'chest', armorType: 'cloth', materialCategory: 'cloth' },
     ],
-    get availableMaterials() {
+
+    get availableCraftingOptions() {
         if (this.buildings.armory.level === 0) return [];
+
+        // 1. 取得當前兵工廠等級能製作的最高階級
         const tierMap = [0, 1, 3, 5, 7];
         const maxTier = tierMap[this.buildings.armory.level] || 0;
-        return Object.entries(EQUIPMENT_MATERIALS)
-            .filter(([key, mat]) => mat.tier <= maxTier)
-            .map(([key, mat]) => ({ key: key, name: mat.name }));
-    },
-    getCraftingCost() {
-        const materialKey = this.modals.armory.craftingMaterial;
-        if (!materialKey || !EQUIPMENT_MATERIALS[materialKey]) {
-            return { amount: 0, type: '' };
+        
+        // 2. 取得當前選擇的裝備類型，並找出它對應的材質分類 (metal, wood, etc.)
+        const selectedType = this.craftableTypes.find(t => t.baseName === this.modals.armory.craftingType);
+        if (!selectedType) return [];
+        const category = selectedType.materialCategory;
+
+        // 3. 遍歷所有材質，找出所有符合 分類(category) 和 最高階級(maxTier) 的材質
+        const options = [];
+        for (const key in EQUIPMENT_MATERIALS) {
+            const mat = EQUIPMENT_MATERIALS[key];
+            if (mat.category === category && mat.tier <= maxTier) {
+                options.push({
+                    tier: mat.tier,
+                    name: mat.name
+                });
+            }
         }
-        const material = EQUIPMENT_MATERIALS[materialKey];
-        return {
-            amount: material.cost,
-            type: material.type === 'metal' ? '礦石' : '木材'
-        };
+        
+        // 4. 按階級排序並回傳結果
+        return options.sort((a, b) => a.tier - b.tier);
     },
+
+    getCraftingCost() {
+        const tier = this.modals.armory.craftingTier;
+        if (!tier) return { food: 0, wood: 0, stone: 0 };
+        return CRAFTING_COSTS[tier] || { food: 0, wood: 0, stone: 0 };
+    },
+
     get canAffordCraft() {
         const cost = this.getCraftingCost();
-        if (cost.type === '礦石') {
-            return this.resources.stone >= cost.amount;
-        }
-        if (cost.type === '木材') {
-            return this.resources.wood >= cost.amount;
-        }
-        return false;
+        // 檢查所有資源是否都足夠
+        return this.resources.food >= cost.food && 
+            this.resources.wood >= cost.wood && 
+            this.resources.stone >= cost.stone;
     },
+
     craftItem() {
         if (!this.canAffordCraft) {
             this.showCustomAlert('資源不足！');
             return;
         }
-        // 將 equipmentCapacity 改為正確的 backpackCapacity，以正確檢查背包容量
         if (this.player.inventory.length >= this.backpackCapacity) {
             this.showCustomAlert('你的背包已滿，無法製作新裝備！');
             return;
         }
-        const cost = this.getCraftingCost();
-        if (cost.type === '礦石') {
-            this.resources.stone -= cost.amount;
-        } else {
-            this.resources.wood -= cost.amount;
+        
+        // --- 新的後台邏輯 ---
+        const typeName = this.modals.armory.craftingType;
+        const tier = this.modals.armory.craftingTier;
+
+        // 1. 根據類型名稱找到對應的 materialCategory
+        const craftableInfo = this.craftableTypes.find(t => t.baseName === typeName);
+        if (!craftableInfo) {
+            console.error("找不到可製作的類型:", typeName);
+            return;
         }
+        const category = craftableInfo.materialCategory;
+
+        // 2. 在所有材質中，尋找同時滿足 "階級" 和 "分類" 的那一個
+        const materialKey = Object.keys(EQUIPMENT_MATERIALS).find(key => {
+            const mat = EQUIPMENT_MATERIALS[key];
+            return mat.tier === tier && mat.category === category;
+        });
+
+        if (!materialKey) {
+            console.error(`找不到階級為 ${tier} 且分類為 ${category} 的材質。`);
+            this.showCustomAlert('發生內部錯誤，找不到對應的材質！');
+            return;
+        }
+        // --- 邏輯結束 ---
+
+        const cost = this.getCraftingCost();
+        this.resources.food -= cost.food;
+        this.resources.wood -= cost.wood;
+        this.resources.stone -= cost.stone;
 
         const roll = randomInt(1, 100);
         let qualityKey = 'worn';
-        if (roll <= 5) qualityKey = 'legendary';      // 機率為 5%
-        else if (roll <= 15) qualityKey = 'epic';     // 機率為 10%
-        else if (roll <= 32) qualityKey = 'rare';     // 機率為 17%
-        else if (roll <= 58) qualityKey = 'uncommon'; // 機率為 26%
-        else if (roll <= 93) qualityKey = 'common';   // 機率為 35%
-                                                    // 剩下 7% 為 worn
+        if (roll <= 5) qualityKey = 'legendary';
+        else if (roll <= 15) qualityKey = 'epic';
+        else if (roll <= 32) qualityKey = 'rare';
+        else if (roll <= 58) qualityKey = 'uncommon';
+        else if (roll <= 93) qualityKey = 'common';
 
         const newItem = this.createEquipment(
-            this.modals.armory.craftingMaterial,
+            materialKey, // 使用我們在後台找到的材質key
             qualityKey,
-            this.modals.armory.craftingType
+            typeName
         );
 
         this.player.inventory.push(newItem);
-        this.logMessage('tribe', `你成功製作了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
-
-        //   顯示一個包含詳細結果的提示框，給予玩家即時回饋
+        this.logMessage('tribe', `你花費 食物x${cost.food}, 木材x${cost.wood}, 礦石x${cost.stone} 成功製作了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
         this.showCustomAlert(`製作成功！\n你獲得了 [${newItem.name}]`);
     },
+
     decomposeItem(itemId) {
         if (this.buildings.armory.level === 0) {
             this.showCustomAlert('你需要先建造兵工廠才能分解裝備！');
@@ -4512,21 +4551,28 @@ const gameLogic = {
         if (itemIndex === -1) return;
 
         const item = sourceArray[itemIndex];
+        const tier = item.material.tier;
+        const originalCost = CRAFTING_COSTS[tier];
+        if (!originalCost) return;
 
-        const material = item.material;
+        // 根據兵工廠等級決定返還率
         const returnRate = [0.2, 0.3, 0.4, 0.5][this.buildings.armory.level - 1] || 0;
-        const resourcesBack = Math.floor(material.cost * returnRate);
+        
+        // 計算三種資源的返還量
+        const foodBack = Math.floor(originalCost.food * returnRate);
+        const woodBack = Math.floor(originalCost.wood * returnRate);
+        const stoneBack = Math.floor(originalCost.stone * returnRate);
 
-        if (material.type === 'metal') {
-            this.resources.stone += resourcesBack;
-            this.logMessage('tribe', `你分解了 [${item.name}]，回收了 ${resourcesBack} 礦石。`, 'info');
-        } else {
-            this.resources.wood += resourcesBack;
-            this.logMessage('tribe', `你分解了 [${item.name}]，回收了 ${resourcesBack} 木材。`, 'info');
-        }
+        // 增加資源
+        this.resources.food += foodBack;
+        this.resources.wood += woodBack;
+        this.resources.stone += stoneBack;
+
+        this.logMessage('tribe', `你分解了 [${item.name}]，回收了食物x${foodBack}, 木材x${woodBack}, 礦石x${stoneBack}。`, 'info');
 
         sourceArray.splice(itemIndex, 1);
     },
+
     openDiscardConfirm(itemId) {
         const item = this.player.inventory.find(i => i.id === itemId) || this.warehouseInventory.find(i => i.id === itemId);
         if (item) {
@@ -4558,43 +4604,46 @@ const gameLogic = {
     equipItem(itemId, targetUnit) {
         if (!targetUnit) return;
         
-        let itemIndex = this.player.inventory.findIndex(i => i.id === itemId);
-        let sourceArray = this.player.inventory;
-        if (itemIndex === -1) {
+        let itemIndex = -1;
+        let sourceArray = null;
+
+        // 先在玩家背包中尋找
+        itemIndex = this.player.inventory.findIndex(i => i.id === itemId);
+        sourceArray = this.player.inventory;
+
+        // 【核心修改】只有在非掠奪畫面時，才去倉庫中尋找
+        if (itemIndex === -1 && this.screen !== 'raid') {
             itemIndex = this.warehouseInventory.findIndex(i => i.id === itemId);
             sourceArray = this.warehouseInventory;
         }
-        if (itemIndex === -1) return;
+
+        if (itemIndex === -1) return; // 如果在哪都沒找到，就結束
 
         const itemToEquip = sourceArray[itemIndex];
         let slot = itemToEquip.slot; 
 
+        // (後續的裝備檢查與裝備邏輯維持不變)
         const mainHandWeapon = targetUnit.equipment.mainHand;
         const offHandItem = targetUnit.equipment.offHand;
-
-        // --- DLC 雙持系統檢查 ---
-        // 檢查點一：嘗試裝備第二把「劍」
+        
         if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName === '劍' && !offHandItem) {
             if (!this.dlc.hells_knights) {
                 this.showCustomAlert('需要「王國騎士團」DLC 才能雙持單手劍！');
                 return;
             }
         }
-        // 檢查點二：當主手已是「長槍」或「法杖」時，嘗試裝備「盾」
         if (itemToEquip.baseName === '盾' && mainHandWeapon && ['長槍', '法杖'].includes(mainHandWeapon.baseName)) {
             if (!this.dlc.hells_knights) {
                 this.showCustomAlert('需要「王國騎士團」DLC 才能將長槍或法杖與盾牌搭配使用！');
                 return;
             }
         }
-        // 檢查點三：當副手已是「盾」時，嘗試裝備「長槍」或「法杖」
         if (['長槍', '法杖'].includes(itemToEquip.baseName) && offHandItem?.baseName === '盾') {
             if (!this.dlc.hells_knights) {
                 this.showCustomAlert('需要「王國騎士團」DLC 才能將長槍或法杖與盾牌搭配使用！');
                 return;
             }
         }
-        // --- DLC 檢查結束 ---
 
         if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName === '劍' && !targetUnit.equipment.offHand) {
             slot = 'offHand';
@@ -4607,7 +4656,6 @@ const gameLogic = {
                 this.showCustomAlert(`裝備 ${mainHandWeapon.name} 時無法使用副手裝備！`);
                 return;
             }
-            // 這一段檢查現在由上面的DLC邏輯處理，但保留以防萬一
             if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName !== '劍') {
                 this.showCustomAlert('只有在主手裝備單手劍時，才能在副手裝備另一把劍！');
                 return;
@@ -4629,7 +4677,7 @@ const gameLogic = {
         sourceArray.splice(itemIndex, 1);
         
         if (targetUnit.updateHp) targetUnit.updateHp(this.isStarving);
-        this.logMessage('tribe', `${targetUnit.name} 裝備了 <span style="color:${itemToEquip.quality.color};">[${itemToEquip.name}]</span>。`, 'success');
+        this.logMessage(this.screen === 'raid' ? 'raid' : 'tribe', `${targetUnit.name} 裝備了 <span style="color:${itemToEquip.quality.color};">[${itemToEquip.name}]</span>。`, 'success');
     },
 
     unequipItem(slot, targetUnit, silent = false) {
@@ -4690,20 +4738,28 @@ const gameLogic = {
             this.warehouseInventory.push(item);
         }
     },
+
     getItemStatsString(item) {
         if (!item) return '';
         let parts = [];
-        // 顯示基礎屬性
+        
+        // --- v2.5: 顯示新的基礎屬性 ---
         if (item.stats && Object.keys(item.stats).length > 0) {
             const statsString = Object.entries(item.stats).map(([key, value]) => {
-                if (key === 'blockChance') {
-                    return `${STAT_NAMES[key] || key} +${value}%`;
-                }
-                return `${STAT_NAMES[key] || key} +${value}`;
+                const nameMap = {
+                    damage: '傷害',
+                    attackBonus: '攻擊加成',
+                    damageReduction: '傷害減免',
+                    allStats: '全屬性',
+                    blockTarget: '格擋目標值'
+                };
+                const unitMap = { damageReduction: '%' };
+                return `${nameMap[key] || key} +${value}${unitMap[key] || ''}`;
             }).join(', ');
             parts.push(statsString);
         }
-        // 顯示詞綴效果
+        
+        // --- 詞綴顯示邏輯 (維持不變) ---
         item.affixes.forEach(affix => {
             if (affix.type === 'stat') {
                 const effectString = affix.effects.map(e => {
@@ -4715,7 +4771,8 @@ const gameLogic = {
                 parts.push(`<span class="text-blue-400">${affix.name} (機率性效果)</span>`);
             }
         });
-        // 顯示特殊詛咒詞綴效果
+
+        // --- 特殊詛咒詞綴顯示邏輯 (維持不變) ---
         if (item.specialAffix) {
             const affixDesc = {
                 'strength_curse': '脫力(基礎力=0時+10力, 否則全能力-10)',
@@ -4732,6 +4789,7 @@ const gameLogic = {
 
         return parts.join('<br>');
     },
+
     get availablePartnersForDispatch() {
         // 取得所有未被派遣的夥伴
         const dispatchedIds = new Set([
@@ -4801,25 +4859,32 @@ const gameLogic = {
 
         const currentLevel = this.player.learnedSkills[skill.id] || 0;
         let infoParts = [];
+        
+        // --- 提前宣告 effectString，避免 undefined 錯誤 ---
+        let effectString = '';
 
         // --- 顯示當前等級或第一級的效果 ---
         const displayLevel = Math.max(1, currentLevel);
         const levelData = skill.levels[displayLevel - 1];
         
-        if (levelData && levelData.effect) {
-            let effectString = currentLevel > 0 ? `當前效果: ` : `效果: `;
+        if (levelData) {
+            // --- 根據不同技能的資料結構，獨立處理 ---
             switch (skill.id) {
                 case 'combat_powerful_strike':
-                    effectString += `+${Math.round(levelData.effect.multiplier * 100)}% 力量傷害`;
+                    if (levelData.effect) {
+                        effectString = (currentLevel > 0 ? `當前效果: ` : `效果: `) + `+${Math.round(levelData.effect.multiplier * 100)}% 力量傷害`;
+                    }
                     break;
                 case 'combat_quick_cooldown':
-                    effectString += `-${levelData.effect.value} 回合冷卻`;
+                    if (levelData.effect) {
+                        effectString = (currentLevel > 0 ? `當前效果: ` : `效果: `) + `-${levelData.effect.value} 回合冷卻`;
+                    }
                     break;
                 case 'tribe_01':
-                    effectString = `被動: +${Math.round(levelData.passive * 100)}% | 主動: +${Math.round(levelData.active * 100)}%`;
+                    if (levelData.passive !== undefined) {
+                        effectString = `被動: +${Math.round(levelData.passive * 100)}% 夥伴屬性加成`;
+                    }
                     break;
-                default:
-                    effectString = '';
             }
             if (effectString) infoParts.push(effectString);
         }
@@ -4828,13 +4893,13 @@ const gameLogic = {
             infoParts.push(`冷卻: ${this.player.getFinalCooldown(skill)} 回合`);
         }
         if (skill.baseDuration) {
-            const finalDuration = skill.baseDuration + Math.floor(this.player.getEffectiveIntelligence() / 80);
+            const finalDuration = this.player.getFinalDuration(skill);
             infoParts.push(`持續: ${finalDuration} 回合`);
         }
         
         let mainInfo = infoParts.join(' | ');
 
-        // --- 如果技能還沒滿級，則顯示下一級的效果 ---
+        // --- 如果技能還沒滿級，則顯示下一級的效果 (維持不變) ---
         if (currentLevel > 0 && currentLevel < skill.maxLevel) {
             const nextLevelData = skill.levels[currentLevel];
             let nextLevelEffect = '';
@@ -4846,7 +4911,7 @@ const gameLogic = {
                     nextLevelEffect = `-${nextLevelData.effect.value} 回合`;
                     break;
                 case 'tribe_01':
-                    nextLevelEffect = `+${Math.round(nextLevelData.passive * 100)}% / +${Math.round(nextLevelData.active * 100)}%`;
+                    nextLevelEffect = `+${Math.round(nextLevelData.passive * 100)}%`;
                     break;
             }
             if (nextLevelEffect) {
@@ -5012,23 +5077,27 @@ const gameLogic = {
     // 這是新的視覺化擲骰核心，它只負責“播動畫”，不處理“算結果”
     showDiceRollAnimation(title, playerRolls = [], opponentRolls = []) {
         return new Promise(resolve => {
-            const allRolls = [...playerRolls, ...opponentRolls];
-            
+            // 更新骰子內容
             this.modals.dice.sides.player = playerRolls.map(r => ({ ...r, isRolling: true }));
             this.modals.dice.sides.opponent = opponentRolls.map(r => ({ ...r, isRolling: true }));
             this.modals.dice.title = title;
+            
+            // 打開骰盤
             this.modals.dice.isOpen = true;
-            this.modals.dice.onComplete = resolve;
+            this.modals.dice.onComplete = resolve; // 設定動畫結束後的回呼
 
+            // 模擬擲骰動畫
             setTimeout(() => {
+                // 停止滾動，顯示結果
                 this.modals.dice.sides.player.forEach(r => r.isRolling = false);
                 this.modals.dice.sides.opponent.forEach(r => r.isRolling = false);
                 
+                // 讓玩家看清楚結果，再自動關閉
                 setTimeout(() => {
                     this.closeDiceModal();
-                }, 1200);
+                }, 1200); // 顯示結果後停留 1.2 秒
 
-            }, 1000);
+            }, 1000); // 擲骰動畫持續 1 秒
         });
     },
 };

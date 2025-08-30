@@ -37,20 +37,18 @@ const SKILL_TREES = {
         {
             id: 'tribe_01',
             name: '集團戰略',
-            description: '你將夥伴的力量化為己用。被動效果在非戰鬥時生效，主動效果需在戰鬥中施放。',
+            description: '你將夥伴的力量化為己用。被動地將所有夥伴總能力的百分比，轉化為哥布林王自身的額外能力。', // <-- 更新描述
             maxLevel: 5,
             dependencies: [],
-            type: 'hybrid',
-            combatActive: true,
-            baseDuration: 3,
-            baseCooldown: 15,
-            minCooldown: 1,
+            type: 'passive', // <-- 從 'hybrid' 改為 'passive'
+            combatActive: false, // <-- 從 true 改為 false
+            // 移除了 baseDuration, baseCooldown, minCooldown
             levels: [
-                { cost: 5,  passive: 0.1, active: 0.1 },
-                { cost: 10, passive: 0.2, active: 0.2 },
-                { cost: 15, passive: 0.3, active: 0.3 },
-                { cost: 20, passive: 0.4, active: 0.4 },
-                { cost: 25, passive: 0.5, active: 0.5 }
+                { cost: 5,  passive: 0.1 },
+                { cost: 10, passive: 0.2 },
+                { cost: 15, passive: 0.3 },
+                { cost: 20, passive: 0.4 },
+                { cost: 25, passive: 0.5 }
             ]
         },
     ],
@@ -140,63 +138,112 @@ const VISUAL_OPTIONS = {
 
 // --- 裝備系統常數 ---
 const EQUIPMENT_QUALITIES = {
-    worn:      { name: '破舊', color: '#9ca3af', bonus: -1, affixes: [0, 1] },
-    common:    { name: '普通', color: '#ffffff', bonus: 0,  affixes: [1, 1] },
-    uncommon:  { name: '精良', color: '#4ade80', bonus: 1,  affixes: [1, 2] },
-    rare:      { name: '稀有', color: '#60a5fa', bonus: 2,  affixes: [2, 2] },
-    epic:      { name: '史詩', color: '#a78bfa', bonus: 3,  affixes: [2, 3] },
-    legendary: { name: '傳說', color: '#f97316', bonus: 4,  affixes: [3, 3] },
+    worn:      { name: '破舊', color: '#9ca3af', qualityBonus: -1, affixes: [0, 0] },
+    common:    { name: '普通', color: '#ffffff', qualityBonus: 0,  affixes: [0, 1] },
+    uncommon:  { name: '精良', color: '#4ade80', qualityBonus: 1,  affixes: [1, 1] },
+    rare:      { name: '稀有', color: '#60a5fa', qualityBonus: 2,  affixes: [2, 2] },
+    epic:      { name: '史詩', color: '#a78bfa', qualityBonus: 3,  affixes: [3, 3] },
+    legendary: { name: '傳說', color: '#f97316', qualityBonus: 5,  affixes: [3, 4] },
 };
 
 const EQUIPMENT_MATERIALS = {
-    iron:   { name: '鐵', tier: 1, type: 'metal', cost: 10 },
-    copper: { name: '銅', tier: 2, type: 'metal', cost: 20 },
-    steel:  { name: '鋼', tier: 3, type: 'metal', cost: 40 },
-    silver: { name: '銀', tier: 4, type: 'metal', cost: 80 },
-    gold:   { name: '黃金', tier: 5, type: 'metal', cost: 160 },
-    mithril:{ name: '秘銀', tier: 6, type: 'metal', cost: 320 },
-    orichalcum: { name: '殞鐵', tier: 7, type: 'metal', cost: 640 },
-    pine:   { name: '松木', tier: 1, type: 'wood', cost: 10 },
-    ash:    { name: '白蠟木', tier: 2, type: 'wood', cost: 20 },
-    mahogany:{ name: '桃花心木', tier: 3, type: 'wood', cost: 40 },
-    rosewood:{ name: '紫檀木', tier: 4, type: 'wood', cost: 80 },
-    ebony:  { name: '烏木', tier: 5, type: 'wood', cost: 160 },
-    ironwood:{ name: '鐵木', tier: 6, type: 'wood', cost: 320 },
-    godwood: { name: '神木', tier: 7, type: 'wood', cost: 640 },
+    // --- 金屬 (Metal) ---
+    iron:       { name: '鐵',           tier: 1, type: 'metal', category: 'metal' },
+    copper:     { name: '銅',           tier: 2, type: 'metal', category: 'metal' },
+    steel:      { name: '鋼',           tier: 3, type: 'metal', category: 'metal' },
+    silver:     { name: '銀',           tier: 4, type: 'metal', category: 'metal' },
+    gold:       { name: '黃金',         tier: 5, type: 'metal', category: 'metal' },
+    mithril:    { name: '秘銀',         tier: 6, type: 'metal', category: 'metal' },
+    orichalcum: { name: '殞鐵',         tier: 7, type: 'metal', category: 'metal' },
+
+    // --- 木材 (Wood) ---
+    pine:       { name: '松木',         tier: 1, type: 'wood', category: 'wood' },
+    ash:        { name: '白蠟木',       tier: 2, type: 'wood', category: 'wood' },
+    mahogany:   { name: '桃花心木',     tier: 3, type: 'wood', category: 'wood' },
+    rosewood:   { name: '紫檀木',       tier: 4, type: 'wood', category: 'wood' },
+    ebony:      { name: '烏木',         tier: 5, type: 'wood', category: 'wood' },
+    ironwood:   { name: '鐵木',         tier: 6, type: 'wood', category: 'wood' },
+    godwood:    { name: '神木',         tier: 7, type: 'wood', category: 'wood' },
+
+    // --- 【新增】皮革 (Leather) ---
+    crude_hide:         { name: '粗製獸皮',     tier: 1, type: 'leather', category: 'leather' },
+    tanned_leather:     { name: '鞣製皮革',     tier: 2, type: 'leather', category: 'leather' },
+    hardened_leather:   { name: '硬化皮革',     tier: 3, type: 'leather', category: 'leather' },
+    studded_leather:    { name: '鑲釘皮革',     tier: 4, type: 'leather', category: 'leather' },
+    monster_leather:    { name: '魔獸皮革',     tier: 5, type: 'leather', category: 'leather' },
+    drakeskin_leather:  { name: '龍蜥皮革',     tier: 6, type: 'leather', category: 'leather' },
+    dragonscale_leather:{ name: '巨龍皮革',     tier: 7, type: 'leather', category: 'leather' },
+
+    // --- 【新增】布料 (Cloth) ---
+    linen:              { name: '亞麻',         tier: 1, type: 'cloth', category: 'cloth' },
+    wool:               { name: '羊毛',         tier: 2, type: 'cloth', category: 'cloth' },
+    reinforced_fiber:   { name: '強化纖維',     tier: 3, type: 'cloth', category: 'cloth' },
+    spider_silk:        { name: '蛛絲',         tier: 4, type: 'cloth', category: 'cloth' },
+    enchanted_silk:     { name: '附魔絲綢',     tier: 5, type: 'cloth', category: 'cloth' },
+    star_brocade:       { name: '星辰織錦',     tier: 6, type: 'cloth', category: 'cloth' },
+    soulweave:          { name: '靈魂織物',     tier: 7, type: 'cloth', category: 'cloth' },
 };
 
-// --- 新版武器數據 (根據 GDD) ---
-const METAL_WEAPON_STATS = {
-    '劍': { 1: { damage: 6 }, 2: { damage: 11 }, 3: { damage: 20 }, 4: { damage: 36 }, 5: { damage: 65 }, 6: { damage: 117 }, 7: { damage: 210 } },
-    '雙手劍': { 1: { damage: 10 }, 2: { damage: 18 }, 3: { damage: 32 }, 4: { damage: 58 }, 5: { damage: 104 }, 6: { damage: 187 }, 7: { damage: 337 } },
-    '長槍': { 1: { damage: 8 }, 2: { damage: 14 }, 3: { damage: 25 }, 4: { damage: 45 }, 5: { damage: 81 }, 6: { damage: 146 }, 7: { damage: 263 } },
-    '弓':   { 1: { damage: 8 }, 2: { damage: 14 }, 3: { damage: 25 }, 4: { damage: 45 }, 5: { damage: 81 }, 6: { damage: 146 }, 7: { damage: 263 } },
-    '法杖': { 1: { damage: 8 }, 2: { damage: 14 }, 3: { damage: 25 }, 4: { damage: 45 }, 5: { damage: 81 }, 6: { damage: 146 }, 7: { damage: 263 } },
+const CRAFTING_COSTS = {
+    1: { food: 5,   wood: 5,   stone: 5 },
+    2: { food: 10,  wood: 10,  stone: 10 },
+    3: { food: 20,  wood: 20,  stone: 20 },
+    4: { food: 40,  wood: 40,  stone: 40 },
+    5: { food: 80,  wood: 80,  stone: 80 },
+    6: { food: 160, wood: 160, stone: 160 },
+    7: { food: 320, wood: 320, stone: 320 },
 };
 
-const WOOD_WEAPON_STATS = {
-    '劍': { 1: { damage: 5, accuracy: 2 }, 2: { damage: 9, accuracy: 3 }, 3: { damage: 16, accuracy: 4 }, 4: { damage: 29, accuracy: 5 }, 5: { damage: 52, accuracy: 6 }, 6: { damage: 94, accuracy: 7 }, 7: { damage: 169, accuracy: 8 } },
-    '雙手劍': { 1: { damage: 8, accuracy: 2 }, 2: { damage: 14, accuracy: 3 }, 3: { damage: 26, accuracy: 4 }, 4: { damage: 46, accuracy: 5 }, 5: { damage: 83, accuracy: 6 }, 6: { damage: 150, accuracy: 7 }, 7: { damage: 270, accuracy: 8 } },
-    '長槍': { 1: { damage: 6, accuracy: 2 }, 2: { damage: 11, accuracy: 3 }, 3: { damage: 20, accuracy: 4 }, 4: { damage: 37, accuracy: 5 }, 5: { damage: 66, accuracy: 6 }, 6: { damage: 119, accuracy: 7 }, 7: { damage: 214, accuracy: 8 } },
-    '弓':   { 1: { damage: 6, accuracy: 2 }, 2: { damage: 11, accuracy: 3 }, 3: { damage: 20, accuracy: 4 }, 4: { damage: 37, accuracy: 5 }, 5: { damage: 66, accuracy: 6 }, 6: { damage: 119, accuracy: 7 }, 7: { damage: 214, accuracy: 8 } },
-    '法杖': { 1: { damage: 6, accuracy: 2 }, 2: { damage: 11, accuracy: 3 }, 3: { damage: 20, accuracy: 4 }, 4: { damage: 37, accuracy: 5 }, 5: { damage: 66, accuracy: 6 }, 6: { damage: 119, accuracy: 7 }, 7: { damage: 214, accuracy: 8 } },
+const WEAPON_STATS = {
+    '劍':     { 1: 10, 2: 15, 3: 23, 4: 35, 5: 53, 6: 80, 7: 120 },
+    '雙手劍': { 1: 16, 2: 24, 3: 36, 4: 54, 5: 81, 6: 122, 7: 183 },
+    '長槍':   { 1: 12, 2: 18, 3: 27, 4: 41, 5: 62, 6: 93, 7: 140 },
+    '弓':     { 1: 12, 2: 18, 3: 27, 4: 41, 5: 62, 6: 93, 7: 140 },
+    '法杖':   { 1: 12, 2: 18, 3: 27, 4: 41, 5: 62, 6: 93, 7: 140 },
 };
 
-// --- 新版防具數據 (根據 GDD) ---
-const WOOD_ARMOR_STATS = {
-    1: { defenseDice: '2d6' }, 2: { defenseDice: '3d6' }, 3: { defenseDice: '4d6' }, 4: { defenseDice: '5d6' }, 5: { defenseDice: '6d6' }, 6: { defenseDice: '7d6' }, 7: { defenseDice: '8d6' }
+// 鎧甲
+const PLATE_ARMOR_STATS = {
+    1: { attackBonus: 2,  damageReduction: 6 },
+    2: { attackBonus: 3,  damageReduction: 12 },
+    3: { attackBonus: 5,  damageReduction: 18 },
+    4: { attackBonus: 8,  damageReduction: 24 },
+    5: { attackBonus: 13, damageReduction: 30 },
+    6: { attackBonus: 21, damageReduction: 36 },
+    7: { attackBonus: 34, damageReduction: 42 },
 };
 
-const METAL_ARMOR_STATS = {
-    1: { soakDice: '1d6', damage: 2 }, 2: { soakDice: '2d6', damage: 3 }, 3: { soakDice: '3d6', damage: 5 }, 4: { soakDice: '4d6', damage: 8 }, 5: { soakDice: '5d6', damage: 13 }, 6: { soakDice: '6d6', damage: 21 }, 7: { soakDice: '7d6', damage: 34 }
-};
-
+// 皮甲
 const LEATHER_ARMOR_STATS = {
-    1: { defenseDice: '1d6', allStats: 5 }, 2: { defenseDice: '2d6', allStats: 10 }, 3: { defenseDice: '2d6', allStats: 15 }, 4: { defenseDice: '3d6', allStats: 20 }, 5: { defenseDice: '3d6', allStats: 25 }, 6: { defenseDice: '4d6', allStats: 30 }, 7: { defenseDice: '4d6', allStats: 35 }
+    1: { damageReduction: 4,  allStats: 5 },
+    2: { damageReduction: 8,  allStats: 10 },
+    3: { damageReduction: 12, allStats: 15 },
+    4: { damageReduction: 16, allStats: 20 },
+    5: { damageReduction: 20, allStats: 25 },
+    6: { damageReduction: 24, allStats: 30 },
+    7: { damageReduction: 28, allStats: 35 },
 };
 
+// 布服
 const CLOTH_ARMOR_STATS = {
-    1: { defenseDice: '0d6', allStats: 10 }, 2: { defenseDice: '0d6', allStats: 20 }, 3: { defenseDice: '0d6', allStats: 30 }, 4: { defenseDice: '0d6', allStats: 40 }, 5: { defenseDice: '1d6', allStats: 50 }, 6: { defenseDice: '1d6', allStats: 60 }, 7: { defenseDice: '1d6', allStats: 70 }
+    1: { damageReduction: 2,  allStats: 10 },
+    2: { damageReduction: 4,  allStats: 20 },
+    3: { damageReduction: 6,  allStats: 30 },
+    4: { damageReduction: 8,  allStats: 40 },
+    5: { damageReduction: 10, allStats: 50 },
+    6: { damageReduction: 12, allStats: 60 },
+    7: { damageReduction: 14, allStats: 70 },
+};
+
+// 盾牌
+const SHIELD_STATS = {
+    1: { blockTarget: 19, attackBonus: 1 },
+    2: { blockTarget: 18, attackBonus: 2 },
+    3: { blockTarget: 17, attackBonus: 3 },
+    4: { blockTarget: 16, attackBonus: 5 },
+    5: { blockTarget: 15, attackBonus: 8 },
+    6: { blockTarget: 14, attackBonus: 13 },
+    7: { blockTarget: 13, attackBonus: 21 },
 };
 
 // --- 詞綴系統 ---
