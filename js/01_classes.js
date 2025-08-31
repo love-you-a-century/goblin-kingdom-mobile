@@ -228,6 +228,7 @@
             this.skillPoints = 0;
             this.attributePoints = 0;
             this.learnedSkills = {};
+            this.tribeSkillCooldowns = {};
             this.activeSkillBuff = null;
             this.party = [];
             this.avatarUrl = null;

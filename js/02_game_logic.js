@@ -39,6 +39,17 @@ const gameLogic = {
         };
     },
 
+    get canScoutEnvironment() {
+        if (!this.currentRaid || !this.currentRaid.currentZone) {
+            return false;
+        }
+        const zone = this.currentRaid.currentZone;
+        const hasHiddenBuildings = zone.buildings.some(b => b.scoutState === 'hidden');
+        const hasHiddenEnemies = zone.enemies.some(group => group.length > 0 && group[0].scoutState === 'hidden');
+        // 只要還有任何隱藏的目標，按鈕就應該是可用的 (所以回傳 true)
+        return hasHiddenBuildings || hasHiddenEnemies;
+    },
+
     performAbilityContest(partyA, partyB) {
         const partyA_Stats = this.getPartyAverageStats(partyA);
         const partyA_DiceCount = Math.max(1, Math.floor(partyA_Stats.average / 20));
@@ -858,7 +869,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.32 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.33 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1222,6 +1233,15 @@ const gameLogic = {
     },
 
     processDailyUpkeep() {
+
+        if (this.player && this.player.tribeSkillCooldowns) {
+            for (const skillId in this.player.tribeSkillCooldowns) {
+                if (this.player.tribeSkillCooldowns[skillId] > 0) {
+                    this.player.tribeSkillCooldowns[skillId]--;
+                }
+            }
+        }
+        
         // --- 商人來訪邏輯 ---
         if (this.merchant.isPresent) {
             this.merchant.stayDuration--;
@@ -2223,7 +2243,6 @@ const gameLogic = {
 
     generateCity(difficulty) {
         const config = {
-            //  更新各難度的居民 (pop) 數量
             easy:    { time: 300, zones: ['外城', '內城'], pop: [10, 15], guards: [5, 10], knightStats: [80, 150] },
             normal: { time: 240, zones: ['外城', '內城A', '內城B'], pop: [15, 25], guards: [10, 15], knightStats: [150, 240] },
             hard:    { time: 180, zones: ['外城', '內城A', '內城B', '內城C'], pop: [25, 30], guards: [15, 20], knightStats: [240, 350] },
@@ -2242,33 +2261,29 @@ const gameLogic = {
         };
 
         city.zones = cityConfig.zones.map(name => ({
-            name: name, scouted: { environment: false, targets: new Set() },
-            buildings: [], enemies: [],
+            name: name,
+            buildings: [], 
+            enemies: [],
             resources: { food: 0, wood: 0, stone: 0 }
         }));
         
         const gridCols = Math.floor(MAP_WIDTH / GRID_SIZE);
         const gridRows = Math.floor(MAP_HEIGHT / GRID_SIZE);
-        //  為每個 zone 建立獨立的 grid，避免跨層干擾
         city.zones.forEach(zone => {
             zone.placementGrid = Array(gridRows).fill(null).map(() => Array(gridCols).fill(null));
         });
-
         const paddingTop = 60;
         const paddingBottom = 40;
-        
         const getFreePosition = (zone, isBuilding = false) => {
             let attempts = 0;
             while(attempts < 50) {
                 const r = randomInt(0, gridRows - 1);
                 const c = randomInt(0, gridCols - 1);
                 const potentialY = r * GRID_SIZE + (GRID_SIZE / 4);
-
                 if (potentialY < paddingTop || potentialY > MAP_HEIGHT - paddingBottom) {
                     attempts++;
                     continue;
                 }
-                
                 if (!zone.placementGrid[r][c]) {
                     zone.placementGrid[r][c] = isBuilding ? 'building' : 'unit'; 
                     return { 
@@ -2284,27 +2299,21 @@ const gameLogic = {
                 y: randomInt(paddingTop, paddingTop + safeMapHeight)
             };
         };
-
         const totalResidents = randomInt(cityConfig.pop[0], cityConfig.pop[1]);
         const totalGuards = randomInt(cityConfig.guards[0], cityConfig.guards[1]);
-
         let allGuards = Array.from({ length: totalGuards }, () => {
             const statRange = ENEMY_STAT_RANGES[difficulty].guard;
             const totalStatPoints = randomInt(statRange[0], statRange[1]);
             const isFemale = rollPercentage(50);
-            
-            let guard; // 先宣告一個變數來存放守軍
+            let guard;
             if (isFemale) {
                 guard = new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length-1)], distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), '城市守軍', generateVisuals(), difficulty);
             } else {
                 guard = new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length-1)], distributeStats(totalStatPoints), '城市守軍');
             }
-
-            this.equipEnemy(guard, difficulty); // 為生成的守軍呼叫裝備函式
-
-            return guard; // 最後返回這個已經穿好裝備的守軍
+            this.equipEnemy(guard, difficulty);
+            return guard;
         });
-        
         let allResidents = Array.from({ length: totalResidents }, () => {
             const statRange = ENEMY_STAT_RANGES[difficulty].resident;
             const isFemale = rollPercentage(50);
@@ -2315,7 +2324,6 @@ const gameLogic = {
                 return new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length - 1)], distributeStats(randomInt(statRange[0], statRange[1])), '男性居民');
             }
         });
-
         const outerGuardsCount = Math.floor(totalGuards * 0.25);
         const outerGuards = allGuards.slice(0, outerGuardsCount);
         const innerGuards = allGuards.slice(outerGuardsCount);
@@ -2324,7 +2332,8 @@ const gameLogic = {
             const pos = getFreePosition(city.zones[0], true);
             city.zones[0].buildings.push({ 
                 id: crypto.randomUUID(), type: '衛兵所', occupants: outerGuards, looted: false, resources: { food: 0, wood: 0, stone: 0 },
-                scouted: false, postScoutText: '',
+                scoutState: 'hidden',
+                postScoutText: '',
                 x: pos.x, y: pos.y, width: GRID_SIZE / 2, height: GRID_SIZE / 2
             });
         }
@@ -2339,7 +2348,11 @@ const gameLogic = {
                 if (patrolTeam.length > 0) {
                     const targetZone = innerZones[randomInt(0, innerZones.length - 1)];
                     const pos = getFreePosition(targetZone);
-                    patrolTeam.forEach(unit => { unit.x = pos.x; unit.y = pos.y; });
+                    patrolTeam.forEach(unit => { 
+                        unit.x = pos.x; 
+                        unit.y = pos.y;
+                        unit.scoutState = 'hidden';
+                    });
                     targetZone.enemies.push(patrolTeam);
                 }
                 currentGuardIndex += groupSize;
@@ -2354,20 +2367,21 @@ const gameLogic = {
                 targetZone.buildings.push({
                     id: crypto.randomUUID(), type: BUILDING_TYPES[randomInt(0, BUILDING_TYPES.length - 2)],
                     occupants: [], looted: false, resources: { food: 0, wood: 0, stone: 0 },
-                    scouted: false, postScoutText: '',
+                    scoutState: 'hidden',
+                    postScoutText: '',
                     x: pos.x, y: pos.y, width: GRID_SIZE / 2, height: GRID_SIZE / 2
                 });
             }
         }
-
-        //   確保每層建築不少於3棟的邏輯
+        
         innerZones.forEach(zone => {
             while (zone.buildings.length > 0 && zone.buildings.length < 3) {
-                    const pos = getFreePosition(zone, true);
-                    zone.buildings.push({
+                const pos = getFreePosition(zone, true);
+                zone.buildings.push({
                     id: crypto.randomUUID(), type: BUILDING_TYPES[randomInt(0, BUILDING_TYPES.length - 2)],
                     occupants: [], looted: false, resources: { food: 0, wood: 0, stone: 0 },
-                    scouted: false, postScoutText: '',
+                    scoutState: 'hidden',
+                    postScoutText: '',
                     x: pos.x, y: pos.y, width: GRID_SIZE / 2, height: GRID_SIZE / 2
                 });
             }
@@ -2390,81 +2404,52 @@ const gameLogic = {
                 const randomBuilding = allInnerBuildings[randomInt(0, allInnerBuildings.length - 1)];
                 randomBuilding.occupants.push(finalUnit);
             } else if (innerZones.length > 0) {
+                // --- START OF MODIFIED CODE ---
+                // 修正了此處的變數錯誤
                 const targetZone = innerZones[randomInt(0, innerZones.length - 1)];
                 const pos = getFreePosition(targetZone);
                 finalUnit.x = pos.x;
                 finalUnit.y = pos.y;
+                finalUnit.scoutState = 'hidden';
                 targetZone.enemies.push([finalUnit]);
+                // --- END OF MODIFIED CODE ---
             }
         });
-
+        
         const royalCityZone = city.zones.find(z => z.name === '王城');
         if (difficulty === 'hell' && royalCityZone) {
-            //  清空王城，確保只有我們的特殊建築
             royalCityZone.enemies = [];
             royalCityZone.buildings = [];
-
             let castleOccupants = [];
-            
-            // 1. 生成 GDD 中定義的七位騎士團成員 (各兵種一名)
             const knightStatRange = cityConfig.knightStats;
-            const knightTypes = Object.keys(KNIGHT_ORDER_UNITS); // ['士兵', '盾兵', '槍兵', '弓兵', '騎士', '法師', '祭司']
-
+            const knightTypes = Object.keys(KNIGHT_ORDER_UNITS);
             knightTypes.forEach(unitType => {
-                if (!KNIGHT_ORDER_UNITS[unitType]) return; // 避免未定義的兵種
+                if (!KNIGHT_ORDER_UNITS[unitType]) return;
                 const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
-                // 50% 機率生成女性騎士 [cite: 89]
                 const knight = rollPercentage(50) 
                     ? new FemaleKnightOrderUnit(unitType, totalStatPoints) 
                     : new KnightOrderUnit(unitType, totalStatPoints);
                 castleOccupants.push(knight);
             });
-
-            // 2.  根據 GDD 6.5 與 10.3 產生 1 至 3 位公主
-            const numPrincesses = randomInt(1, 3); // [修正] 公主數量為1-3人
-
-            // 1. 建立一個可修改的、隨機打亂的女性名字複製列表
+            const numPrincesses = randomInt(1, 3);
             const availableNames = [...FEMALE_NAMES].sort(() => 0.5 - Math.random());
-
             for (let i = 0; i < numPrincesses; i++) {
-                // 2. 從複製列表中「抽出」一個名字，確保不重複
                 const princessName = availableNames.pop() || `公主 #${i + 1}`;
-
                 const princessStats = {
-                    strength: 20,
-                    agility: 20,
-                    intelligence: 20,
-                    luck: 20,
-                    charisma: randomInt(200, 300)
+                    strength: 20, agility: 20, intelligence: 20, luck: 20, charisma: randomInt(200, 300)
                 };
-                
-                const princess = new FemaleHuman(
-                    princessName, // 3. 使用我們抽出的獨一無二的名字
-                    princessStats, 
-                    '公主', 
-                    generateVisuals()
-                );
+                const princess = new FemaleHuman(princessName, princessStats, '公主', generateVisuals());
                 castleOccupants.push(princess);
             }
-            
-            // 3. 創建城堡建築，將所有單位放入 (總人數為 7 + 公主數量)
             const pos = { x: (MAP_WIDTH / 2) - (GRID_SIZE / 2), y: 100 };
             royalCityZone.buildings.push({
-                id: crypto.randomUUID(),
-                type: '城堡',
-                occupants: castleOccupants,
-                looted: false,
-                resources: { food: 500, wood: 500, stone: 500 },
-                scouted: false, 
-                postScoutText: '',
-                isFinalChallenge: true, //  特殊標記
-                x: pos.x, 
-                y: pos.y, 
-                width: GRID_SIZE,
-                height: GRID_SIZE 
+                id: crypto.randomUUID(), type: '城堡', occupants: castleOccupants, looted: false,
+                resources: { food: 500, wood: 500, stone: 500 }, 
+                scoutState: 'hidden',
+                postScoutText: '', isFinalChallenge: true,
+                x: pos.x, y: pos.y, width: GRID_SIZE, height: GRID_SIZE 
             });
         }
-        //各難度資源量
         const resConfig = {
             easy: { food: [100, 200], wood: [50, 100], stone: [50, 100] },
             normal: { food: [200, 400], wood: [100, 200], stone: [100, 200] },
@@ -2474,14 +2459,12 @@ const gameLogic = {
         const totalFood = randomInt(resConfig[difficulty].food[0], resConfig[difficulty].food[1]);
         const totalWood = randomInt(resConfig[difficulty].wood[0], resConfig[difficulty].wood[1]);
         const totalStone = randomInt(resConfig[difficulty].stone[0], resConfig[difficulty].stone[1]);
-
         const allCityBuildings = city.zones.flatMap(z => z.buildings);
         if(allCityBuildings.length > 0) {
             for(let i = 0; i < totalFood; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.food++;
             for(let i = 0; i < totalWood; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.wood++;
             for(let i = 0; i < totalStone; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.stone++;
         }
-
         city.zones.forEach(zone => {
             zone.resources.food = zone.buildings.reduce((sum, b) => sum + b.resources.food, 0);
             zone.resources.wood = zone.buildings.reduce((sum, b) => sum + b.resources.wood, 0);
@@ -2524,62 +2507,55 @@ const gameLogic = {
     },
 
     scoutEnvironment() {
-        // --- 核心修改：使用新的「解除迷霧」邏輯 ---
-        // 此動作必定成功，效果與隊伍人數掛鉤。
-        const playerParty = [this.player, ...this.player.party];
+        // 這是完全重寫的函式，實現「解除迷霧」的功能
+        const playerPartySize = [this.player, ...this.player.party].length;
         const zone = this.currentRaid.currentZone;
-        const targetsToRevealCount = playerParty.length; // 要揭露的目標數量 = 隊伍人數
 
-        // 根據新規則，固定消耗 2 分鐘
-        this.currentRaid.timeRemaining -= 2;
-        this.logMessage('raid', `你開始仔細偵查周遭環境... (-2 分鐘)`, 'info');
-
-        // 1. 找出所有尚未被偵查過的目標（建築或敵方隊伍）
-        const unScoutedBuildings = zone.buildings.filter(b => !this.isTargetScouted(b.id));
-        const unScoutedEnemies = zone.enemies.filter(group => !this.isTargetScouted(group[0].id));
-        // 將所有可偵查目標放入一個陣列中，以便隨機選取
-        let availableTargets = [...unScoutedBuildings, ...unScoutedEnemies];
+        // 1. 找出所有還隱藏的目標
+        const hiddenBuildings = zone.buildings.filter(b => b.scoutState === 'hidden');
+        const hiddenEnemies = zone.enemies
+            .filter(group => group.length > 0 && group[0].scoutState === 'hidden');
         
-        const revealedTargetNames = []; // 用來記錄本次發現了哪些目標
+        let availableTargets = [...hiddenBuildings, ...hiddenEnemies];
 
-        // 2. 根據隊伍人數，迴圈揭露目標
+        if (availableTargets.length === 0) {
+            this.logMessage('raid', '你已經將此區域偵查完畢，沒有新的發現。', 'info');
+            return;
+        }
+
+        // 2. 根據隊伍人數決定要揭露多少目標
+        const targetsToRevealCount = Math.min(playerPartySize, availableTargets.length);
+        this.currentRaid.timeRemaining -= 2;
+        this.logMessage('raid', `你開始仔細偵查周遭環境，尋找目標... (-2 分鐘)`, 'info');
+
+        const revealedTargetNames = [];
+
+        // 3. 隨機揭露目標
         for (let i = 0; i < targetsToRevealCount; i++) {
-            // 如果已經沒有可偵查的目標，就提前結束迴圈
-            if (availableTargets.length === 0) {
-                break;
-            }
-
-            // 從可用目標中隨機抽取一個
             const randomIndex = randomInt(0, availableTargets.length - 1);
-            const [targetToReveal] = availableTargets.splice(randomIndex, 1); // splice 會取出並從原陣列移除
+            const [targetToReveal] = availableTargets.splice(randomIndex, 1);
 
             let targetName = '';
-            // 3. 根據目標類型（建築或敵方隊伍）進行處理並記錄名稱
-            if (Array.isArray(targetToReveal)) { // 敵方隊伍
+            if (Array.isArray(targetToReveal)) { // 這是敵人隊伍
                 const representativeEnemy = targetToReveal[0];
-                this.currentRaid.currentZone.scouted.targets.add(representativeEnemy.id);
+                // 將整個隊伍所有人的狀態都設為 revealed
+                targetToReveal.forEach(unit => unit.scoutState = 'revealed');
                 targetName = `一支由 ${representativeEnemy.name} 帶領的隊伍`;
-            } else { // 建築
-                targetToReveal.scouted = true;
-                this.currentRaid.currentZone.scouted.targets.add(targetToReveal.id);
+            } else { // 這是建築
+                targetToReveal.scoutState = 'revealed';
                 targetName = `一棟 ${targetToReveal.type}`;
             }
             revealedTargetNames.push(targetName);
         }
-        
-        // 4. 根據最終結果，產生統一的日誌訊息
-        if (revealedTargetNames.length > 0) {
-            this.updateBuildingScoutText();
-            this.logMessage('raid', `偵查成功！在隊伍的努力下，你們發現了 ${revealedTargetNames.join('、')} 的位置。`, 'success');
-        } else {
-            this.logMessage('raid', '你已經將此區域偵查完畢，沒有新的發現。', 'info');
-            // 如果所有目標都已被偵查過，且地圖尚未完全顯示，則將其完全顯示
-            if (!zone.scouted.environment) {
-                zone.scouted.environment = true;
-            }
-        }
 
-        this.checkRaidTime(); // 檢查時間是否耗盡
+        // 4. 記錄日誌並檢查時間
+        if (revealedTargetNames.length > 0) {
+            this.logMessage('raid', `偵查成功！你們發現了 ${revealedTargetNames.join('、')} 的位置。`, 'success');
+            // 強制刷新UI
+            this.currentRaid.currentZone = { ...this.currentRaid.currentZone };
+        }
+        
+        this.checkRaidTime();
     },
    
     scoutTarget(targetOrGroup) {
@@ -2591,29 +2567,33 @@ const gameLogic = {
         const representativeTarget = isGroup ? targetOrGroup[0] : targetOrGroup;
         const targetNameForLog = isGroup ? '一個隊伍' : (representativeTarget.type || representativeTarget.name);
         
+        // 新增：如果目標已經被詳細偵查過，直接顯示情報且不耗時
+        if (representativeTarget.scoutState === 'scouted') {
+            this.modals.scoutInfo.target = isGroup ? targetOrGroup : (representativeTarget.occupants || []);
+            this.modals.scoutInfo.emptyBuildingMessage = representativeTarget.looted ? '這棟建築是空的，你已搜刮過。' : '這棟建築是空的，看來可以搜刮一番。';
+            this.modals.scoutInfo.isOpen = true;
+            this.logMessage('raid', `你再次查看了 ${targetNameForLog} 的情報。`, 'info');
+            return;
+        }
+        
+        // 偵查空建築的邏輯
         if (!isGroup && representativeTarget.occupants && representativeTarget.occupants.length === 0) {
             this.currentRaid.timeRemaining -= 2;
             this.logMessage('raid', `偵查成功！你發現 ${targetNameForLog} 是空的。(-2 分鐘)`, 'success');
-            representativeTarget.scouted = true;
-            this.currentRaid.currentZone.scouted.targets.add(representativeTarget.id);
-            this.updateBuildingScoutText();
+            
+            representativeTarget.scoutState = 'scouted'; // 更新為已偵查狀態
+            this.updateBuildingScoutText(); // 更新建築狀態文字
+            
             this.modals.scoutInfo.target = [];
             this.modals.scoutInfo.emptyBuildingMessage = representativeTarget.looted ? '這棟建築是空的，你已搜刮過。' : '這棟建築是空的，看來可以搜刮一番。';
             this.modals.scoutInfo.isOpen = true;
             this.checkRaidTime();
             return;
         }
-        if (this.isTargetScouted(representativeTarget.id)) {
-            this.modals.scoutInfo.target = isGroup ? targetOrGroup : representativeTarget.occupants;
-            this.modals.scoutInfo.isOpen = true;
-            this.logMessage('raid', `你再次查看了 ${targetNameForLog} 的情報。`, 'info');
-            return;
-        }
 
-        // --- 核心修改：呼叫通用的對抗擲骰函式 ---
+        // 偵查有人目標的擲骰邏輯
         const playerParty = [this.player, ...this.player.party];
         const enemiesToScout = isGroup ? targetOrGroup : representativeTarget.occupants;
-
         const contestResult = this.performAbilityContest(playerParty, enemiesToScout);
 
         this.logMessage('raid', `我方偵查擲骰: ${contestResult.partyA_Details.roll} (基於 ${contestResult.partyA_Details.diceCount}d10) + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
@@ -2621,9 +2601,14 @@ const gameLogic = {
 
         if (contestResult.partyA_Value > contestResult.partyB_Value) { 
             this.currentRaid.timeRemaining -= 2;
-            representativeTarget.scouted = true;
-            this.currentRaid.currentZone.scouted.targets.add(representativeTarget.id);
-            this.updateBuildingScoutText();
+            
+            if (isGroup) {
+                targetOrGroup.forEach(unit => unit.scoutState = 'scouted');
+            } else {
+                representativeTarget.scoutState = 'scouted';
+            }
+            this.updateBuildingScoutText(); // 更新建築狀態文字
+
             this.logMessage('raid', `你成功偵查了 ${targetNameForLog} 的詳細情報！(-2 分鐘)`, 'success');
             this.modals.scoutInfo.target = enemiesToScout;
             this.modals.scoutInfo.isOpen = true;
@@ -2632,11 +2617,6 @@ const gameLogic = {
             this.logMessage('raid', `偵查 ${targetNameForLog} 失敗！(-4 分鐘)`, 'enemy');
         }
         this.checkRaidTime();
-    },
-    
-    isTargetScouted(targetId) {
-        if (!this.currentRaid) return false;
-        return this.currentRaid.currentZone.scouted.targets.has(targetId);
     },
 
     lootBuilding(building) {
@@ -2780,9 +2760,8 @@ const gameLogic = {
         const playerAgility = this.player.getTotalStat('agility', this.isStarving);
         const enemyAvgAgility = outerGuards.reduce((sum, e) => sum + e.stats.agility, 0) / outerGuards.length;
         
-        // --- 計算「散開脫逃」技能效果 ---
         let penalty = ((this.player.party.length + 1) - outerGuards.length) * 2;
-        if (penalty > 0) { // 只在有人數懲罰時才計算減免
+        if (penalty > 0) {
             const skillId = 'raid_dispersed_escape';
             if (this.player && this.player.learnedSkills[skillId]) {
                 const skillLevel = this.player.learnedSkills[skillId];
@@ -2802,7 +2781,8 @@ const gameLogic = {
         } else {
             this.currentRaid.timeRemaining -= 6;
             this.logMessage('raid', `潛行失敗！你被守軍發現了！(-6 分鐘)`, 'enemy');
-            this.startCombat(outerGuards, !this.isTargetScouted(outerGuards[0].id));
+            // 將舊的 isTargetScouted 判斷式，改為使用新的 scoutState 系統
+            this.startCombat(outerGuards, guardPost.scoutState !== 'scouted');
             this.checkRaidTime();
         }
     },
@@ -3536,6 +3516,7 @@ const gameLogic = {
             this.logMessage('raid', `你從 ${enemy.name} 身上獲得了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
         }
     },
+
     // 為敵人穿戴裝備的智慧助手函式
     equipEnemy(enemy, difficulty) {
         if (!enemy || !enemy.equipment) return;
@@ -3549,7 +3530,7 @@ const gameLogic = {
             // 輔助函式：根據難度和可選的材質類型，獲取一個隨機材質
             const getRandomMaterialKey = (type = null) => {
                 const materialTiers = {
-                    easy:   { metal: [2, 3], wood: [2, 3] }, // 騎士團最低也從Tier 2開始
+                    easy:   { metal: [2, 3], wood: [2, 3] },
                     normal: { metal: [3, 4], wood: [3, 4] },
                     hard:   { metal: [4, 5], wood: [4, 5] },
                     hell:   { metal: [5, 6], wood: [5, 6] },
@@ -3574,47 +3555,49 @@ const gameLogic = {
             };
 
             // 1. 所有騎士團成員必穿身體盔甲
-            createAndEquip('chest', '鎧甲', enemy.profession === '盾兵' ? 'wood' : null);
+            // 【修正】移除材質類型的強制指定，讓所有騎士的盔甲都能隨機材質
+            createAndEquip('chest', '鎧甲');
 
             // 2. 根據職業分配武器和副手
             switch (enemy.profession) {
                 case '士兵':
                     createAndEquip('mainHand', '劍');
-                    if (rollPercentage(50)) { // 50%機率雙持
+                    if (rollPercentage(50)) {
                         createAndEquip('offHand', '劍');
-                    } else { // 50%機率劍盾
+                    } else {
                         createAndEquip('offHand', '盾');
                     }
                     break;
                 case '盾兵':
-                    // 盾兵必拿木盾，身體盔甲在上面已經指定為木材質
-                    createAndEquip('offHand', '盾', 'wood');
+                    // 【修正】移除材質類型的強制指定
+                    createAndEquip('offHand', '盾');
                     break;
                 case '槍兵':
                     createAndEquip('mainHand', '長槍');
-                    if (rollPercentage(50)) { // 50%機率持盾
+                    if (rollPercentage(50)) {
                         createAndEquip('offHand', '盾');
                     }
                     break;
                 case '法師':
                     createAndEquip('mainHand', '法杖');
                     break;
-                case '弓兵': // 遊戲內代碼為'弓兵'
+                case '弓兵':
                     createAndEquip('mainHand', '弓');
                     break;
                 case '祭司':
                     createAndEquip('mainHand', '法杖');
-                    createAndEquip('offHand', '盾', 'wood'); // 副手必為木盾
+                    // 【修正】移除材質類型的強制指定
+                    createAndEquip('offHand', '盾');
                     break;
                 case '騎士':
-                    if (rollPercentage(50)) { // 50%機率劍盾
+                    if (rollPercentage(50)) {
                         createAndEquip('mainHand', '劍');
-                    } else { // 50%機率槍盾
+                    } else {
                         createAndEquip('mainHand', '長槍');
                     }
-                    createAndEquip('offHand', '盾'); // 副手必為盾
+                    createAndEquip('offHand', '盾');
                     break;
-                default: // 其他未定義的騎士團職業，給予預設裝備
+                default:
                     createAndEquip('mainHand', '劍');
                     createAndEquip('offHand', '盾');
                     break;
@@ -3650,8 +3633,13 @@ const gameLogic = {
                 if (possibleSlots.length === 0) break;
                 const slotIndex = randomInt(0, possibleSlots.length - 1);
                 const slot = possibleSlots.splice(slotIndex, 1)[0];
-                let baseItem = this.craftableTypes.find(t => t.slot === slot) || this.craftableTypes[0];
-                if (slot === 'offHand') baseItem = this.craftableTypes.find(t => t.baseName === '盾');
+
+                // --- 已包含上一個問題的修正 ---
+                const possibleItemsForSlot = this.craftableTypes.filter(t => t.slot === slot);
+                if (possibleItemsForSlot.length === 0) continue;
+                const baseItem = possibleItemsForSlot[randomInt(0, possibleItemsForSlot.length - 1)];
+                // --- 修正結束 ---
+                
                 if (!baseItem) continue;
 
                 const isMetal = rollPercentage(50);
@@ -4411,53 +4399,8 @@ const gameLogic = {
         }
     },
 
-    migrateSaveData() {
-        // 使用 Map 來收集所有物品，以確保每個物品的唯一性
-        const allKnownItems = new Map();
-
-        // 1. 定義一個輔助函式來安全地添加物品到 Map 中
-        const addItem = (item) => {
-            // 確保 item 有效、有 id 且尚未被添加過
-            if (item && item.id && !allKnownItems.has(item.id)) {
-                allKnownItems.set(item.id, item);
-            }
-        };
-
-        // 2. 遍歷所有可能的物品來源，並使用輔助函式添加
-        this.player.inventory.forEach(addItem);
-        this.warehouseInventory.forEach(addItem);
-        Object.values(this.player.equipment).forEach(addItem);
-        
-        this.partners.forEach(p => {
-            Object.values(p.equipment).forEach(addItem);
-            // 確保 p.inventory 存在且為陣列
-            if (Array.isArray(p.inventory)) {
-                p.inventory.forEach(addItem);
-            }
-        });
-
-        // 3. 從 Map 中取得獨一無二的物品列表，這將是乾淨無重複的
-        const allItems = Array.from(allKnownItems.values());
-
-        const migrateItem = (item) => {
-            if (item && item.baseName === '盾' && typeof item.stats.blockChance === 'undefined') {
-                const materialTier = item.material.tier;
-                const materialType = item.material.type;
-                
-                const correctBlockChance = BASE_EQUIPMENT_STATS[materialType]['盾'][materialTier]?.blockChance;
-
-                if (correctBlockChance) {
-                    item.stats.blockChance = correctBlockChance;
-                }
-            }
-        };
-
-        allItems.forEach(migrateItem);
-        console.log("Save data migration check complete.");
-    },
-
     loadGame() {
-        this.logs = { tribe: [], raid: [], combat: [] }; // 清空日誌
+        this.logs = { tribe: [], raid: [], combat: [] };
 
         const savedData = localStorage.getItem('goblinKingSaveFile');
         if (!savedData) {
@@ -4498,7 +4441,7 @@ const gameLogic = {
                     }
                 }
             };
-            
+
             this.warehouseInventory = (parsedData.warehouseInventory || []).map(itemData => rehydrateEquipment(itemData));
 
             this.partners = (parsedData.partners || []).map(pData => {
@@ -4518,7 +4461,6 @@ const gameLogic = {
                 return captive;
             });
 
-            // 這邊的 Player constructor 已修正為不會提前計算，是正確的
             const loadedPlayerInstance = new Player(parsedData.player.name, parsedData.player.stats || {});
             safelyAssign(loadedPlayerInstance, parsedData.player);
             this.player = loadedPlayerInstance;
@@ -4527,9 +4469,9 @@ const gameLogic = {
             this.player.party = (parsedData.player.party || [])
                 .map(pData => partnersMap.get(pData.id))
                 .filter(Boolean);
-            
+
             this.resources = parsedData.resources;
-            
+
             const defaultBuildings = {
                 dungeon: { level: 0, name: "地牢" }, warehouse: { level: 0, name: "倉庫" },
                 barracks: { level: 0, name: "寢室" }, armory: { level: 0, name: "兵工廠" },
@@ -4542,12 +4484,9 @@ const gameLogic = {
             this.dispatch = parsedData.dispatch || { hunting: [], logging: [], mining: [] }; 
             this.narrativeMemory = parsedData.narrativeMemory;
 
-            // --- 核心修正區塊：使用最穩固的 if/else 判斷 ---
             if (parsedData.dlc) {
-                // 如果存檔中有 DLC 資料，則直接使用它
                 this.dlc = parsedData.dlc;
             } else {
-                // 如果存檔中沒有 DLC 資料 (代表是舊存檔)，則強制建立一個全新的、預設為鎖定的 DLC 物件
                 this.dlc = {
                     hells_knights: false
                 };
@@ -4556,7 +4495,7 @@ const gameLogic = {
             this.tutorial = { ...{ active: false, step: 0, merchantMet: false }, ...parsedData.tutorial };
             this.breedingChargesLeft = parsedData.breedingChargesLeft;
             this.merchant = { ...this.merchant, ...parsedData.merchant };
-            
+
             this.player.updateHp(this.isStarving);
             this.partners.forEach(p => p.updateHp(this.isStarving));
 
@@ -4565,10 +4504,10 @@ const gameLogic = {
             } else {
                 this.cancelAttributePoints();
             }
-            
+
             this.salvageSaveData();
-            this.migrateSaveData();
-                
+            // this.migrateSaveData(); // <-- 已移除這一行
+
             this.screen = 'tribe';
             this.showCustomAlert('遊戲進度已讀取！');
 
@@ -5219,20 +5158,19 @@ const gameLogic = {
         });
         this.currentRaid.currentZone = { ...zone };
     }, 
+
     updateBuildingScoutText() {
         if (!this.currentRaid) return;
         this.currentRaid.currentZone.buildings.forEach(b => {
-            // 只更新那些已經被偵查過的建築
-            if (b.scouted) {
+            // 只為已被詳細偵查過的建築產生狀態文字
+            if (b.scoutState === 'scouted') {
                 if (b.occupants.length === 0) {
-                    // 如果建築是空的，根據是否搜刮過來顯示文字
                     b.postScoutText = b.looted ? ' (空)' : ' (可搜刮)';
                 } else {
-                    // 如果裡面還有人，顯示人數
                     b.postScoutText = ` (${b.occupants.length}人)`;
                 }
             } else {
-                // 如果還沒偵查過，就沒有後綴文字
+                // 如果只是 revealed，則沒有後綴文字
                 b.postScoutText = '';
             }
         });
@@ -5274,4 +5212,37 @@ const gameLogic = {
             }, 1000); // 擲骰動畫持續 1 秒
         });
     },
+
+    executeForcedLabor() {
+        const skillId = 'tribe_forced_labor';
+        if (!this.player.learnedSkills[skillId]) {
+            this.showCustomAlert('你尚未學習此技能！');
+            return;
+        }
+        
+        if (this.player.tribeSkillCooldowns[skillId] > 0) {
+            this.showCustomAlert(`技能冷卻中！還需等待 ${this.player.tribeSkillCooldowns[skillId]} 天。`);
+            return;
+        }
+
+        const dispatchedGoblinsCount = this.dispatch.hunting.length + this.dispatch.logging.length + this.dispatch.mining.length;
+        if (dispatchedGoblinsCount === 0) {
+            this.showCustomAlert('目前沒有任何夥伴被派遣，無法使用此技能。');
+            return;
+        }
+
+        // 1. 執行技能核心效果：結算資源
+        this.logMessage('tribe', `你發動了 [強制勞動]，壓榨夥伴們的潛力！`, 'skill');
+        this.calculateDispatchYields(); // 直接呼叫現有的結算函式
+
+        // 2. 設定技能冷卻時間
+        const skillData = SKILL_TREES.tribe.find(s => s.id === skillId);
+        const skillLevel = this.player.learnedSkills[skillId];
+        const cooldown = skillData.levels[skillLevel - 1].effect.cooldown_override;
+        this.player.tribeSkillCooldowns[skillId] = cooldown;
+        this.logMessage('tribe', `[強制勞動] 進入冷卻，需等待 ${cooldown} 天。`, 'system');
+
+        this.showCustomAlert('強制勞動完成！資源已立即入庫，夥伴們將繼續執行派遣任務。');
+    },
+
 };
