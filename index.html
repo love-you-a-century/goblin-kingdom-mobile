@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.32</title>
+    <title>哥布林王國v5.33</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -512,7 +512,7 @@
                             <div class="game-container relative p-4 rounded-lg pt-10">
                                 <h2 class="game-title font-medieval">掠奪指令</h2>
                                 <div class="grid grid-cols-2 gap-4">
-                                    <button @click="scoutEnvironment()" class="btn btn-primary" :disabled="currentRaid.currentZone.scouted.environment" :class="{'glow-pulse': tutorial.active && tutorial.step === 4.5}">偵查環境</button>
+                                    <button @click="scoutEnvironment()" class="btn btn-primary" :disabled="!canScoutEnvironment" :class="{'glow-pulse': tutorial.active && tutorial.step === 4.5}">偵查環境</button>
                                     <button @click="modals.raidStatus.isOpen = true" class="btn btn-secondary">查看狀態</button>
 
                                     <button @click="modals.raidCaptives.isOpen = true" class="btn btn-secondary">查看俘虜</button>
@@ -552,32 +552,38 @@
                                                 <span>區域: </span>
                                                 <span class="font-bold" x-text="currentRaid?.currentZone?.name"></span>
                                             </div>
-                                            <div x-show="currentRaid.currentZone.scouted.environment" 
-                                                class="absolute bottom-0 left-1/2 -translate-x-1/2 p-2 bg-black bg-opacity-40 text-white text-sm whitespace-nowrap">
-                                                <span>區域資源: </span>
-                                                <span class="text-green-400">食 <span x-text="currentRaid.currentZone.resources.food"></span></span> | 
-                                                <span class="text-yellow-500">木 <span x-text="currentRaid.currentZone.resources.wood"></span></span> | 
-                                                <span class="text-gray-400">礦 <span x-text="currentRaid.currentZone.resources.stone"></span></span>
-                                            </div>
                                             <div class="absolute bottom-0 right-0 p-2 bg-black bg-opacity-40 text-white text-sm">
                                                 <span>攜帶俘虜: </span>
                                                 <span class="font-bold" x-text="currentRaid?.carriedCaptives.length ?? 0"></span> /
                                                 <span class="font-bold" x-text="carryCapacity"></span>
                                             </div>
-                                            <div x-show="currentRaid.currentZone.scouted.environment">
-                                                <template x-for="building in currentRaid.currentZone.buildings" :key="building.id">
-                                                    <div @click="handleMapClick(building, $event)" class="absolute border-2 border-gray-500 bg-gray-700/50 flex flex-col items-center justify-center text-center p-1 cursor-pointer hover:border-yellow-400" :style="`left:${building.x}px; top:${building.y}px; width:${building.width}px; height:${building.height}px;`" :class="{'border-yellow-400': selectedTarget && selectedTarget.id === building.id}">
-                                                        <span class="text-xs leading-tight" x-text="building.type + building.postScoutText"></span>
-                                                    </div>
-                                                </template>
-                                                <template x-for="enemyGroup in currentRaid.currentZone.enemies" :key="enemyGroup[0].id">
-                                                    <div @click="handleMapClick(enemyGroup, $event)" class="absolute w-4 h-4 rounded-full border-2 border-black cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-150 transition-transform" :class="[getUnitColor(enemyGroup), {'ring-2 ring-offset-2 ring-offset-gray-800 ring-yellow-400': selectedTarget && selectedTarget[0] && selectedTarget[0].id === enemyGroup[0].id}]" :style="`left:${enemyGroup[0].x}px; top:${enemyGroup[0].y}px;`"></div>
-                                                </template>
-                                            </div>
+
+                                            <template x-for="building in currentRaid.currentZone.buildings" :key="building.id">
+                                                <div x-show="building.scoutState !== 'hidden'"
+                                                    @click="handleMapClick(building, $event)" 
+                                                    class="absolute border-2 border-gray-500 bg-gray-700/50 flex flex-col items-center justify-center text-center p-1 cursor-pointer hover:border-yellow-400" 
+                                                    :style="`left:${building.x}px; top:${building.y}px; width:${building.width}px; height:${building.height}px;`" 
+                                                    :class="{'border-yellow-400': selectedTarget && selectedTarget.id === building.id}">
+                                                    <span class="text-xs leading-tight" x-text="building.type + (building.scoutState === 'scouted' ? building.postScoutText : '')"></span>
+                                                </div>
+                                            </template>
+                                            <template x-for="enemyGroup in currentRaid.currentZone.enemies" :key="enemyGroup[0].id">
+                                                <div x-show="enemyGroup[0].scoutState !== 'hidden'"
+                                                    @click="handleMapClick(enemyGroup, $event)" 
+                                                    class="absolute w-4 h-4 rounded-full border-2 border-black cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-150 transition-transform" 
+                                                    :class="[getUnitColor(enemyGroup), {'ring-2 ring-offset-2 ring-offset-gray-800 ring-yellow-400': selectedTarget && selectedTarget[0] && selectedTarget[0].id === enemyGroup[0].id}]" 
+                                                    :style="`left:${enemyGroup[0].x}px; top:${enemyGroup[0].y}px;`">
+                                                </div>
+                                            </template>
+                                            
                                             <div class="absolute w-5 h-5 rounded-full border-2 border-black transition-all duration-300" :class="getUnitColor(player)" :style="`left:${playerMapPosition.x}px; top:${playerMapPosition.y}px;`"></div>
                                             <template x-if="selectedTarget">
                                                 <div class="absolute bg-gray-900/80 p-2 rounded-lg border border-gray-600 space-y-2 z-10" :style="getInteractionMenuPosition()">
-                                                    <button @click="scoutTarget(selectedTarget)" class="btn btn-xs btn-secondary w-full">偵查</button>
+                                                    <button x-show="(Array.isArray(selectedTarget) ? selectedTarget[0].scoutState : selectedTarget.scoutState) !== 'hidden'" 
+                                                            @click="scoutTarget(selectedTarget)" 
+                                                            class="btn btn-xs btn-secondary w-full">
+                                                        偵查
+                                                    </button>
                                                 </div>
                                             </template>
                                         </div>
@@ -749,6 +755,18 @@
                                     </div>
                                 </div>
                             </template>
+
+                            <button x-show="player.learnedSkills['tribe_forced_labor']"
+                                    @click="executeForcedLabor()"
+                                    class="btn btn-primary"
+                                    :disabled="player.tribeSkillCooldowns['tribe_forced_labor'] > 0">
+                                <span x-show="!player.tribeSkillCooldowns['tribe_forced_labor'] || player.tribeSkillCooldowns['tribe_forced_labor'] === 0">
+                                    強制勞動
+                                </span>
+                                <span x-show="player.tribeSkillCooldowns['tribe_forced_labor'] > 0" x-text="`冷卻中 (${player.tribeSkillCooldowns['tribe_forced_labor']})`">
+                                </span>
+                            </button>
+                                
                             <div class="text-right mt-6">
                                 <button @click="modals.dispatch.isOpen = false" class="btn btn-secondary">關閉</button>
                             </div>
@@ -863,7 +881,8 @@
                                     <h3 class="text-xl font-bold mb-2">管理夥伴</h3>
                                     <p class="mb-2">選擇最多 20 名夥伴加入你的出擊隊伍。</p>
                                     <p class="mb-4">目前夥伴: <span x-text="partners.length"></span> / <span x-text="partnerCapacity"></span> | 當前隊伍: <span x-text="player?.party.length || 0"></span> / 20</p>
-                                    <div class="space-y-2">
+                                    
+                                    <div class="space-y-2 max-h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
                                         <template x-for="p in availablePartnersForParty" :key="p.id">
                                             <div class="p-2 border border-gray-600 rounded">
                                                 <label class="flex justify-between items-center cursor-pointer hover:bg-gray-700 p-1 rounded-t">
@@ -1055,7 +1074,8 @@
                                 <div x-show="modals.maternity.subTab === 'manage'">
                                     <h3 class="text-xl font-bold mb-2">管理孕母</h3>
                                     <p class="mb-4">目前孕母: <span x-text="mothers.length"></span> / <span x-text="maternityCapacity"></span></p>
-                                    <div class="space-y-4">
+                                    
+                                    <div class="space-y-4 max-h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
                                         <template x-for="mother in mothers" :key="mother.id">
                                             <div class="p-3 border border-gray-600 rounded">
                                                 <div class="flex justify-between items-start">
@@ -1124,7 +1144,8 @@
                                     <div>
                                         <h3 class="text-xl font-bold mb-2">夥伴訓練</h3>
                                         <p class="mb-4 text-sm text-gray-400">選擇一名夥伴進行一對一訓練，將消耗一天時間。訓練將參考您<span class="text-yellow-400">自身原始能力</span>，為夥伴增加 <span class="font-bold text-green-400" x-text="potentialTrainingPoints"></span> 點隨機屬性。每位夥伴一生只能接受一次訓練。</p>
-                                        <div class="space-y-4">
+                                        
+                                        <div class="space-y-4 max-h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
                                             <template x-for="p in partners" :key="p.id">
                                                 <div class="p-3 border border-gray-600 rounded flex justify-between items-center">
                                                     <div>
