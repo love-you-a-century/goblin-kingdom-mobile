@@ -404,8 +404,8 @@ const PROFESSIONS = ['居民', '女僕', '修女', '農婦', '商人', '妓女',
 const ENEMY_STAT_RANGES = {
     easy:    { resident: [20, 20], guard: [20, 40] },
     normal: { resident: [20, 40], guard: [40, 80] },
-    hard:    { resident: [40, 80], guard: [80, 160] },
-    hell:    { resident: [80, 160], guard: [160, 320] },
+    hard:    { resident: [40, 80], guard: [80, 140] },
+    hell:    { resident: [80, 140], guard: [140, 220] },
 };
 const VISUAL_OPTIONS = {
     hairColor: ['金色', '黑色', '棕色', '紅色', '銀色', '灰色', '白色', '藍色', '綠色', '焦糖色', '紅棕色', '藍黑色', '薰衣草灰', '薄荷綠', '蜂蜜色', '冷棕色', '霧感灰', '藍灰色'],
@@ -444,7 +444,7 @@ const EQUIPMENT_MATERIALS = {
     ironwood:   { name: '鐵木',         tier: 6, type: 'wood', category: 'wood' },
     godwood:    { name: '神木',         tier: 7, type: 'wood', category: 'wood' },
 
-    // --- 【新增】皮革 (Leather) ---
+    // --- 皮革 (Leather) ---
     crude_hide:         { name: '粗製獸皮',     tier: 1, type: 'leather', category: 'leather' },
     tanned_leather:     { name: '鞣製皮革',     tier: 2, type: 'leather', category: 'leather' },
     hardened_leather:   { name: '硬化皮革',     tier: 3, type: 'leather', category: 'leather' },
@@ -453,7 +453,7 @@ const EQUIPMENT_MATERIALS = {
     drakeskin_leather:  { name: '龍蜥皮革',     tier: 6, type: 'leather', category: 'leather' },
     dragonscale_leather:{ name: '巨龍皮革',     tier: 7, type: 'leather', category: 'leather' },
 
-    // --- 【新增】布料 (Cloth) ---
+    // --- 布料 (Cloth) ---
     linen:              { name: '亞麻',         tier: 1, type: 'cloth', category: 'cloth' },
     wool:               { name: '羊毛',         tier: 2, type: 'cloth', category: 'cloth' },
     reinforced_fiber:   { name: '強化纖維',     tier: 3, type: 'cloth', category: 'cloth' },
@@ -483,35 +483,35 @@ const WEAPON_STATS = {
 
 // 鎧甲
 const PLATE_ARMOR_STATS = {
-    1: { attackBonus: 2,  damageReduction: 6 },
-    2: { attackBonus: 3,  damageReduction: 12 },
-    3: { attackBonus: 5,  damageReduction: 18 },
-    4: { attackBonus: 8,  damageReduction: 24 },
-    5: { attackBonus: 13, damageReduction: 30 },
-    6: { attackBonus: 21, damageReduction: 36 },
-    7: { attackBonus: 34, damageReduction: 42 },
+    1: { attackBonus: 2,  damageReduction: 6,  allStats: 2 },
+    2: { attackBonus: 3,  damageReduction: 12, allStats: 4 },
+    3: { attackBonus: 5,  damageReduction: 18, allStats: 6 },
+    4: { attackBonus: 8,  damageReduction: 24, allStats: 8 },
+    5: { attackBonus: 13, damageReduction: 30, allStats: 10 },
+    6: { attackBonus: 21, damageReduction: 36, allStats: 12 },
+    7: { attackBonus: 34, damageReduction: 42, allStats: 14 },
 };
 
 // 皮甲
 const LEATHER_ARMOR_STATS = {
-    1: { damageReduction: 4,  allStats: 5 },
-    2: { damageReduction: 8,  allStats: 10 },
-    3: { damageReduction: 12, allStats: 15 },
-    4: { damageReduction: 16, allStats: 20 },
-    5: { damageReduction: 20, allStats: 25 },
-    6: { damageReduction: 24, allStats: 30 },
-    7: { damageReduction: 28, allStats: 35 },
+    1: { damageReduction: 4,  allStats: 4 },
+    2: { damageReduction: 8,  allStats: 8 },
+    3: { damageReduction: 12, allStats: 12 },
+    4: { damageReduction: 16, allStats: 16 },
+    5: { damageReduction: 20, allStats: 20 },
+    6: { damageReduction: 24, allStats: 24 },
+    7: { damageReduction: 28, allStats: 28 },
 };
 
 // 布服
 const CLOTH_ARMOR_STATS = {
-    1: { damageReduction: 2,  allStats: 10 },
-    2: { damageReduction: 4,  allStats: 20 },
-    3: { damageReduction: 6,  allStats: 30 },
-    4: { damageReduction: 8,  allStats: 40 },
-    5: { damageReduction: 10, allStats: 50 },
-    6: { damageReduction: 12, allStats: 60 },
-    7: { damageReduction: 14, allStats: 70 },
+    1: { damageReduction: 2,  allStats: 6 },
+    2: { damageReduction: 4,  allStats: 12 },
+    3: { damageReduction: 6,  allStats: 18 },
+    4: { damageReduction: 8,  allStats: 24 },
+    5: { damageReduction: 10, allStats: 30 },
+    6: { damageReduction: 12, allStats: 36 },
+    7: { damageReduction: 14, allStats: 42 },
 };
 
 // 盾牌
@@ -527,22 +527,41 @@ const SHIELD_STATS = {
 
 // --- 詞綴系統 ---
 const STANDARD_AFFIXES = {
-    strong: { name: '強壯的', type: 'stat', effects: [{ stat: 'strength', value: 1.1, type: 'multiplier' }], conflicts: ['savage', 'assassin'] },
-    agile: { name: '靈巧的', type: 'stat', effects: [{ stat: 'agility', value: 1.1, type: 'multiplier' }], conflicts: ['troll'] },
-    wise: { name: '智慧的', type: 'stat', effects: [{ stat: 'intelligence', value: 1.1, type: 'multiplier' }], conflicts: ['savage'] },
-    lucky: { name: '幸運的', type: 'stat', effects: [{ stat: 'luck', value: 1.1, type: 'multiplier' }], conflicts: [] },
-    sturdy: { name: '堅固的', type: 'stat', effects: [{ stat: 'hp', value: 1.1, type: 'multiplier' }], conflicts: ['troll'] },
-    savage: { name: '野蠻的', type: 'stat', effects: [{ stat: 'strength', value: 1.25, type: 'multiplier' }, { stat: 'intelligence', value: 0.8, type: 'multiplier' }], conflicts: ['strong', 'wise', 'assassin'] },
-    assassin: { name: '刺客的', type: 'stat', effects: [{ stat: 'agility', value: 1.25, type: 'multiplier' }, { stat: 'strength', value: 0.8, type: 'multiplier' }], conflicts: ['strong', 'savage'] },
-    troll: { name: '巨魔的', type: 'stat', effects: [{ stat: 'hp', value: 1.25, type: 'multiplier' }, { stat: 'agility', value: 0.8, type: 'multiplier' }], conflicts: ['agile', 'sturdy'] },
-    kings: { name: '哥布林王的', type: 'stat', effects: [{ stat: 'all', value: 1.05, type: 'multiplier' }], conflicts: [] },
+    // --- T1 Stat Affixes ---
+    strength: { name: '力量的', type: 'stat', effects: [{ stat: 'strength', value: 10 }, { stat: 'hp', value: -60 }] },
+    agility: { name: '敏捷的', type: 'stat', effects: [{ stat: 'agility', value: 10 }, { stat: 'hp', value: -60 }] },
+    intelligence: { name: '智力的', type: 'stat', effects: [{ stat: 'intelligence', value: 10 }, { stat: 'hp', value: -60 }] },
+    luck: { name: '幸運的', type: 'stat', effects: [{ stat: 'luck', value: 10 }, { stat: 'hp', value: -60 }] },
+    health: { name: '健康的', type: 'stat', effects: [{ stat: 'hp', value: 240 }] },
+
+    // --- T2 Stat Affixes ---
+    savage: { name: '蠻力的', type: 'stat', effects: [{ stat: 'strength', value: 20 }, { stat: 'hp', value: -120 }] },
+    swift: { name: '迅捷的', type: 'stat', effects: [{ stat: 'agility', value: 20 }, { stat: 'hp', value: -120 }] },
+    wise: { name: '睿智的', type: 'stat', effects: [{ stat: 'intelligence', value: 20 }, { stat: 'hp', value: -120 }] },
+    fortunate: { name: '強運的', type: 'stat', effects: [{ stat: 'luck', value: 20 }, { stat: 'hp', value: -120 }] },
+    sturdy: { name: '健壯的', type: 'stat', effects: [{ stat: 'hp', value: 480 }] },
+
+    // --- T3 Stat Affixes ---
+    goblin: { name: '哥布林的', type: 'stat', effects: [{ stat: 'all', value: 5 }, { stat: 'hp', value: -120 }] },
+    goblin_king: { name: '哥布林王的', type: 'stat', effects: [{ stat: 'all', value: 10 }, { stat: 'hp', value: -240 }] },
+
+    // --- Weapon Damage Affixes ---
+    sword_mastery: { name: '單手劍的', type: 'weapon_damage', effects: [{ stat: 'strength', multiplier: 0.1 }] },
+    greatsword_mastery: { name: '巨劍的', type: 'weapon_damage', effects: [{ stat: 'strength', multiplier: 0.3 }] },
+    bow_mastery: { name: '弓箭的', type: 'weapon_damage', effects: [{ stat: 'agility', multiplier: 0.2 }] },
+    staff_mastery: { name: '法杖的', type: 'weapon_damage', effects: [{ stat: 'intelligence', multiplier: 0.2 }] },
+    spear_mastery: { name: '長槍的', type: 'weapon_damage', effects: [{ stat: 'luck', multiplier: 0.2 }] },
+
+    // --- Proc & Special Affixes ---
     vampiric: { name: '吸血的', type: 'proc', procInfo: { baseRate: 10, type: 'vampiric', value: 0.5 } },
     spiky: { name: '尖刺的', type: 'proc', procInfo: { baseRate: 10, type: 'thorns', value: 0.1 } },
     multi_hit: { name: '連擊的', type: 'proc', procInfo: { baseRate: 5, type: 'multi_hit' } },
-    devastating: { name: '毀滅的', type: 'proc', procInfo: { type: 'devastating', value: 1.5 } },
+    devastating: { name: '毀滅的', type: 'crit_mod', effects: { crit_multiplier: 1.5 } },
     regenerating: { name: '再生的', type: 'proc', procInfo: { type: 'regenerating', value: 0.05 } },
     blocking: { name: '格擋的', type: 'proc', procInfo: { baseRate: 5, type: 'blocking' } },
-    penetrating: { name: '穿透的', type: 'proc', procInfo: { baseRate: 10, type: 'penetrating', value: 0.05 } },
+    penetrating: { name: '穿透的', type: 'proc', procInfo: { baseRate: 10, type: 'penetrating', value: 0.1 } },
+    critical_strike: { name: '爆擊的', type: 'crit_chance', effects: { value: 10 } },
+    gambler: { name: '賭徒的', type: 'proc_rate_enhancer', effects: { value: 5 } },
 };
 
 // --- 輔助函式 ---
@@ -625,3 +644,67 @@ const CAPACITY_LEVELS = {
     dungeon: [0, 5, 10, 15, 20, 25, 30],
     barracks: [5, 10, 20, 30, 40, 50]
 };
+
+const FESTIVALS = [
+    // --- 情人節系列 ---
+    {
+        month: 1, date: 14, eventName: '日記情人節', type: 'valentine',
+        avatar: 'assets/century-0114.png',
+        dialogue: '「唉...一年之初就要寫日記？真是麻煩死了...不過...如果是記錄你的『有趣』事，我倒是考慮考慮...」'
+    },
+    {
+        month: 2, date: 14, eventName: '西洋情人節', type: 'valentine',
+        avatar: 'assets/century-0214.png',
+        dialogue: '「哥布林王，聽說今天是個充滿『愛』的日子...有沒有準備什麼能讓我開心的『祭品』？嘿嘿嘿...」'
+    },
+    {
+        month: 3, date: 14, eventName: '白色情人節', type: 'valentine',
+        avatar: 'assets/century-0314.png',
+        dialogue: '「嘖...回禮什麼的最麻煩了。不過看在你供品不錯的份上，這個就當作是我賞你的吧！」'
+    },
+    {
+        month: 4, date: 14, eventName: '黑色情人節', type: 'valentine',
+        avatar: 'assets/century-0414.png',
+        dialogue: '「單身？寂寞？正好，把那些情緒都化為掠奪的動力吧！我這裡正好有好東西能幫你...呵...」'
+    },
+    {
+        month: 5, date: 14, eventName: '玫瑰情人節', type: 'valentine',
+        avatar: 'assets/century-0514.png',
+        dialogue: '「送我玫瑰？俗氣。不如送我幾個『好貨』來得實際...你懂的吧？嘿嘿嘿...」'
+    },
+    {
+        month: 6, date: 14, eventName: '親吻情人節', type: 'valentine',
+        avatar: 'assets/century-0614.png',
+        dialogue: '「想要一個吻嗎？哈哈哈~我開玩笑的~先拿出能讓我滿意的『代價』再說吧...哈」'
+    },
+    {
+        month: 7, date: 14, eventName: '銀色情人節', type: 'valentine',
+        avatar: 'assets/century-0714.png',
+        dialogue: '「聽說今天是把『戀人』介紹給長輩的日子...要把我介紹給你的哥布林們嗎？沒事...我就開開玩笑，不要給我當真呀!!!」'
+    },
+    {
+        month: 8, date: 14, eventName: '綠色情人節', type: 'valentine',
+        avatar: 'assets/century-0814.png',
+        dialogue: '「多親近大自然也不錯...你看，你的膚色和森林多搭啊。要不要考慮多抓幾個『精靈』？噢~我都忘了dlc還沒裝呢~」'
+    },
+    {
+        month: 9, date: 14, eventName: '音樂/相片情人節', type: 'valentine',
+        avatar: 'assets/century-0914.png',
+        dialogue: '「笑一個~(喀擦)謝謝惠顧~奴隸1個~我就開開玩笑嘛~你問我這些東西從哪來的？難道你認為"世紀"只是單純的名子嗎?」'
+    },
+    {
+        month: 10, date: 14, eventName: '葡萄酒情人節', type: 'valentine',
+        avatar: 'assets/century-1014.png',
+        dialogue: '「來一杯嗎？這可是用上好的『材料』釀造的...喝完之後...可是會很有『精神』的喔？不過你看來不太需要呢~哈哈哈~」'
+    },
+    {
+        month: 11, date: 14, eventName: '電影情人節', type: 'valentine',
+        avatar: 'assets/century-1114.png',
+        dialogue: '「電影？這裡好像沒有這種東西，提線木偶倒是有。不過...你的王國崛起史，可更精彩。你問我怎麼知道電影?秘~密~」'
+    },
+    {
+        month: 12, date: 14, eventName: '擁抱情人節', type: 'valentine',
+        avatar: 'assets/century-1214.png',
+        dialogue: '「你問我為什麼穿這樣？噢~對~這裡沒有聖誕節，那你的情人節禮物我就收走啦~開玩笑的啦，哈哈哈~」'
+    }
+];
