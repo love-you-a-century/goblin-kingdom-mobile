@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.45</title>
+    <title>哥布林王國v5.48</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -613,16 +613,18 @@
             <div id="combat-screen" x-cloak>
                 <div class="max-w-5xl mx-auto game-container relative p-6 rounded-lg pt-10">
                     <h1 class="game-title font-medieval">戰鬥中</h1>
-                    <div class="grid grid-cols-2 gap-6">
+                    <div class="flex justify-between gap-6">
                         <div>
                             <h3 class="text-lg font-bold text-green-400">我方隊伍
                                 (<span x-text="combat.allies.filter(u => u.isAlive()).length"></span>)</h3>
                             <div class="space-y-1 mt-2 text-sm">
                                 <template x-for="unit in combat.allies">
-                                    <p :class="!unit.isAlive() ? 'text-gray-500 line-through' : ''">
-                                        <span x-text="unit.name"></span> - HP: <span x-text="unit.currentHp"></span> /
-                                        <span x-text="unit.maxHp"></span>
-                                    </p>
+                                    <div class="relative" :id="'unit-display-' + unit.id">
+                                        <p :class="!unit.isAlive() ? 'text-gray-500 line-through' : ''">
+                                            <span x-text="unit.name"></span> - HP: <span x-text="unit.currentHp"></span> <span :id="'unit-slash-' + unit.id">/</span>
+                                            <span x-text="unit.maxHp"></span>
+                                        </p>
+                                    </div>
                                 </template>
                             </div>
                         </div>
@@ -631,10 +633,11 @@
                                 (<span x-text="combat.enemies.filter(u => u.isAlive()).length"></span>)</h3>
                             <div class="space-y-1 mt-2 text-sm">
                                 <template x-for="unit in combat.enemies">
-                                    <p :class="!unit.isAlive() ? 'text-gray-500 line-through' : ''">
-                                        <span x-text="unit.name"></span> (<span x-text="unit.profession"></span>) - HP:
-                                        <span x-text="unit.currentHp"></span> / <span x-text="unit.maxHp"></span>
-                                    </p>
+                                    <div class="relative" :id="'unit-display-' + unit.id">
+                                        <p :class="!unit.isAlive() ? 'text-gray-500 line-through' : ''">
+                                            <span x-text="unit.name"></span> (<span x-text="unit.profession"></span>) - HP:
+                                            <span x-text="unit.currentHp"></span> <span :id="'unit-slash-' + unit.id">/</span> <span x-text="unit.maxHp"></span> </p>
+                                    </div>
                                 </template>
                             </div>
                         </div>

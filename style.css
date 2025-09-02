@@ -1,4 +1,4 @@
-         /* 【新增此段】地圖響應式樣式 */
+         /* 地圖響應式樣式 */
         .map-container-responsive {
             width: 100%;
             max-width: 480px; /* 【修改】地圖最大不會超過 480px */
@@ -10,8 +10,8 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 480px; /* 【修改】畫布的邏輯尺寸更新 */
-            height: 700px; /* 【修改】畫布的邏輯尺寸更新 */
+            width: 480px; /* 畫布的邏輯尺寸更新 */
+            height: 700px; /* 畫布的邏輯尺寸更新 */
             transform-origin: top left; /* 設定縮放的基準點為左上角 */
         }
         :root {
@@ -283,7 +283,7 @@
             transform: translateY(2px); /* 按下時的下沉效果 */
             box-shadow: none; /* 按下時陰影消失 */
         }
-        /* --- 新增的場景樣式 (2D版本) --- */
+        /* --- 場景樣式 (2D版本) --- */
         .scene-container {
             width: 100%;
             max-width: 600px;
@@ -349,7 +349,7 @@
             transform: translate(-50%, -50%);
             cursor: pointer;
             transition: transform 0.2s ease;
-            z-index: 10; /* 新增此行，提升層級 */
+            z-index: 10; /* 提升層級 */
         }
         .unit:hover {
             transform: translate(-50%, -50%) scale(1.5); /* 懸停時放大 */
@@ -384,7 +384,7 @@
             75% { opacity: 1; }
             100% { transform: translate(0, 0); opacity: 0; }
         }
-        /* --- 新增：提升特定 Modal 的顯示層級 --- */
+        /* --- 提升特定 Modal 的顯示層級 --- */
         #custom-alert-modal,
         #discard-confirm-modal,
         #bailout-confirm-modal,
@@ -523,4 +523,28 @@
             justify-content: center; /* 水平置中所有骰子 */
             gap: 1rem; /* 骰子之間的間距 */
             width: 100%;
+        }
+
+        /* --- 戰鬥浮動文字樣式 --- */
+        .damage-popup {
+            position: absolute; /* 絕對定位，這是必須的 */
+            font-size: 1em;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 99;
+            
+            opacity: 1; /* 初始完全可見 */
+            transform: translate(-50%, 0); /* 初始水平居中 */
+            transition: opacity 2s ease-out, transform 2s ease-out; /* 淡出和移動的動畫 */
+            text-shadow: 1px 1px 2px black; /* 增加可讀性 */
+        }
+
+        /* 傷害數字的顏色 */
+        .damage-popup.damage {
+            color: #f56565; /* 紅色 */
+        }
+
+        /* 未命中文字的顏色 */
+        .damage-popup.miss {
+            color: #f6e05e; /* 黃色 */
         }
