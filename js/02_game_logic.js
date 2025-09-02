@@ -766,8 +766,35 @@ const gameLogic = {
         if (stats.damageReduction) {
             nativeStatValue += stats.damageReduction * 10; // e.g., 傷害減免+6% -> 6*10 = 60
         }
-        if (stats.blockTarget) { // 盾牌格擋值 (根據比例賦予較高價值)
-            nativeStatValue += (20 - stats.blockTarget) * 50;
+        if (item.baseName === '盾') {
+            // --- 盾牌的專屬價格公式 ---
+            const blockTarget = stats.blockTarget || 20; // 若無目標值，預設為20 (極難成功)
+            const blockChancePercent = (20 - blockTarget) * 5; // (20-目標值)*5 = 發動率%
+            const blockChanceValue = blockChancePercent * 10;
+            
+            // 根據您的公式「10 * 25減傷」，這裡解釋為一個代表減傷潛力的固定價值 250
+            const damageReductionValue = 250; 
+            
+            nativeStatValue += blockChanceValue + damageReductionValue;
+
+            // 盾牌也帶有攻擊加成，需要另外計算
+            if (stats.attackBonus) {
+                nativeStatValue += (stats.attackBonus * 6) * 2;
+            }
+        } else {
+            // --- 其他所有非盾牌裝備的價格公式 ---
+            if (stats.allStats) {
+                nativeStatValue += (stats.allStats * 4 * 6) * 2;
+            }
+            if (stats.attackBonus) {
+                nativeStatValue += (stats.attackBonus * 6) * 2;
+            }
+            if (stats.damage) {
+                nativeStatValue += (stats.damage * 6) * 2;
+            }
+            if (stats.damageReduction) {
+                nativeStatValue += stats.damageReduction * 10;
+            }
         }
 
         // 3. 品質價值
@@ -824,6 +851,13 @@ const gameLogic = {
                             break;
                     }
                 } 
+                
+                // D. 特殊效果類詞綴 (例如爆擊模組)
+                else if (affix.key === 'devastating') {
+                    // 根據您的公式設定價值
+                    singleAffixValue += 50 * 6 * 2; // 600
+                }
+
                 else if (affix.type === 'weapon_damage') {
                     const effect = affix.effects[0]; // 取得效果設定
                     if (effect) {
@@ -1027,7 +1061,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.45 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.46 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -3485,15 +3519,15 @@ const gameLogic = {
         
         this.logMessage('combat', `攻擊命中！`, 'success');
 
-        // --- v2.5 傷害計算  ---
+        // --- v2.5 傷害計算 (修改後) ---
         let damage = attacker.calculateDamage(this.isStarving);
         damage += (attacker.equipment.chest?.stats.attackBonus || 0) + (attacker.equipment.offHand?.stats.attackBonus || 0);
 
-        // --- 機率觸發系統 ---
+        // --- 機率觸發系統 (修改後) ---
         let attackerGamblerBonus = 0;
         let critAffixCount = 0;
         let penetratingAffixCount = 0;
-        let critMultiplier = 2.0;
+        let devastatingAffixCount = 0; // 新增：計算「毀滅的」詞綴數量
 
         Object.values(attacker.equipment).forEach(item => {
             if (!item) return;
@@ -3507,8 +3541,9 @@ const gameLogic = {
                 if (affix.key === 'penetrating') {
                     penetratingAffixCount++;
                 }
-                if (affix.key === 'devastating' && affix.effects) {
-                    critMultiplier = affix.effects.crit_multiplier;
+                // 修改：不再覆蓋倍率，而是計數
+                if (affix.key === 'devastating') {
+                    devastatingAffixCount++;
                 }
             });
         });
@@ -3516,10 +3551,27 @@ const gameLogic = {
         const totalCritChance = 5.0 + (critAffixCount * 10) + attackerGamblerBonus;
         if (rollPercentage(totalCritChance)) {
             this.logMessage('combat', `致命一擊！`, 'crit');
-            damage = Math.floor(damage * critMultiplier);
+
+            // 1. 設定基礎爆擊倍率
+            const baseCritMultiplier = 1.5;
+            // 2. 計算基礎爆擊傷害
+            let baseCritDamage = Math.floor(damage * baseCritMultiplier);
+
+            // 3. 如果有「毀滅的」詞綴，計算額外傷害
+            if (devastatingAffixCount > 0) {
+                const devastatingAffixData = STANDARD_AFFIXES.devastating;
+                const bonusPerAffix = devastatingAffixData.effects.crit_damage_bonus; // 取得我們設定的 0.5
+                // 額外傷害 = (原始傷害 * 基礎爆擊倍率 * 每個詞綴的加成) * 詞綴數量
+                const bonusDamage = Math.floor((damage * baseCritMultiplier * bonusPerAffix) * devastatingAffixCount);
+                
+                this.logMessage('combat', `[毀滅的] 效果觸發 x${devastatingAffixCount}，額外造成 ${bonusDamage} 點爆擊傷害！`, 'skill');
+                damage = baseCritDamage + bonusDamage;
+            } else {
+                damage = baseCritDamage;
+            }
         }
 
-        // --- 【新增】處理「穿透的」詞綴 ---
+        // --- 處理「穿透的」詞綴 ---
         let penetrationEffect = 0; // 0 代表不穿透
         if (penetratingAffixCount > 0) {
             const totalPenetratingChance = (penetratingAffixCount * 10) + attackerGamblerBonus; // 基礎機率 10%
@@ -3562,14 +3614,18 @@ const gameLogic = {
 
         const shield = currentTarget.equipment.offHand;
         if (!wasBlockedByAffix && shield && shield.baseName === '盾') {
-            const blockRoll = rollDice('1d20').total;
-            const blockTarget = shield.stats.blockTarget || 99;
-            if (attacker.id === this.player.id || currentTarget.id === this.player.id) {
-                await this.showDiceRollAnimation('格擋判定', [], [{ sides: 20, result: blockRoll }]);
-            }
-            this.logMessage('combat', `> ${currentTarget.name} 進行盾牌格擋: 擲出 ${blockRoll} (目標 >= ${blockTarget})`, 'info');
-            if (blockRoll >= blockTarget) {
-                damage = Math.floor(damage * 0.75);
+            // --- 將 d20 判定改為百分比判定 ---
+
+            // 1. 從盾牌的 blockTarget 計算基礎格擋率
+            const baseBlockChance = (20 - (shield.stats.blockTarget || 20)) * 5; // (20-目標值)*5 = 發動率%
+            
+            // 2. 加上「賭徒的」詞綴提供的總加成 (此變數在稍早的「格擋的」詞綴判定中已計算好)
+            const finalBlockChance = baseBlockChance + defenderGamblerBonus;
+            
+            // 3. 進行百分比擲骰
+            this.logMessage('combat', `> ${currentTarget.name} 進行盾牌格擋: 機率 ${finalBlockChance.toFixed(1)}%`, 'info');
+            if (rollPercentage(finalBlockChance)) {
+                damage = Math.floor(damage * 0.75); // 傷害減免25%
                 this.logMessage('combat', `${currentTarget.name} 的盾牌成功格擋了攻擊，傷害大幅降低！`, 'skill');
             }
         }

@@ -556,7 +556,7 @@ const STANDARD_AFFIXES = {
     vampiric: { name: '吸血的', type: 'proc', procInfo: { baseRate: 10, type: 'vampiric', value: 0.5 } },
     spiky: { name: '尖刺的', type: 'proc', procInfo: { baseRate: 10, type: 'thorns', value: 0.1 } },
     multi_hit: { name: '連擊的', type: 'proc', procInfo: { baseRate: 5, type: 'multi_hit' } },
-    devastating: { name: '毀滅的', type: 'crit_mod', effects: { crit_multiplier: 1.5 } },
+    devastating: { name: '毀滅的', type: 'crit_mod', effects: { crit_damage_bonus: 0.5 } },
     regenerating: { name: '再生的', type: 'proc', procInfo: { type: 'regenerating', value: 0.05 } },
     blocking: { name: '格擋的', type: 'proc', procInfo: { baseRate: 5, type: 'blocking' } },
     penetrating: { name: '穿透的', type: 'proc', procInfo: { baseRate: 10, type: 'penetrating', value: 0.1 } },
