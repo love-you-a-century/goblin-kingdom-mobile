@@ -1061,7 +1061,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.46 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.48 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -3514,6 +3514,10 @@ const gameLogic = {
 
         if (attackerTotal <= defenderTotal) { 
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${currentTarget.name} 閃過了！`, logType === 'player' ? 'enemy' : 'player');
+            
+            // 顯示 MISS 浮動文字
+            showFloatingText(currentTarget.id, 'MISS', 'miss');
+
             return;
         }
         
@@ -3633,6 +3637,11 @@ const gameLogic = {
         const finalDamage = Math.max(0, Math.floor(damage)); 
         currentTarget.currentHp = Math.max(0, currentTarget.currentHp - finalDamage);
         this.logMessage('combat', `${attacker.name} 對 ${currentTarget.name} 造成了 ${finalDamage} 點傷害。`, isAllyAttacking ? 'player' : 'enemy');
+        
+        // 如果造成了傷害 (或0點傷害)，就顯示傷害數字
+        if (finalDamage >= 0) {
+            showFloatingText(currentTarget.id, finalDamage, 'damage');
+        }
 
         // --- 攻擊者與防禦者「命中後」觸發效果 ---
         if (attacker.isAlive()) { // 攻擊方吸血
@@ -5248,12 +5257,12 @@ const gameLogic = {
         // 顯示特殊詛咒詞綴 (紅字)
         if (item.specialAffix) {
             const affixDesc = {
-                'strength_curse': '脫力(基礎力=0時+10力, 否則全能力-10)',
-                'agility_curse': '遲鈍(基礎敏=0時+10敏, 否則全能力-10)',
-                'intelligence_curse': '愚鈍(基礎智=0時+10智, 否則全能力-10)',
-                'luck_curse': '不幸(基礎運=0時+10運, 否則全能力-10)',
-                'gundam_curse': '肛蛋(基礎2項=0時, 該2項+8, 否則全能力-8)',
-                'henshin_curse': '變身(基礎3項=0時, 該3項+5, 否則全能力-5)',
+                'strength_curse': '脫力(基礎力=0時+30力, 否則全能力-30)',
+                'agility_curse': '遲鈍(基礎敏=0時+30敏, 否則全能力-30)',
+                'intelligence_curse': '愚鈍(基礎智=0時+30智, 否則全能力-30)',
+                'luck_curse': '不幸(基礎運=0時+30運, 否則全能力-30)',
+                'gundam_curse': '肛蛋(基礎2項=0時, 該2項+15, 否則全能力-15)',
+                'henshin_curse': '變身(基礎3項=0時, 該3項+10, 否則全能力-10)',
             }[item.specialAffix] || '';
             if (affixDesc) {
                 parts.push(`<span class="text-red-400">${affixDesc}</span>`);

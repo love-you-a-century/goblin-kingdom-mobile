@@ -332,28 +332,28 @@
                     if (!item || !item.specialAffix) return;
                     switch (item.specialAffix) {
                         case 'strength_curse':
-                            if (zeroStats.includes('strength')) { if (stat === 'strength') modifier.bonus += 10; } 
-                            else { modifier.penalty += 10; }
+                            if (zeroStats.includes('strength')) { if (stat === 'strength') modifier.bonus += 30; } 
+                            else { modifier.penalty += 30; }
                             break;
                         case 'agility_curse':
-                            if (zeroStats.includes('agility')) { if (stat === 'agility') modifier.bonus += 10; }
-                            else { modifier.penalty += 10; }
+                            if (zeroStats.includes('agility')) { if (stat === 'agility') modifier.bonus += 30; }
+                            else { modifier.penalty += 30; }
                             break;
                         case 'intelligence_curse':
-                            if (zeroStats.includes('intelligence')) { if (stat === 'intelligence') modifier.bonus += 10; }
-                            else { modifier.penalty += 10; }
+                            if (zeroStats.includes('intelligence')) { if (stat === 'intelligence') modifier.bonus += 30; }
+                            else { modifier.penalty += 30; }
                             break;
                         case 'luck_curse':
-                            if (zeroStats.includes('luck')) { if (stat === 'luck') modifier.bonus += 10; }
-                            else { modifier.penalty += 10; }
+                            if (zeroStats.includes('luck')) { if (stat === 'luck') modifier.bonus += 30; }
+                            else { modifier.penalty += 30; }
                             break;
                         case 'gundam_curse':
-                            if (zeroStats.length === 2) { if (zeroStats.includes(stat)) modifier.bonus += 8; }
-                            else { modifier.penalty += 8; }
+                            if (zeroStats.length === 2) { if (zeroStats.includes(stat)) modifier.bonus += 15; }
+                            else { modifier.penalty += 15; }
                             break;
                         case 'henshin_curse':
-                            if (zeroStats.length === 3) { if (zeroStats.includes(stat)) modifier.bonus += 5; }
-                            else { modifier.penalty += 5; }
+                            if (zeroStats.length === 3) { if (zeroStats.includes(stat)) modifier.bonus += 10; }
+                            else { modifier.penalty += 10; }
                             break;
                     }
                 });

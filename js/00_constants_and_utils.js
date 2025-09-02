@@ -708,3 +708,56 @@ const FESTIVALS = [
         dialogue: '「你問我為什麼穿這樣？噢~對~這裡沒有聖誕節，那你的情人節禮物我就收走啦~開玩笑的啦，哈哈哈~」'
     }
 ];
+// --- 顯示戰鬥浮動文字的函式 (定位在 '/' 上方) ---
+function showFloatingText(targetUnitId, text, type = 'damage') {
+    const targetContainer = document.getElementById('unit-display-' + targetUnitId);
+    // 找到血量顯示中的 '/' 符號元素
+    const slashSpan = document.getElementById('unit-slash-' + targetUnitId); 
+
+    if (!targetContainer || !slashSpan) { 
+        console.error("找不到浮動文字的目標容器或斜線符號:", targetUnitId);
+        return;
+    }
+
+    const popup = document.createElement('div');
+    popup.textContent = text;
+    popup.className = 'damage-popup';
+
+    if (type === 'damage') {
+        popup.classList.add('damage');
+        popup.textContent = `-${text}`;
+    } else if (type === 'miss') {
+        popup.classList.add('miss');
+    }
+
+    targetContainer.appendChild(popup);
+
+    // 【定位在 '/' 符號上方】
+    // 獲取 '/' span 和其父容器的相對位置
+    const slashRect = slashSpan.getBoundingClientRect();
+    const containerRect = targetContainer.getBoundingClientRect();
+
+    // 計算新的 left 和 top 位置
+    // left: 對齊 '/' 符號的中心
+    // top: 對齊 '/' 符號的頂部，然後再往上移動一些，讓它浮在上方
+    popup.style.left = `${slashRect.left - containerRect.left + (slashRect.width / 2)}px`; // 居中對齊 '/'
+    popup.style.top = `${slashRect.top - containerRect.top - 10}px`; // 向上移動 10px，可以根據需要調整
+
+    // 為了讓文字居中對齊到這個計算出的 left 位置，需要向左移動自身寬度的一半
+    popup.style.transform = `translateX(-50%)`; 
+
+    // 觸發 CSS 動畫 (這次也讓它稍微向上移動一點，更自然)
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            popup.style.opacity = '0'; // 開始淡出
+            popup.style.transform += ' translateY(-5px)'; // 在淡出的同時再向上飄移一點(-5px)
+        }, 10);
+    });
+
+    // 在動畫結束後 (2秒)，從畫面中移除這個元素
+    setTimeout(() => {
+        if (popup.parentNode) {
+            popup.parentNode.removeChild(popup);
+        }
+    }, 2000);
+}
