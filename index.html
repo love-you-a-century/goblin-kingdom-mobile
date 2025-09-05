@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.48</title>
+    <title>哥布林王國v5.55</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -355,10 +355,14 @@
                                             </div>
                                         </div>
 
-                                        <div class="grid grid-cols-3 text-sm text-center border-y border-gray-700 py-1 my-2">
+                                        <div class="grid grid-cols-4 text-sm text-center border-y border-gray-700 py-1 my-2">
                                             <div class="col-span-1">
                                                 <span class="text-gray-400 block text-xs">日期</span>
                                                 <span class="text-xs" x-text="`第 ${year} 年 ${month} 月 ${currentDate} 日`"></span>
+                                            </div>
+                                            <div>
+                                                <span class="text-gray-400 block text-xs">總繁衍次數</span>
+                                                <span x-text="totalBreedingCount"></span>
                                             </div>
                                             <div>
                                                 <span class="text-gray-400 block text-xs">能力點</span>
@@ -408,13 +412,10 @@
                                                     <li>夥伴: <span x-text="partners.length"></span> /
                                                         <span x-text="partnerCapacity"></span>
                                                     </li>
-                                                    <li>俘虜: <span x-text="dungeonCaptives.length"></span> /
+                                                    <li>俘虜 (總數): <span x-text="captives.length"></span> /
                                                         <span x-text="captiveCapacity"></span>
                                                     </li>
-                                                    <li>孕母: <span x-text="mothers.length"></span> /
-                                                        <span x-text="maternityCapacity"></span>
-                                                    </li>
-                                                </ul>
+                                                    </ul>
                                             </div>
                                         </div>
                                     </div>
@@ -642,6 +643,15 @@
                             </div>
                         </div>
                     </div>
+                    <template x-if="combat.isGoddessQnA">
+                        <div class="my-6 text-center">
+                            <p class="text-lg text-amber-200 mb-4" x-text="combat.goddessQuestion"></p>
+                            <input type="text" x-model="combat.playerAnswer" @keydown.enter="submitGoddessAnswer()" class="w-full md:w-1/2 bg-gray-800 border-2 border-gray-600 rounded px-3 py-2 mb-4" placeholder="在此輸入你的答案...">
+                            <div>
+                                <button @click="submitGoddessAnswer()" class="btn btn-primary">回答</button>
+                            </div>
+                        </div>
+                    </template>
                     <div class="mt-4">
                         <h3 class="font-bold">戰鬥紀錄</h3>
                         <div class="log-panel" id="combat" x-init="$watch('logs.combat', () => { $nextTick(() => { $el.scrollTop = $el.scrollHeight }) })">
@@ -650,7 +660,7 @@
                             </template>
                         </div>
                     </div>
-                    <div class="mt-4 text-center space-x-4">
+                    <div class="mt-4 text-center space-x-4" x-show="!combat.isGoddessQnA">
                         <button @click="executePlayerAction('attack')" class="btn btn-primary" :disabled="!player || !player.isAlive() || combat.isProcessing || combat.playerActionTaken">普通攻擊</button>
                         <button @click="modals.combatSkills.isOpen = true" 
                                 class="btn btn-primary" 
@@ -791,8 +801,8 @@
                                 <button @click="modals.construction.activeTab = 'barracks'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'barracks' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">寢室</button>
                                 <button @click="modals.construction.activeTab = 'warehouse'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'warehouse' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">倉庫</button>
                                 <button @click="modals.construction.activeTab = 'armory'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'armory' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">兵工廠</button>
-                                <button @click="modals.construction.activeTab = 'maternity'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'maternity', 'glow-pulse': tutorial.active && tutorial.step === 4 }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">產房</button>
                                 <button @click="modals.construction.activeTab = 'trainingGround'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'trainingGround' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">訓練場</button>
+                                <button @click="modals.construction.activeTab = 'watchtower'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'watchtower' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">哨塔</button>
                                 <button @click="modals.construction.activeTab = 'merchantCamp'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'merchantCamp' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">商人營地</button>
                             </div>
                             <div x-show="modals.construction.activeTab === 'dungeon'">
@@ -802,13 +812,38 @@
                                     <button @click="modals.dungeon.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'upgrade', 'glow-pulse': tutorial.active && tutorial.step === 3 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
                                 </div>
                                 <div x-show="modals.dungeon.subTab === 'manage'">
-                                    <h3 class="text-xl font-bold mb-2">管理俘虜</h3>
-                                    <p class="mb-4">目前俘虜: <span x-text="dungeonCaptives.length"></span> / <span x-text="captiveCapacity"></span></p>
-                                    <div class="space-y-4">
-                                        <template x-for="captive in dungeonCaptives" :key="captive.id">
-                                            <div class="p-3 border border-gray-600 rounded">
+                                    <h3 class="text-xl font-bold mb-2">管理所有俘虜</h3>
+                                    <p class="mb-2">總人數: <span x-text="captives.length"></span> / <span x-text="captiveCapacity"></span></p>
+                                    
+                                    <div class="flex items-center space-x-2 mb-4 border-b border-gray-600 pb-3">
+                                        <span class="font-bold text-sm text-gray-400">篩選狀態:</span>
+                                        <button @click="modals.dungeon.activeFilter = 'all'" class="btn btn-xs" :class="{ 'btn-primary': modals.dungeon.activeFilter === 'all', 'btn-secondary': modals.dungeon.activeFilter !== 'all' }">全部</button>
+                                        <button @click="modals.dungeon.activeFilter = 'breedable'" class="btn btn-xs" :class="{ 'btn-primary': modals.dungeon.activeFilter === 'breedable', 'btn-secondary': modals.dungeon.activeFilter !== 'breedable' }">可繁衍</button>
+                                        <button @click="modals.dungeon.activeFilter = 'pregnant'" class="btn btn-xs" :class="{ 'btn-primary': modals.dungeon.activeFilter === 'pregnant', 'btn-secondary': modals.dungeon.activeFilter !== 'pregnant' }">懷孕中</button>
+                                        <button @click="modals.dungeon.activeFilter = 'mother'" class="btn btn-xs" :class="{ 'btn-primary': modals.dungeon.activeFilter === 'mother', 'btn-secondary': modals.dungeon.activeFilter !== 'mother' }">產奶中</button>
+                                    </div>
+
+                                    <div class="space-y-4 max-h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
+                                        <template x-for="captive in filteredCaptives" :key="captive.id">
+                                            <div class="p-3 border rounded" :class="{
+                                                'border-pink-400/50 bg-pink-900/10': captive.isPregnant,
+                                                'border-blue-400/50 bg-blue-900/10': !captive.isPregnant && captive.isMother,
+                                                'border-gray-600': !captive.isPregnant && !captive.isMother
+                                            }">
                                                 <div class="flex justify-between items-start">
-                                                    <div><p class="text-lg font-bold text-amber-200"><span x-text="captive.name"></span> - <span x-text="captive.profession"></span></p></div>
+                                                    <div>
+                                                        <p class="text-lg font-bold text-amber-200"><span x-text="captive.name"></span> - <span x-text="captive.profession"></span></p>
+                                                        <p class="text-sm font-bold" :class="{
+                                                            'text-pink-400': captive.isPregnant,
+                                                            'text-blue-400': !captive.isPregnant && captive.isMother,
+                                                            'text-green-400': !captive.isPregnant && !captive.isMother
+                                                        }">
+                                                            <span x-show="captive.isPregnant" x-text="`狀態: 懷孕中 (剩餘 ${captive.pregnancyTimer} 天)`"></span>
+                                                            <span x-show="!captive.isPregnant && captive.isMother">狀態: 產奶中</span>
+                                                            <span x-show="!captive.isPregnant && !captive.isMother">狀態: 可繁衍</span>
+                                                            <span class="text-gray-400 font-normal" x-text="` | 繁衍: ${(captive.breedingCount || 0)} 次`"></span>
+                                                        </p>
+                                                    </div>
                                                     <div class="text-right text-sm"><p>魅力: <span class="font-bold" x-text="captive.stats.charisma"></span></p></div>
                                                 </div>
                                                 <div class="mt-2 pt-2 border-t border-gray-600 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
@@ -817,10 +852,13 @@
                                                     <div><strong>智力:</strong> <span x-text="captive.stats.intelligence"></span></div>
                                                     <div><strong>運氣:</strong> <span x-text="captive.stats.luck"></span></div>
                                                 </div>
-                                                <div class="text-right mt-2"><button @click="releaseCaptive(captive.id)" class="btn btn-danger btn-sm">拋棄</button></div>
+                                                <div class="text-right mt-2 space-x-2">
+                                                    <button x-show="!captive.isPregnant && captive.isMother" @click="moveMotherToDungeon(captive.id)" class="btn btn-secondary btn-sm">移回可繁衍</button>
+                                                    <button @click="releaseCaptive(captive.id)" class="btn btn-danger btn-sm">拋棄</button>
+                                                </div>
                                             </div>
                                         </template>
-                                        <p x-show="dungeonCaptives.length === 0" class="text-center text-gray-400">地牢中沒有任何俘虜。</p>
+                                        <p x-show="filteredCaptives.length === 0" class="text-center text-gray-400">地牢中沒有任何俘虜，或篩選結果為空。</p>
                                     </div>
                                 </div>
                                 <div x-show="modals.dungeon.subTab === 'breed'">
@@ -832,7 +870,10 @@
                                                 <div class="flex justify-between items-start">
                                                     <div class="flex-grow">
                                                         <p class="font-bold text-amber-200"><span x-text="captive.name"></span> (<span x-text="captive.profession"></span>)</p>
-                                                        <p class="text-sm text-pink-400">魅力: <span x-text="captive.stats.charisma"></span></p> 
+                                                        <p class="text-sm">
+                                                            <span class="text-pink-400">魅力: <span x-text="captive.stats.charisma"></span></span>
+                                                            <span class="text-gray-400" x-text="` | 繁衍: ${(captive.breedingCount || 0)} 次`"></span>
+                                                        </p> 
                                                         <template x-if="captive.visual">
                                                             <div class="mt-2 pt-2 border-t border-gray-700 text-xs text-gray-400 grid grid-cols-2 gap-x-3 gap-y-1">
                                                                 <span>身高: <span x-text="captive.visual.height + ' cm'"></span></span>
@@ -857,8 +898,7 @@
                                                 class="btn btn-primary">
                                             執行繁衍 (<span x-text="modals.dungeon.selectedBreedIds.length"></span>)
                                         </button>
-                                        <p x-show="maternityCapacity === 0" class="text-red-400 text-sm mt-2">請先建造或升級產房！</p>
-                                        <p x-show="maternityCapacity > 0 && mothers.length >= maternityCapacity" class="text-red-400 text-sm mt-2">產房已滿！</p>
+                                        <p x-show="captives.length >= captiveCapacity" class="text-red-400 text-sm mt-2">地牢空間已滿！</p>
                                     </div>
                                 </div>
                                 <div x-show="modals.dungeon.subTab === 'upgrade'">
@@ -1081,62 +1121,6 @@
                                 </div>
                             </div>
 
-                            <div x-show="modals.construction.activeTab === 'maternity'">
-                                <div class="flex border-b border-gray-600 mb-4">
-                                    <button @click="modals.maternity.subTab = 'manage'" :class="{ 'bg-gray-700 text-white': modals.maternity.subTab === 'manage' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">管理孕母</button>
-                                    <button @click="modals.maternity.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.maternity.subTab === 'upgrade', 'glow-pulse': tutorial.active && tutorial.step === 4 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
-                                </div>
-                                <div x-show="modals.maternity.subTab === 'manage'">
-                                    <h3 class="text-xl font-bold mb-2">管理孕母</h3>
-                                    <p class="mb-4">目前孕母: <span x-text="mothers.length"></span> / <span x-text="maternityCapacity"></span></p>
-                                    
-                                    <div class="space-y-4 max-h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
-                                        <template x-for="mother in mothers" :key="mother.id">
-                                            <div class="p-3 border border-gray-600 rounded">
-                                                <div class="flex justify-between items-start">
-                                                    <div>
-                                                        <p class="text-lg font-bold text-amber-200"><span x-text="mother.name"></span> - <span x-text="mother.profession"></span></p>
-                                                        <p class="text-sm" :class="mother.isPregnant ? 'text-pink-400' : 'text-gray-400'" x-text="mother.isPregnant ? `懷孕中 (剩餘 ${mother.pregnancyTimer} 天)` : '產奶中'"></p>
-                                                    </div>
-                                                    <div class="text-right text-sm">
-                                                        <p>魅力: <span class="font-bold" x-text="mother.stats.charisma"></span></p>
-                                                    </div>
-                                                </div>
-                                                <div class="mt-2 pt-2 border-t border-gray-600 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                                                    <div><strong>力量:</strong> <span x-text="mother.stats.strength"></span></div>
-                                                    <div><strong>敏捷:</strong> <span x-text="mother.stats.agility"></span></div>
-                                                    <div><strong>智力:</strong> <span x-text="mother.stats.intelligence"></span></div>
-                                                    <div><strong>運氣:</strong> <span x-text="mother.stats.luck"></span></div>
-                                                </div>
-                                                <div class="text-right mt-2 space-x-2">
-                                                    <button @click="moveMotherToDungeon(mother.id)" class="btn btn-secondary btn-sm">移回地牢</button>
-                                                    <button @click="releaseCaptive(mother.id)" class="btn btn-danger btn-sm">拋棄</button>
-                                                </div>
-                                            </div>
-                                        </template>
-                                        <p x-show="mothers.length === 0" class="text-center text-gray-400">產房中沒有任何孕母。</p>
-                                    </div>
-                                </div>
-                                <div x-show="modals.maternity.subTab === 'upgrade'">
-                                    <h3 class="text-xl font-bold mb-2">升級產房 (等級 <span x-text="buildings.maternity.level"></span>)</h3>
-                                    <p class="text-sm text-gray-400 mb-4">增加孕母容量上限。</p>
-                                    <template x-if="buildings.maternity.level < 6">
-                                        <div>
-                                            <p class="text-sm">
-                                                <span x-text="buildings.maternity.level === 0 ? '建造花費:' : `升級至 ${buildings.maternity.level + 1} 級花費:`"></span>
-                                                <span x-text="getBuildingUpgradeCost('maternity').food"></span> 食物,
-                                                <span x-text="getBuildingUpgradeCost('maternity').wood"></span> 木材,
-                                                <span x-text="getBuildingUpgradeCost('maternity').stone"></span> 礦石
-                                            </p>
-                                            <button @click="upgradeBuilding('maternity')" class="btn btn-primary mt-2" :disabled="!canAffordBuildingUpgrade('maternity')" :class="{'glow-pulse': tutorial.active && tutorial.step === 4}">
-                                                <span x-text="buildings.maternity.level === 0 ? '建造' : '升級'"></span>
-                                            </button>
-                                        </div>
-                                    </template>
-                                    <p x-show="buildings.maternity.level >= 6" class="text-sm text-green-400 mt-2">產房已達到最大等級！</p>
-                                </div>
-                            </div>
-
                             <div x-show="modals.construction.activeTab === 'trainingGround'">
                                 <template x-if="buildings.trainingGround.level === 0">
                                     <div>  <h3 class="text-xl font-bold mb-2">建造訓練場</h3>
@@ -1178,6 +1162,73 @@
                                 </template>
                             </div>
 
+                            <div x-show="modals.construction.activeTab === 'watchtower'">
+                                <div class="flex border-b border-gray-600 mb-4">
+                                    <button @click="modals.dungeon.subTab = 'manage'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'manage' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">派駐夥伴</button>
+                                    <button @click="modals.dungeon.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'upgrade' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
+                                </div>
+
+                                <div x-show="modals.dungeon.subTab === 'manage'">
+                                    <h3 class="text-xl font-bold mb-2">派駐夥伴</h3>
+                                    <p class="mb-4">將夥伴派駐到哨塔以降低復仇小隊來襲的機率。目前效果：<strong class="text-green-400" x-text="`- ${dispatch.watchtower.length * [0, 2, 4, 6, 8, 10][buildings.watchtower.level]}%`"></strong></p>
+                                    <div class="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <h3 class="text-lg font-bold mb-2 text-amber-200">可派駐的哥布林</h3>
+                                            <div class="space-y-2 h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
+                                                <template x-for="p in availablePartnersForDispatch" :key="p.id">
+                                                    <div class="p-3 border border-gray-600 rounded flex justify-between items-center">
+                                                        <div>
+                                                            <p class="font-bold" x-text="p.name"></p>
+                                                            <p class="text-xs text-gray-400">力:<span x-text="p.stats.strength"></span> 敏:<span x-text="p.stats.agility"></span> 智:<span x-text="p.stats.intelligence"></span> 運:<span x-text="p.stats.luck"></span></p>
+                                                        </div>
+                                                        <button @click="assignPartner(p.id, 'watchtower')" class="btn btn-sm btn-success">派駐</button>
+                                                    </div>
+                                                </template>
+                                                <p x-show="availablePartnersForDispatch.length === 0" class="text-center text-gray-400">沒有可派駐的夥伴了。</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-lg font-bold mb-2 text-amber-200">
+                                                已派駐的守衛 (<span x-text="dispatch.watchtower.length"></span> / 5)
+                                            </h3>
+                                            <div class="space-y-2 h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
+                                                <template x-for="p in getDispatchedPartners('watchtower')" :key="p.id">
+                                                    <div class="p-3 border border-gray-600 rounded flex justify-between items-center">
+                                                        <div>
+                                                            <p class="font-bold" x-text="p.name"></p>
+                                                            <p class="text-xs text-gray-400">力:<span x-text="p.stats.strength"></span> 敏:<span x-text="p.stats.agility"></span> 智:<span x-text="p.stats.intelligence"></span> 運:<span x-text="p.stats.luck"></span></p>
+                                                        </div>
+                                                        <button @click="removeFromDispatch(p.id, 'watchtower')" class="btn btn-sm btn-danger">解除</button>
+                                                    </div>
+                                                </template>
+                                                <p x-show="dispatch.watchtower.length === 0" class="text-center text-gray-400">尚未派駐任何守衛。</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div x-show="modals.dungeon.subTab === 'upgrade'">
+                                    <h3 class="text-xl font-bold mb-2">升級哨塔 (等級 <span x-text="buildings.watchtower.level"></span>)</h3>
+                                    <p class="text-sm text-gray-400 mb-4">提升每位守衛能降低的復仇機率。</p>
+                                    <p class="mb-4">目前效果: 每位守衛 <strong class="text-green-400" x-text="`- ${[0, 2, 4, 6, 8, 10][buildings.watchtower.level]}%`"></strong></p>
+                                    <template x-if="buildings.watchtower.level < 5">
+                                        <div>
+                                            <p class="text-sm">
+                                                <span x-text="buildings.watchtower.level === 0 ? '建造花費:' : `升級至 ${buildings.watchtower.level + 1} 級花費:`"></span>
+                                                <span x-text="getBuildingUpgradeCost('watchtower').food"></span> 食物,
+                                                <span x-text="getBuildingUpgradeCost('watchtower').wood"></span> 木材,
+                                                <span x-text="getBuildingUpgradeCost('watchtower').stone"></span> 礦石
+                                            </p>
+                                            <p class="text-sm mt-1">下一級效果: 每位守衛 <strong class="text-green-400" x-text="`- ${[0, 2, 4, 6, 8, 10][buildings.watchtower.level + 1]}%`"></strong></p>
+                                            <button @click="upgradeBuilding('watchtower')" class="btn btn-primary mt-2" :disabled="!canAffordBuildingUpgrade('watchtower')">
+                                                <span x-text="buildings.watchtower.level === 0 ? '建造' : '升級'"></span>
+                                            </button>
+                                        </div>
+                                    </template>
+                                    <p x-show="buildings.watchtower.level >= 5" class="text-sm text-green-400 mt-2">哨塔已達到最大等級！</p>
+                                </div>
+                            </div>
+
                             <div x-show="modals.construction.activeTab === 'merchantCamp'">
                                 <h3 class="text-xl font-bold mb-2">升級商人營地 (等級 <span x-text="buildings.merchantCamp.level"></span>)</h3>
                                 <p class="text-sm text-gray-400 mb-4">提升旅行商人販售的商品數量，並增加其停留時間。</p>
@@ -1205,7 +1256,6 @@
                         </div>
                     </div>
                 </div>  
-
 
                 <!-- 偵查目標 Modal -->
                 <div class="modal" x-show="modals.scoutInfo.isOpen" x-cloak>
@@ -1450,6 +1500,7 @@
                     <div class="modal-content game-container relative p-6 rounded-lg flex flex-col">
                         <h2 class="game-title font-medieval" x-text="modals.narrative.title"></h2>
                         <div class="pt-10 flex-grow flex flex-col max-h-[80vh]">
+                            
                             <div class="flex-grow overflow-y-auto p-4 bg-black bg-opacity-20 rounded mb-4 flex items-center justify-center">
 
                                 <div x-show="modals.narrative.type !== 'tutorial'" class="w-full">
@@ -1466,17 +1517,22 @@
                                 </div>
 
                                 <div x-show="modals.narrative.type === 'tutorial'" class="flex items-start gap-4 w-full">
-                                    <img :src="modals.narrative.avatarUrl || 'assets/century_avatar.png'" alt="世紀的頭像" class="w-24 h-24 rounded-full border-2 border-pink-400 flex-shrink-0">
+                                    <img :src="modals.narrative.avatarUrl || 'assets/century_avatar.png'" alt="對話者頭像" class="w-24 h-24 rounded-full border-2 border-pink-400 flex-shrink-0">
                                     <div class="flex-grow text-left" x-html="modals.narrative.content">
                                     </div>
                                 </div>
                             </div>
-
-                            <div class="text-center mt-4">
-                                <button x-show="modals.narrative.type === 'tutorial'" @click="closeNarrativeModal()" class="btn btn-primary">了解</button>
-                            </div>
                             
+                            <div class="text-center mt-4">
+                                <button 
+                                    x-show="modals.narrative.type === 'tutorial'" 
+                                    @click="confirmNarrativeModal()" 
+                                    class="btn btn-primary">
+                                    <span x-text="modals.narrative.onConfirm ? '迎戰' : '了解'"></span>
+                                </button>
                             </div>
+
+                        </div>
                     </div>
                 </div>
 
