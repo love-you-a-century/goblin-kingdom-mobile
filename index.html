@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.55</title>
+    <title>哥布林王國v5.56</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -904,19 +904,22 @@
                                 <div x-show="modals.dungeon.subTab === 'upgrade'">
                                     <h3 class="text-xl font-bold mb-2">升級地牢 (等級 <span x-text="buildings.dungeon.level"></span>)</h3>
                                     <p class="text-sm text-gray-400 mb-4">增加俘虜容量上限。</p>
-                                    <template x-if="buildings.dungeon.level < 6">
+                                    
+                                    <template x-if="buildings.dungeon.level < 5">
                                         <div>
                                             <p class="text-sm">
                                                 <span x-text="buildings.dungeon.level === 0 ? '建造花費:' : `升級至 ${buildings.dungeon.level + 1} 級花費:`"></span>
+                                                <span x-text="getBuildingUpgradeCost('dungeon').food"></span> 食物,
                                                 <span x-text="getBuildingUpgradeCost('dungeon').wood"></span> 木材,
                                                 <span x-text="getBuildingUpgradeCost('dungeon').stone"></span> 礦石
                                             </p>
-                                            <button @click="upgradeBuilding('dungeon')" class="btn btn-primary mt-2" :disabled="!canAffordBuildingUpgrade('dungeon')" :class="{'glow-pulse': tutorial.active && tutorial.step === 2}">
+                                            <button @click="upgradeBuilding('dungeon')" class="btn btn-primary mt-2" :disabled="!canAffordBuildingUpgrade('dungeon')" :class="{'glow-pulse': tutorial.active && tutorial.step === 3}">
                                                 <span x-text="buildings.dungeon.level === 0 ? '建造' : '升級'"></span>
                                             </button>
                                         </div>
                                     </template>
-                                    <p x-show="buildings.dungeon.level >= 6" class="text-sm text-green-400 mt-2">地牢已達到最大等級！</p>
+                                    
+                                    <p x-show="buildings.dungeon.level >= 5" class="text-sm text-green-400 mt-2">地牢已達到最大等級！</p>
                                 </div>
                             </div>
                             <div x-show="modals.construction.activeTab === 'barracks'">
