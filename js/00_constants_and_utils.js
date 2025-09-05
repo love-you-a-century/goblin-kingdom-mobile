@@ -719,11 +719,11 @@ function generateVisuals() {
         clothing: VISUAL_OPTIONS.clothing[randomInt(0, VISUAL_OPTIONS.clothing.length - 1)],
     };
 }
-// --- 容量等級總表 ---
+// --- 建築容量等級總表 ---
 const CAPACITY_LEVELS = {
     warehouse: [10, 20, 40, 80, 160, 320, 640],
     storage: [200, 500, 1000, 2000, 4000, 8000, 16000],
-    dungeon: [0, 5, 10, 15, 20, 25, 30],
+    dungeon: [0, 10, 20, 30, 40, 50],
     barracks: [5, 10, 20, 30, 40, 50]
 };
 

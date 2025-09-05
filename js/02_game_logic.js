@@ -1014,7 +1014,7 @@ const gameLogic = {
         if (this.merchant.purchases === 47) {
             const shijiClone = new FemaleHuman(
                 '世紀的分身', 
-                { strength: 47, agility: 47, intelligence: 47, luck: 47, charisma: 201 },
+                { strength: 20, agility: 20, intelligence: 20, luck: 20, charisma: 147 },
                 '魅魔',
                 { hairColor: '深棕色', hairStyle: '波波頭', height: 168, age: '未知', bust: 'E', personality: '悶騷', clothing: '魅魔裝' }
             );
@@ -1096,7 +1096,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.55 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.56 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1666,13 +1666,16 @@ const gameLogic = {
         const building = this.buildings[type];
         if (!building) return { food: 0, wood: 0, stone: 0 };
         const level = building.level;
-        const multiplier = Math.pow(2, level);
+
         let cost = { food: 0, wood: 0, stone: 0 };
 
         switch (type) {
             case 'dungeon':
-                if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
-                cost = { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
+                // 更新地牢的升級邏輯
+                if (level >= 5) return { food: Infinity, wood: Infinity, stone: Infinity }; // 最高 5 級
+                const dungeonCosts = [100, 200, 400, 800, 1600]; // 建立一個成本對照表
+                const resourceCost = dungeonCosts[level];
+                cost = { food: resourceCost, wood: resourceCost, stone: resourceCost };
                 break;
             // 哨塔的升級成本邏輯
             case 'watchtower':
@@ -2113,21 +2116,29 @@ const gameLogic = {
     },
 
     removeAllCaptives(reason) {
-        // 如果本來就沒有俘虜，就什麼都不做
         if (this.captives.length === 0) {
             return;
         }
 
-        const captiveCount = this.captives.length;
-        
-        // 根據移除原因，記錄不同的日誌
+        // 定義哪些職業是特殊單位，不會被救走
+        const specialProfessions = ['魅魔', '女神', '使徒'];
+
         if (reason === 'rescued') {
-            this.logMessage('tribe', `復仇小隊趁亂將你所有的 ${captiveCount} 名俘虜（包含地牢與產房）全部救走了！`, 'enemy');
+            // 篩選出「會」被救走的普通俘虜
+            const rescuedCaptives = this.captives.filter(c => !specialProfessions.includes(c.profession));
+            const rescuedCount = rescuedCaptives.length;
+
+            if (rescuedCount > 0) {
+                this.logMessage('tribe', `復仇小隊趁亂將你的 ${rescuedCount} 名俘虜救走了！`, 'enemy');
+            } else {
+                this.logMessage('tribe', `復仇小隊試圖解救俘虜，但特殊俘虜拒絕離開。`, 'info');
+            }
         }
-        // 未來可以擴充其他原因，例如 'escaped' (集體逃跑), 'sacrificed' (獻祭) 等
-        // 核心邏輯：將俘虜陣列直接清空
-        this.captives = [];
+        
+        // 核心邏輯：只保留特殊職業的俘虜，其餘全部移除
+        this.captives = this.captives.filter(c => specialProfessions.includes(c.profession));
     },
+
     
     releaseCaptive(captiveId) {
         const captive = this.captives.find(c => c.id === captiveId);
@@ -3128,7 +3139,7 @@ const gameLogic = {
         const newCaptives = this.currentRaid.carriedCaptives;
         const currentDungeonCaptives = this.dungeonCaptives;
 
-        // 新的觸發條件：當地牢的現有人 + 新抓的人 > 地牢容量時
+        // 當地牢的現有人 + 新抓的人 > 地牢容量時
         if (currentDungeonCaptives.length + newCaptives.length > this.captiveCapacity) {
             
             this.logMessage('tribe', '你帶回的俘虜過多，地牢無法容納！你需要從現有和新增的俘虜中決定去留...', 'warning');
