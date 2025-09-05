@@ -1096,7 +1096,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.55 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.56 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1666,13 +1666,16 @@ const gameLogic = {
         const building = this.buildings[type];
         if (!building) return { food: 0, wood: 0, stone: 0 };
         const level = building.level;
-        const multiplier = Math.pow(2, level);
+
         let cost = { food: 0, wood: 0, stone: 0 };
 
         switch (type) {
             case 'dungeon':
-                if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
-                cost = { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
+                // 更新地牢的升級邏輯
+                if (level >= 5) return { food: Infinity, wood: Infinity, stone: Infinity }; // 最高 5 級
+                const dungeonCosts = [100, 200, 400, 800, 1600]; // 建立一個成本對照表
+                const resourceCost = dungeonCosts[level];
+                cost = { food: resourceCost, wood: resourceCost, stone: resourceCost };
                 break;
             // 哨塔的升級成本邏輯
             case 'watchtower':
@@ -3136,7 +3139,7 @@ const gameLogic = {
         const newCaptives = this.currentRaid.carriedCaptives;
         const currentDungeonCaptives = this.dungeonCaptives;
 
-        // 新的觸發條件：當地牢的現有人 + 新抓的人 > 地牢容量時
+        // 當地牢的現有人 + 新抓的人 > 地牢容量時
         if (currentDungeonCaptives.length + newCaptives.length > this.captiveCapacity) {
             
             this.logMessage('tribe', '你帶回的俘虜過多，地牢無法容納！你需要從現有和新增的俘虜中決定去留...', 'warning');
