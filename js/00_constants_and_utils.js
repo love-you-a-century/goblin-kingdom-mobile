@@ -352,6 +352,88 @@ const KNIGHT_ORDER_UNITS = {
     '祭司': { ratio: [1, 1, 4, 4], skill: { name: '聖光', cd: 10, type: 'team_heal', triggerHp: 0.8, description: '當騎士團隊伍總血量低於80%時施放，恢復所有團員生命。' } },
 };
 
+// --- 特殊 BOSS 資料 ---
+const SPECIAL_BOSSES = {
+    apostle_maiden: {
+        name: '螺旋女神的使徒',
+        profession: '使徒',
+        avatar: 'assets/apostle_avatar.png', //在這裡加上頭像路徑
+        stats: { strength: 180, agility: 180, intelligence: 180, luck: 180, charisma: 120 }, // 
+        visual: {
+            hairColor: '藍綠色', // [cite: 39]
+            hairStyle: '拖地長髮', // [cite: 39]
+            height: 160, // [cite: 39]
+            age: '未知', // [cite: 39]
+            bust: 'C', // [cite: 39]
+            personality: '高飛車', // [cite: 39]
+            clothing: '纏繞身體的頭髮' // [cite: 39]
+        },
+        skills: [
+            {
+                id: 'apostle_proliferate',
+                name: '繁衍的權能', // [cite: 21]
+                type: 'active',
+                baseCooldown: 8, // [cite: 21]
+                description: '開場時立即施放一次。完整複製一個自己到戰場上，包含當前的所有正面與負面效果。' // [cite: 21]
+            },
+            { id: 'apostle_reappear', name: '重現的權能', type: 'passive', description: '每當施放「繁衍的權能」後，能立即再進行一次行動。' }, // [cite: 21]
+            { id: 'apostle_spiral', name: '螺旋的權能', type: 'passive', description: '在戰鬥中陣亡時，有 25% 機率以 50% 生命值復活，並立即重置「繁衍的權能」冷卻時間。' }, // [cite: 21]
+            { id: 'apostle_nullify', name: '歸零的權能', type: 'passive', description: '受到任何傷害時，有 25% 機率使該次傷害變為 0，並恢復等同於該次傷害 50% 的生命值。' }, // [cite: 21]
+            { id: 'apostle_multiply', name: '螺旋女神的使徒？', type: 'passive', description: '自身所有能力值（力/敏/智/運/魅）都會乘以場上「螺旋女神的使徒」的總數量 (N)，N 值上限為 20。' } // [cite: 21]
+        ],
+        dialogues: {
+            intro: [
+                "來自異界的靈魂，吾乃『螺旋女神』的使徒，前來肅清擾亂世界秩序的『變數』...也就是你！", // [cite: 18]
+                "見識一下吧，這就是女神真正的權能。在你那可悲的復活能力面前，我將賜予你無限的絕望。" // [cite: 19]
+            ],
+            hp_75: "哦？有點能耐。但不過是垂死掙扎罷了。", // [cite: 24]
+            hp_50: "還能站著嗎？開始變得有趣了...", // [cite: 26]
+            hp_25: "不可原諒...區區哥布林...！", // [cite: 28]
+            player_hp_50: "看到了嗎？這就是你與我之間，絕對無法跨越的差距。" // [cite: 30]
+        }
+    },
+    spiral_goddess_mother: {
+        name: '螺旋女神',
+        profession: '女神',
+        avatar: 'assets/goddess_avatar.png',// 在這裡加上頭像路徑
+        stats: { strength: 2600, agility: 2600, intelligence: 2600, luck: 2600, charisma: 2902 },
+        captiveFormStats: { strength: 0, agility: 0, intelligence: 0, luck: 0, charisma: 290 },
+        visual: {
+            hairColor: '淺藍色',
+            hairStyle: '螺旋長髮',
+            height: 175,
+            age: '未知',
+            bust: 'I',
+            personality: '堅強',
+            clothing: '淺藍色的類希臘女神裝束'
+        },
+        skills: [
+            {
+                id: 'goddess_repulsion',
+                name: '同性相斥',
+                type: 'active',
+                baseCooldown: 4,
+                description: '對我方全體造成基於各自魅力值的真實傷害。'
+            }
+        ],
+        dialogues: {
+            intro: "一個迷途的靈魂，披著哥布林的外皮...？...不對，你的身上...還有另一個討厭的氣息超脫了時間與空間...。",
+            phase1_start: "在我面前，謊言毫無意義。",
+            phase2_start: "在我面前，你與人類無異。",
+            phase3_start: "你似乎很享受掠奪女性的快感...那麼也來體會一下作為『女性』的滋味。",
+            phase4_start: "讓你見識一下，男女間的力量差距。",
+            phase5_start: "就讓你親身體會一下，那些被你擄來的女性，在面對絕對暴力時的絕望。"
+            
+        },
+        qna: [
+            { question: "作為一個哥布林，你的身高是？", check: 'playerHeight' },
+            { question: "你麾下有多少名哥布林夥伴？", check: 'partnerCount' },
+            { question: "身為王者，你的雄風尺寸是？", check: 'penisSize' },
+            { question: "你的地牢與產房中，總共囚禁了多少名俘虜？", check: 'captiveCount' }
+        ]
+    },
+};
+
 /**
  * 根據傳入的骰子字串 (例如 "3d6") 進行擲骰。
  * @param {string} diceString - 格式為 "數量d面數" 的字串。

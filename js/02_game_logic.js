@@ -141,6 +141,7 @@ const gameLogic = {
         hunting: [], // 打獵隊伍
         logging: [], // 伐木隊伍
         mining: [],  // 採礦隊伍
+        watchtower: [], // 哨塔派駐隊伍
     },
 
     // 判斷「商人營地」按鈕是否應該被禁用
@@ -162,6 +163,11 @@ const gameLogic = {
         hells_knights: false // 「王國騎士團」DLC，預設為未解鎖
     },
     bailoutCounter: 0, // 用來計算玩家求助的次數
+    totalBreedingCount: 0, // 用於追蹤觸發使徒BOSS戰的總繁衍次數
+    flags: {
+        defeatedApostle: false,
+        defeatedGoddess: false
+    },
     raidTimeExpired: false, // 用來標記時間是否在戰鬥中耗盡
     isRetreatingWhenTimeExpired: false, // 記錄時間耗盡時是否正在脫離
     bailoutOfferedButRefused: false, // 記錄玩家是否拒絕過求助
@@ -241,14 +247,26 @@ const gameLogic = {
         const selectedIds = this.modals.dungeon.selectedBreedIds;
         const selectedCount = selectedIds.length;
 
-        selectedIds.forEach(id => {
+        for (const id of selectedIds) {
             const captive = this.captives.find(c => c.id === id);
             if (captive && !captive.isPregnant) {
                 captive.isPregnant = true;
                 captive.pregnancyTimer = 3;
                 this.player.attributePoints++;
+                captive.breedingCount = (captive.breedingCount || 0) + 1;
+                this.totalBreedingCount++; // 每繁衍一位，計數就 +1
+                // Boss 觸發邏輯
+                this.totalBreedingCount++;
+                if (this.totalBreedingCount === 69) {
+                    this.pendingDecisions.push({ type: 'apostle_battle' }); 
+                    break; 
+                }
+                if (this.flags.defeatedApostle && this.totalBreedingCount === 88) {
+                    this.pendingDecisions.push({ type: 'goddess_battle' }); 
+                    break;
+                }
             }
-        });
+        }
 
         this.breedingChargesLeft -= selectedCount;
         this.logMessage('tribe', `你與 ${selectedCount} 名女性快速進行了繁衍，獲得了 ${selectedCount} 點能力點。`, 'success');
@@ -283,8 +301,8 @@ const gameLogic = {
             this.showCustomAlert(`繁衍次數不足！你只能選擇最多 ${this.breedingChargesLeft} 位。`);
             return;
         }
-        if (this.mothers.length + selectedCount > this.maternityCapacity) {
-            this.showCustomAlert(`產房空間不足！剩餘空間：${this.maternityCapacity - this.mothers.length}`);
+        if (this.captives.length + selectedCount > this.captiveCapacity) {
+            this.showCustomAlert(`地牢空間不足！剩餘空間：${this.captiveCapacity - this.captives.length}`);
             return;
         }
 
@@ -348,9 +366,9 @@ const gameLogic = {
         warehouse: { level: 0, name: "倉庫" },
         barracks: { level: 0, name: "寢室" },
         armory: { level: 0, name: "兵工廠" },
-        maternity: { level: 0, name: "產房" },
         trainingGround: { level: 0, name: "訓練場" }, 
         merchantCamp: { level: 0, name: "商人營地" },
+        watchtower: { level: 0, name: "哨塔" },
     },
     modals: {
         dice: {
@@ -365,7 +383,7 @@ const gameLogic = {
         construction: { isOpen: false, activeTab: 'dungeon' },
         skillTree: { isOpen: false, activeTab: 'combat' },
         combatSkills: { isOpen: false },
-        dungeon: { subTab: 'manage', selectedBreedIds: [] },
+        dungeon: { subTab: 'manage', selectedBreedIds: [], activeFilter: 'all' },
         barracks: { subTab: 'manage', selectedPartyIds: [] },
         partnerEquipment: { isOpen: false, partnerId: null, activeFilter: 'all' },
         warehouse: { subTab: 'manage', activeFilter: 'all' },
@@ -491,10 +509,6 @@ const gameLogic = {
     get captiveCapacity() { 
         return CAPACITY_LEVELS.dungeon[this.buildings.dungeon.level] || 0;
     },
-    get maternityCapacity() {
-        // 產房和地牢使用相同的升級級距
-        return CAPACITY_LEVELS.dungeon[this.buildings.maternity.level] || 0;
-    },
     get partnerCapacity() { 
         return CAPACITY_LEVELS.barracks[this.buildings.barracks.level] || 0;
     },
@@ -541,6 +555,24 @@ const gameLogic = {
     },
     get dungeonCaptives() {
         return this.captives.filter(c => !c.isPregnant && !c.isMother);
+    },
+    get filteredCaptives() {
+        const filter = this.modals.dungeon.activeFilter;
+        if (filter === 'all') {
+            return this.captives;
+        }
+        if (filter === 'breedable') {
+            // 這個邏輯和原本的 dungeonCaptives 相同
+            return this.captives.filter(c => !c.isPregnant && !c.isMother);
+        }
+        if (filter === 'pregnant') {
+            return this.captives.filter(c => c.isPregnant);
+        }
+        if (filter === 'mother') {
+            // 只顯示產奶中 (是母親但沒有懷孕)
+            return this.captives.filter(c => !c.isPregnant && c.isMother);
+        }
+        return this.captives; // 如果發生意外，預設回傳全部
     },
     get mothers() {
         return this.captives.filter(c => c.isPregnant || c.isMother);
@@ -1004,7 +1036,10 @@ const gameLogic = {
         currentEnemyGroup: [], 
         playerActionTaken: false, 
         isReinforcementBattle: false,
-        isUnescapable: false 
+        isUnescapable: false ,
+        isGoddessQnA: false, // 標記當前是否為女神問答階段
+        goddessQuestion: '',  // 當前顯示的問題
+        playerAnswer: ''      // 玩家的輸入
     },
     
     submitApiKey() {
@@ -1061,7 +1096,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.48 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.55 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1399,7 +1434,7 @@ const gameLogic = {
     
     handleRaidButtonClick() {
         // 步驟 1: 首先檢查是否滿足最基本的掠奪條件
-        const canRaid = this.buildings.dungeon.level > 0 && this.buildings.maternity.level > 0;
+        const canRaid = this.buildings.dungeon.level > 0;
 
         if (canRaid) {
             // 條件滿足：直接切換到掠奪選擇畫面
@@ -1412,7 +1447,7 @@ const gameLogic = {
 
         } else {
             // 條件不滿足：執行提示與潛在的求助流程
-            this.showCustomAlert('必須先建造「地牢」與「產房」，才能出擊！', () => {
+            this.showCustomAlert('必須先建造「地牢」，才能出擊！', () => {
                 // 在玩家關閉提示後，檢查是否卡關
                 const isStuck = this.resources.food < 200 || this.resources.wood < 200 || this.resources.stone < 200;
                 
@@ -1562,6 +1597,9 @@ const gameLogic = {
         let pendingRevengeInfo = null;
         const captivesByDifficulty = {};
         this.captives.forEach(c => {
+            if (c.profession === '使徒' || c.profession === '女神') {
+                return; // 跳過特殊俘虜，不計入復仇計算
+            }
             if (c.originDifficulty) {
                 if (!captivesByDifficulty[c.originDifficulty]) {
                     captivesByDifficulty[c.originDifficulty] = 0;
@@ -1574,7 +1612,26 @@ const gameLogic = {
             if (pendingRevengeInfo) break;
             const count = captivesByDifficulty[difficulty];
             const coefficient = REVENGE_DIFFICULTY_COEFFICIENT[difficulty] || 0;
-            const triggerChance = count * coefficient;
+            
+            // 加入哨塔的減免計算
+            let triggerChance = count * coefficient;
+            
+            const watchtowerLevel = this.buildings.watchtower.level;
+            if (watchtowerLevel > 0) {
+                const stationedCount = this.dispatch.watchtower.length;
+                // 效果陣列，索引 0 代表 0 級，索引 1 代表 1 級...
+                const reductionPerPartner = [0, 2, 4, 6, 8, 10][watchtowerLevel];
+                const totalReduction = stationedCount * reductionPerPartner;
+
+                if (totalReduction > 0) {
+                    this.logMessage('tribe', `哨塔的守衛使復仇機率降低了 ${totalReduction}%。`, 'info');
+                }
+                
+                triggerChance -= totalReduction;
+            }
+            
+            // 確保機率不會變成負數
+            triggerChance = Math.max(0, triggerChance);
 
             if (rollPercentage(triggerChance)) {
                 pendingRevengeInfo = { difficulty: difficulty };
@@ -1617,10 +1674,11 @@ const gameLogic = {
                 if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
                 cost = { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
                 break;
-            case 'maternity':
-                if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
+            // 哨塔的升級成本邏輯
+            case 'watchtower':
+                if (level >= 5) return { food: Infinity, wood: Infinity, stone: Infinity };
                 cost = { food: 50 * multiplier, wood: 100 * multiplier, stone: 100 * multiplier };
-                break;
+                break;    
             case 'warehouse':
                 if (level >= 6) return { food: Infinity, wood: Infinity, stone: Infinity };
                 cost = { food: 0, wood: 100 * multiplier, stone: 100 * multiplier };
@@ -1689,11 +1747,8 @@ const gameLogic = {
             setTimeout(() => {
                 //  對應新的步驟編號
                 if (type === 'dungeon' && this.tutorial.step === 3 && building.level === 1) {
-                    this.advanceTutorial(4);
-                } 
-                else if (type === 'maternity' && this.tutorial.step === 4 && building.level === 1) {
                     this.advanceTutorial(5);
-                }
+                } 
             }, 50);
         }
     },
@@ -1733,9 +1788,9 @@ const gameLogic = {
             this.screen = 'tutorial_query';
         }
 
-        //   對 tutorial 類型的處理
+        // 對 tutorial 類型的處理 (現在也包含了老婦對話)
         if (this.modals.narrative.type === 'tutorial') {
-            // 教學彈窗關閉後，不需要做任何特殊操作，直接關閉即可
+            // 不需要做任何事，直接關閉即可
         }
 
         this.modals.narrative.isOpen = false;
@@ -1743,6 +1798,19 @@ const gameLogic = {
         this.modals.narrative.type = '';
         this.modals.narrative.content = '';
     },
+
+    confirmNarrativeModal() {
+        const modal = this.modals.narrative;
+        modal.isOpen = false;
+        if (typeof modal.onConfirm === 'function') {
+            // 延遲執行，確保 modal 動畫結束
+            setTimeout(() => {
+                modal.onConfirm();
+                modal.onConfirm = null; // 清理回呼
+            }, 200);
+        }
+    },
+
     finalizeBreedingAndReturn() {
         if (this.modals.narrative.hasBred) {
             this.modals.dungeon.selectedBreedIds = [];
@@ -1751,6 +1819,7 @@ const gameLogic = {
         // 呼叫新的共用函式
         this.returnToBreedingModal('繁衍已完成！');
     },
+
     executeQuickBreedingAndReturn() {
         const selectedIds = this.modals.dungeon.selectedBreedIds;
         const selectedCount = selectedIds.length;
@@ -1762,6 +1831,9 @@ const gameLogic = {
                 captive.isPregnant = true;
                 captive.pregnancyTimer = 3;
                 this.player.attributePoints++;
+                captive.breedingCount = (captive.breedingCount || 0) + 1;
+                // 增加繁衍計數
+                this.totalBreedingCount++; 
             }
         });
 
@@ -1782,23 +1854,37 @@ const gameLogic = {
 
         //   顯示操作成功的提示框
         this.showCustomAlert('繁衍已完成！');
-        
     },
+
     async confirmAndNarrateBreeding() {
         // 防止重複觸發
         if (this.modals.narrative.hasBred) return;
 
-        //    在此處加入繁衍的遊戲機制
         const selectedIds = this.modals.dungeon.selectedBreedIds;
         const selectedCount = selectedIds.length;
-        selectedIds.forEach(id => {
+        
+        // 我們將原本的兩個迴圈合併為一個，更有效率
+        for (const id of selectedIds) {
             const captive = this.captives.find(c => c.id === id);
             if (captive && !captive.isPregnant) {
+                // 執行繁衍的遊戲機制
                 captive.isPregnant = true;
                 captive.pregnancyTimer = 3;
                 this.player.attributePoints++;
+                captive.breedingCount = (captive.breedingCount || 0) + 1;
+                this.totalBreedingCount++;// 同時在這裡增加總繁衍計數
+                // 檢查是否觸發 Boss 戰
+                if (this.totalBreedingCount === 69) {
+                    this.pendingDecisions.push({ type: 'apostle_battle' });
+                    break; 
+                }
+                if (this.flags.defeatedApostle && this.totalBreedingCount === 88) {
+                    this.pendingDecisions.push({ type: 'goddess_battle' });
+                    break;
+                }
             }
-        });
+        }
+
         this.breedingChargesLeft -= selectedCount;
         this.logMessage('tribe', `你與 ${selectedCount} 名女性進行了繁衍，獲得了 ${selectedCount} 點能力點。`, 'success');
 
@@ -1808,9 +1894,10 @@ const gameLogic = {
         // 命令 AI 生成對應的敘事文本
         await this.generateNarrativeSegment('繁衍');
     },
+
     async generateIntroNarrative() {
         const modal = this.modals.narrative;
-        modal.isAwaitingConfirmation = false; // <<< 新增：關閉確認狀態
+        modal.isAwaitingConfirmation = false; // 關閉確認狀態
         modal.isLoading = true;
         modal.content = '';
         modal.title = "序幕";
@@ -1858,15 +1945,15 @@ const gameLogic = {
 
         if (isSoloScene) {
             const captive = captives[0];
-            const captiveDetails = `- 名稱: ${captive.name}, 職業: ${captive.profession}, 個性: ${captive.visual.personality}, 髮色: ${captive.visual.hairColor}, 髮型: ${captive.visual.hairStyle}, ${captive.visual.bust}罩杯, 身高 ${captive.visual.height}cm, 年紀 ${captive.visual.age}歲, 服裝: ${captive.visual.clothing}`;
+            const captiveDetails = `- 名稱: ${captive.name}, 職業: ${captive.profession}, 個性: ${captive.visual.personality}, 髮色: ${captive.visual.hairColor}, 髮型: ${captive.visual.hairStyle}, ${captive.visual.bust}罩杯, 身高 ${captive.visual.height}cm, 年紀 ${captive.visual.age}歲, 服裝: ${captive.visual.clothing}, 已被繁衍次數: ${captive.breedingCount || 0}`;
             if (modal.context.length === 0) {
-                prompt = `${baseInstruction}\n\n**哥布林王資訊:**\n- 名稱: ${this.player.name}\n- 外貌: ${this.player.appearance}\n- 身高: ${this.player.height} cm\n- 雄風: ${this.player.penisSize} cm\n\n**女性俘虜資訊:**\n${captiveDetails}\n\n故事從哥布林王決定 "${action}" 開始。請詳細描寫地牢環境，以及哥布林王打牢房，進入到內。\n請撰寫一段約200-250字，充滿氣氛和細節的開場故事，以及女性的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\敘事描述每一個動作、行為、生理反應及雙方感受。`;
+                prompt = `${baseInstruction}\n\n**哥布林王資訊:**\n- 名稱: ${this.player.name}\n- 外貌: ${this.player.appearance}\n- 身高: ${this.player.height} cm\n- 雄風: ${this.player.penisSize} cm\n\n**女性俘虜資訊:**\n${captiveDetails}\n\n故事從哥布林王決定 "${action}" 開始。描寫地牢環境，以及哥布林王打牢房，進入到內。\n請撰寫一段約100-200字，充滿氣氛和細節的開場故事，以及女性的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\敘事描述每一個動作、行為、生理反應及雙方感受。`;
             } else {
                 const storySoFar = modal.context.map(turn => `哥布林王：${turn.user}\n${turn.model}`).join('\n\n');
                 prompt = `接續以下的故事，哥布林王想 "${action}"。請根據這個新動作，繼續撰寫故事的下一段落（約100-200字），保持風格一致，並描寫女性的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\n\n**故事至此:**\n${storySoFar}`;
             }
         } else { // Group scene
-            let captivesDetails = captives.map(c => `- 名稱: ${c.name}, 職業: ${c.profession}, 個性: ${c.visual.personality}, 髮色: ${c.visual.hairColor}, 髮型: ${c.visual.hairStyle}, ${c.visual.bust}罩杯, 身高 ${c.visual.height}cm, 年紀 ${c.visual.age}歲, 服裝: ${c.visual.clothing}`).join('\n');
+            let captivesDetails = captives.map(c => `- 名稱: ${c.name}, 職業: ${c.profession}, 個性: ${c.visual.personality}, 髮色: ${c.visual.hairColor}, 髮型: ${c.visual.hairStyle}, ${c.visual.bust}罩杯, 身高 ${c.visual.height}cm, 年紀 ${c.visual.age}歲, 服裝: ${c.visual.clothing}, 已被繁衍次數: ${c.breedingCount || 0}`).join('\n');
             let partnersDetails = this.player.party.length > 0 ? `你的哥布林夥伴們 (${this.player.party.map(p => p.name).join(', ')}) 也一同參與。` : '';
             if (modal.context.length === 0) {
                 prompt = `${baseInstruction}\n\n**哥布林王資訊:**\n- 名稱: ${this.player.name}\n- 外貌: ${this.player.appearance}\n- 身高: ${this.player.height} cm\n- 雄風: ${this.player.penisSize} cm\n${partnersDetails}\n\n**女性俘虜資訊:**\n${captivesDetails}\n\n故事從哥布林王決定 "${action}" 開始。請詳細描寫地牢環境，以及哥布林王打牢房，進入到內。\n請撰寫一段約200-250字，充滿氣氛和細節的開場故事。哥布林王以及女性們的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\敘事將描述每一個動作、行為、生理反應及雙方感受。`;
@@ -1963,15 +2050,15 @@ const gameLogic = {
                 this.logMessage('tribe', `在「多精卵」的影響下，${mother.name} 誕下了雙胞胎！`, 'success');
             }
         }
-
+        // --- 繁衍公式
         for (let i = 0; i < numberOfBirths; i++) {
             const pStats = this.player.stats;
             const mStats = mother.stats;
             let newStats = {
-                strength: Math.floor(((pStats.strength || 0) + (mStats.strength || 0)) / 4 + (mStats.charisma || 0) / 4),
-                agility: Math.floor(((pStats.agility || 0) + (mStats.agility || 0)) / 4 + (mStats.charisma || 0) / 4),
-                intelligence: Math.floor(((pStats.intelligence || 0) + (mStats.intelligence || 0)) / 4 + (mStats.charisma || 0) / 4),
-                luck: Math.floor(((pStats.luck || 0) + (mStats.luck || 0)) / 4 + (mStats.charisma || 0) / 4)
+                strength: Math.floor(((pStats.strength || 0) + (mStats.strength || 0)) / 4 + (mStats.charisma || 0) / 2),
+                agility: Math.floor(((pStats.agility || 0) + (mStats.agility || 0)) / 4 + (mStats.charisma || 0) / 2),
+                intelligence: Math.floor(((pStats.intelligence || 0) + (mStats.intelligence || 0)) / 4 + (mStats.charisma || 0) / 2),
+                luck: Math.floor(((pStats.luck || 0) + (mStats.luck || 0)) / 4 + (mStats.charisma || 0) / 2)
             };
 
             // --- 處理「優生學」技能 ---
@@ -2091,7 +2178,17 @@ const gameLogic = {
             if (this.dispatch[task].length < 10) {
                 this.dispatch[task].push(partnerId);
             }
+            // 為哨塔增加指派邏輯
+        } else if (task === 'watchtower') {
+            if (this.dispatch.watchtower.length < 5) { // 哨塔容量上限為 5
+                this.dispatch.watchtower.push(partnerId);
+            }
+        } else if (this.dispatch[task]) {
+            if (this.dispatch[task].length < 10) {
+                this.dispatch[task].push(partnerId);
+            }
         }
+        
         
         // 3. 任何隊伍的變動都可能影響玩家血量，統一更新
         this.player.updateHp(this.isStarving);
@@ -2395,6 +2492,86 @@ const gameLogic = {
 
         // 觸發戰鬥
         this.startCombat(revengeSquad, true);
+    },
+
+    cloneApostle(originalApostle) {
+        // 1. 創建一個新的使徒實例
+        const newClone = new ApostleMaiden(this.combat);
+
+        // 2. 複製當前生命值
+        newClone.currentHp = originalApostle.currentHp;
+
+        // 3. 複製所有技能的當前冷卻狀態 (深拷貝)
+        newClone.skills = JSON.parse(JSON.stringify(originalApostle.skills));
+
+        // 4. 複製所有狀態效果 (例如中毒、增益等)
+        newClone.statusEffects = JSON.parse(JSON.stringify(originalApostle.statusEffects));
+        
+        // 5. 返回這個完美的複製體
+        return newClone;
+    },  
+
+    triggerApostleBattle() {
+        const apostleData = SPECIAL_BOSSES.apostle_maiden;
+        this.logMessage('tribe', `你無盡的繁衍似乎觸動了世界的某種禁忌...空間被撕裂了...`, 'enemy');
+
+        // 從 showCustomAlert 改為使用 narrative modal
+        const modal = this.modals.narrative;
+        modal.isOpen = true;
+        modal.title = apostleData.name;
+        modal.type = "tutorial"; // 重用教學的版面配置
+        modal.isLoading = false;
+        modal.isAwaitingConfirmation = false;
+        modal.avatarUrl = apostleData.avatar; // 使用我們剛剛新增的頭像路徑
+        modal.content = `<p class="text-lg leading-relaxed">${apostleData.dialogues.intro.join('<br><br>')}</p>`;
+        
+        // 設定點擊確認後要執行的動作 (開始戰鬥)
+        modal.onConfirm = () => {
+            const apostle = new ApostleMaiden(this.combat);
+            this.startCombat([apostle], true);
+        };
+    },
+
+    triggerGoddessBattle() {
+        const goddessData = SPECIAL_BOSSES.spiral_goddess_mother;
+        this.logMessage('tribe', `整個世界似乎都在震動...一股無法抗拒的、神聖而威嚴的意志降臨到了你的部落！`, 'enemy');
+
+        // 從 showCustomAlert 改為使用 narrative modal
+        const modal = this.modals.narrative;
+        modal.isOpen = true;
+        modal.title = goddessData.name;
+        modal.type = "tutorial"; // 重用教學的版面配置
+        modal.isLoading = false;
+        modal.isAwaitingConfirmation = false;
+        modal.avatarUrl = goddessData.avatar;
+        modal.content = `<p class="text-lg leading-relaxed">${goddessData.dialogues.intro}</p>`;
+        
+        // 設定點擊確認後要執行的動作 (開始戰鬥)
+        modal.onConfirm = () => {
+            const goddess = new SpiralGoddess(this.combat);
+            this.startCombat([goddess], false);
+        };
+    },
+
+    triggerCroneDialogue() {
+        // 使用我們之前設計的 narrative modal 來呈現對話
+        const modal = this.modals.narrative;
+        modal.isOpen = true;
+        modal.title = "與老婦的對話";
+        modal.type = "tutorial"; // 重用教學的版面，有頭像和文字
+        modal.isLoading = false;
+        modal.isAwaitingConfirmation = false;
+        modal.avatarUrl = 'assets/crone_avatar.png'; // GDD中老婦的頭像路徑
+        modal.content = `
+            <p class="text-lg leading-relaxed">「有趣...如今獲得了看似無敵的權能，即使在此將你抹除，你也只會再次於那個破舊的部落中醒來。但眾神的目光永遠注視著你。」</p>
+            <br>
+            <p class="text-lg leading-relaxed">「給你一個忠告，孩子，關於『世紀』...要記住，魔鬼總是藏在細節裡，不要輕信惡魔的甜言蜜語。」</p>
+            <br>
+            <p class="text-lg leading-relaxed">「還有...不要做得太過火了，過往的哥布林一族，正是因為無盡的貪婪與暴力才招致滅亡...不要重蹈覆轍，也不要與過去加害哥布林一族的人一樣。」</p>
+            <br>
+            <p class="text-lg leading-relaxed">「另外，別太自滿了...真正的我們，是你無法觸及的存在。你走吧...」</p>
+        `;
+        // 我們需要修改 closeNarrativeModal 來處理這個新的對話類型
     },
 
     generateCity(difficulty) {
@@ -3180,6 +3357,13 @@ const gameLogic = {
     startCombat(enemyGroup, enemyFirstStrike = false, alliesOverride = null) {
         this.resetAllSkillCooldowns();
 
+        // 在戰鬥開始時，為特殊 Boss 加上對話觸發旗標
+        enemyGroup.forEach(enemy => {
+            if (enemy instanceof ApostleMaiden || enemy instanceof SpiralGoddess) {
+                enemy.triggeredDialogues = new Set();
+            }
+        });
+
         let combatAllies;
 
         // 檢查這是否為一場部落保衛戰 (非掠奪期間的戰鬥)
@@ -3213,6 +3397,39 @@ const gameLogic = {
             this.executeTurn(true); 
         } else {
             this.logMessage('combat', '等待你的指令...', 'system');
+        }
+        if (enemyGroup[0] instanceof SpiralGoddess) {
+            this.startGoddessQnA();
+        }
+    },
+
+    // 1：負責顯示UI並“等待”玩家回答
+    promptGoddessQuestionAndWaitForAnswer() {
+        return new Promise(resolve => {
+            const goddess = this.combat.enemies[0];
+            const qnaData = SPECIAL_BOSSES.spiral_goddess_mother.qna;
+
+            if (goddess.qnaIndex < qnaData.length) {
+                this.combat.isGoddessQnA = true;
+                this.combat.goddessQuestion = qnaData[goddess.qnaIndex].question;
+                this.combat.playerAnswer = '';
+                
+                // 將 resolve 函式暫存起來，供 submitGoddessAnswer 呼叫
+                this.combat.resolveGoddessAnswer = resolve; 
+            } else {
+                // 如果問題已問完，直接 resolve 一個特殊標記
+                resolve({ finished: true });
+            }
+        });
+    },
+
+    // 2：負責在玩家點擊按鈕後“提交”答案
+    submitGoddessAnswer() {
+        if (this.combat.isGoddessQnA && typeof this.combat.resolveGoddessAnswer === 'function') {
+            this.combat.isGoddessQnA = false; // 關閉輸入介面
+            // 呼叫之前暫存的 resolve，將玩家的答案傳回給正在等待的 processAiAction 函式
+            this.combat.resolveGoddessAnswer({ answer: this.combat.playerAnswer });
+            this.combat.resolveGoddessAnswer = null; // 清理
         }
     },
 
@@ -3315,6 +3532,10 @@ const gameLogic = {
     },
 
     async executeTurn(isEnemyFirstStrike = false) {
+        if (this.combat.isGoddessQnA) {
+            this.combat.isProcessing = false;
+            return; // 如果是問答階段，則跳過所有戰鬥流程
+        }
         if (this.combat.isProcessing) return;
         this.combat.isProcessing = true;
 
@@ -3362,24 +3583,140 @@ const gameLogic = {
             this.logMessage('combat', `戰鬥勝利！`, 'success');
             this.endCombat(true);
         } else { // Battle continues
-        this.combat.turn++;
-        this.combat.isProcessing = false;
+            this.combat.turn++;
+            this.combat.isProcessing = false;
 
-        // 檢查哥布林王是否存活
-        if (!this.player.isAlive()) {
-            // 王陣亡，但夥伴還在，觸發自動戰鬥
-            this.logMessage('combat', '哥布林王倒下了！夥伴們將繼續戰鬥！', 'system');
-            // 遲後後自動進入下一回合
-            setTimeout(() => this.executeTurn(false), 1500); // 延遲1.5秒讓玩家閱讀戰報
-        } else {
-            // 王還活著，恢復正常流程，等待玩家指令
-            this.combat.playerActionTaken = false;
-            this.logMessage('combat', '等待你的指令...', 'system');
+            // 檢查哥布林王是否存活
+            if (!this.player.isAlive()) {
+                // 王陣亡，但夥伴還在，觸發自動戰鬥
+                this.logMessage('combat', '哥布林王倒下了！夥伴們將繼續戰鬥！', 'system');
+                // 遲後後自動進入下一回合
+                setTimeout(() => this.executeTurn(false), 1500); // 延遲1.5秒讓玩家閱讀戰報
+            } else {
+                // 王還活著，恢復正常流程，等待玩家指令
+                this.combat.playerActionTaken = false;
+                this.logMessage('combat', '等待你的指令...', 'system');
+            }
         }
-    }
     },
 
     async processAiAction(attacker) {
+        // --- 女神專屬AI邏輯 (V3) ---
+        if (attacker instanceof SpiralGoddess) {
+            // --- 階段一：問答 ---
+            if (attacker.phase === 1) {
+                const result = await this.promptGoddessQuestionAndWaitForAnswer();
+                if (!result.finished) {
+                    const playerNumericAnswer = parseInt(result.answer.trim());
+                    const qnaData = SPECIAL_BOSSES.spiral_goddess_mother.qna;
+                    const currentQnA = qnaData[attacker.qnaIndex];
+                    let correctAnswer;
+                    switch (currentQnA.check) {
+                        case 'playerHeight': correctAnswer = this.player.height; break;
+                        case 'partnerCount': correctAnswer = this.partners.length; break;
+                        case 'penisSize':   correctAnswer = this.player.penisSize; break;
+                        case 'captiveCount': correctAnswer = this.captives.length; break;
+                        default: correctAnswer = -999; break;
+                    }
+
+                    if (!isNaN(playerNumericAnswer) && playerNumericAnswer === correctAnswer) {
+                        this.logMessage('combat', `你回答了：「${playerNumericAnswer}」。女神點了點頭。`, 'player');
+                    } else {
+                        const penaltyDamage = correctAnswer * 10;
+                        await this.showCustomAlert(
+                            `女神：「謊言...是沒有意義的。」`,
+                            async () => {
+                                this.logMessage('combat', `你回答了：「${playerNumericAnswer || '無效的回答'}」。女神對你的謊言降下懲罰！(正確答案: ${correctAnswer})`, 'enemy');
+                                await this.processAttack(attacker, this.player, false, penaltyDamage);
+                            }
+                        );
+                    }
+                    attacker.qnaIndex++;
+                }
+
+                if (attacker.qnaIndex >= SPECIAL_BOSSES.spiral_goddess_mother.qna.length && !attacker.phase2_triggered) {
+                    attacker.phase2_triggered = true;
+                    attacker.phase = 2; 
+                    this.logMessage('combat', '問答的試煉結束了...女神的氣息改變了！', 'system');
+                    this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase2_start}」`, 'enemy');
+                    this.combat.allies.forEach(ally => {
+                        ally.statusEffects.push({ type: 'root_debuff', duration: Infinity });
+                        ally.updateHp(this.isStarving); 
+                    });
+                    this.logMessage('combat', '我方全體感受到了靈魂深處的撕裂，生命力的根源被削弱了！', 'player');
+                }
+            } 
+            // --- 階段二：根源的試煉 ---
+            else if (attacker.phase === 2) {
+                const target = this.combat.allies.filter(a => a.isAlive())[0];
+                if (target) await this.processAttack(attacker, target);
+            }
+            // --- 階段三：女體化的試煉 ---
+            else if (attacker.phase === 3) {
+                const repulsionSkillData = SPECIAL_BOSSES.spiral_goddess_mother.skills.find(s => s.id === 'goddess_repulsion');
+                let skillToUse = attacker.skills.find(s => s.id === 'goddess_repulsion');
+                if (!skillToUse) {
+                    skillToUse = { ...repulsionSkillData, currentCooldown: 0 };
+                    attacker.skills.push(skillToUse);
+                }
+                if (skillToUse.currentCooldown === 0) {
+                    this.logMessage('combat', `女神施放了 <span class="text-pink-400">[${skillToUse.name}]</span>！`, 'skill');
+                    skillToUse.currentCooldown = skillToUse.baseCooldown;
+                    for (const ally of this.combat.allies.filter(a => a.isAlive())) {
+                        const charismaDamage = ally.getTotalStat('charisma', this.isStarving);
+                        ally.currentHp = Math.max(0, ally.currentHp - charismaDamage);
+                        this.logMessage('combat', `奇異的力量在你體內奔流，對 ${ally.name} 造成了 ${charismaDamage} 點真實傷害！`, 'player');
+                    }
+                } else {
+                    const target = this.combat.allies.filter(a => a.isAlive())[0];
+                    if (target) await this.processAttack(attacker, target);
+                }
+            }
+            // --- 階段四 & 階段五：普通攻擊 ---
+            else if (attacker.phase === 4 || attacker.phase === 5) {
+                const target = this.combat.allies.filter(a => a.isAlive())[0];
+                if (target) await this.processAttack(attacker, target);
+            }
+            return; 
+        }
+
+        // 使徒AI
+        if (attacker.profession === '使徒') {
+            const proliferateSkill = attacker.skills.find(s => s.id === 'apostle_proliferate');
+            const apostleCount = this.combat.enemies.filter(e => e.profession === '使徒').length;
+
+            // 檢查是否可以使用「繁衍的權能」(冷卻完畢 且 場上數量 < 20)
+            if (proliferateSkill && proliferateSkill.currentCooldown === 0 && apostleCount < 20) {
+                this.logMessage('combat', `${attacker.name} 施放了 <span class="text-pink-400">[繁衍的權能]</span>！`, 'skill');
+
+                // 1. 複製自己
+                const newClone = this.cloneApostle(attacker);
+
+                // 2. 將複製體加入戰場
+                this.combat.enemies.push(newClone);
+                
+                // 3. 施放後，自己和複製體的技能都進入冷卻
+                proliferateSkill.currentCooldown = proliferateSkill.baseCooldown;
+                const cloneSkill = newClone.skills.find(s => s.id === 'apostle_proliferate');
+                if (cloneSkill) {
+                    cloneSkill.currentCooldown = cloneSkill.baseCooldown;
+                }
+
+                this.logMessage('combat', `一個新的 ${newClone.name} 出現在戰場上！`, 'enemy');
+
+                // 4. 處理「重現的權能」：立即追加一次普通攻擊
+                this.logMessage('combat', `在 [重現的權能] 的影響下，${attacker.name} 立即再次行動！`, 'skill');
+                const livingAllies = this.combat.allies.filter(a => a.isAlive());
+                if (livingAllies.length > 0) {
+                    const target = livingAllies[randomInt(0, livingAllies.length - 1)];
+                    // 使用 await 確保攻擊動畫播放完畢
+                    await this.processAttack(attacker, target, false);
+                }
+                
+                // 5. 結束使徒的回合
+                return; 
+            }
+        }
         const isAlly = this.combat.allies.some(a => a.id === attacker.id);
         const allies = isAlly ? this.combat.allies.filter(u => u.isAlive()) : this.combat.enemies.filter(u => u.isAlive());
         const enemies = isAlly ? this.combat.enemies.filter(u => u.isAlive()) : this.combat.allies.filter(u => u.isAlive());
@@ -3443,7 +3780,7 @@ const gameLogic = {
         await new Promise(res => setTimeout(res, 300));
     },
 
-    async processAttack(attacker, target, isExtraAttack = false) { // 新增一個參數 isExtraAttack，預設為 false
+    async processAttack(attacker, target, isExtraAttack = false, overrideDamage = null) { //  isExtraAttack，預設為 false
         const isAllyAttacking = this.combat.allies.some(a => a.id === attacker.id);
         const logType = isAllyAttacking ? 'player' : 'enemy';
         const enemyTeam = isAllyAttacking ? this.combat.enemies : this.combat.allies;
@@ -3523,11 +3860,19 @@ const gameLogic = {
         
         this.logMessage('combat', `攻擊命中！`, 'success');
 
-        // --- v2.5 傷害計算 (修改後) ---
-        let damage = attacker.calculateDamage(this.isStarving);
-        damage += (attacker.equipment.chest?.stats.attackBonus || 0) + (attacker.equipment.offHand?.stats.attackBonus || 0);
+        // --- v2.5 傷害計算 ---
+        let damage;
+        // 2. 檢查是否有指定傷害值
+        if (overrideDamage !== null) {
+            damage = overrideDamage;
+            this.logMessage('combat', `一股神聖的力量形成了懲罰！`, 'system'); // 加入提示，增加氛圍
+        } else {
+            // 如果沒有指定傷害，則正常計算
+            damage = attacker.calculateDamage(this.isStarving);
+            damage += (attacker.equipment.chest?.stats.attackBonus || 0) + (attacker.equipment.offHand?.stats.attackBonus || 0);
+        }
 
-        // --- 機率觸發系統 (修改後) ---
+        // --- 機率觸發系統  ---
         let attackerGamblerBonus = 0;
         let critAffixCount = 0;
         let penetratingAffixCount = 0;
@@ -3634,15 +3979,106 @@ const gameLogic = {
             }
         }
 
-        const finalDamage = Math.max(0, Math.floor(damage)); 
+        let finalDamage = Math.max(0, Math.floor(damage)); 
+        // --- 使徒「歸零的權能」判定 ---
+        if (currentTarget.profession === '使徒' && finalDamage > 0 && rollPercentage(25)) {
+            const nullifySkill = currentTarget.skills.find(s => s.id === 'apostle_nullify');
+            if (nullifySkill) {
+                const healAmount = Math.floor(finalDamage * 0.5);
+                currentTarget.currentHp = Math.min(currentTarget.maxHp, currentTarget.currentHp + healAmount);
+                this.logMessage('combat', `${currentTarget.name} 的 [歸零的權能] 觸發！傷害變為0，並恢復了 ${healAmount} 點生命！`, 'crit');
+
+                finalDamage = 0; // 將最終傷害歸零
+            }
+        }
+
         currentTarget.currentHp = Math.max(0, currentTarget.currentHp - finalDamage);
         this.logMessage('combat', `${attacker.name} 對 ${currentTarget.name} 造成了 ${finalDamage} 點傷害。`, isAllyAttacking ? 'player' : 'enemy');
+
+        // --- 戰鬥中對話觸發邏輯 ---
+        const hpPercent = currentTarget.currentHp / currentTarget.maxHp;
+
+        // 檢查被打的是不是特殊 Boss
+        if (currentTarget instanceof ApostleMaiden && currentTarget.isAlive()) {
+            if (hpPercent <= 0.25 && !currentTarget.triggeredDialogues.has('hp_25')) {
+                this.showInBattleDialogue(currentTarget, 'hp_25');
+            } else if (hpPercent <= 0.50 && !currentTarget.triggeredDialogues.has('hp_50')) {
+                this.showInBattleDialogue(currentTarget, 'hp_50');
+            } else if (hpPercent <= 0.75 && !currentTarget.triggeredDialogues.has('hp_75')) {
+                this.showInBattleDialogue(currentTarget, 'hp_75');
+            }
+        }
+        
+        // 檢查被打的是不是玩家，且攻擊者是使徒
+        if (currentTarget.id === this.player.id && attacker instanceof ApostleMaiden) {
+            if (hpPercent <= 0.50 && !attacker.triggeredDialogues.has('player_hp_50')) {
+                this.showInBattleDialogue(attacker, 'player_hp_50');
+            }
+        }
+
+        // --- 女神階段轉換判定 ---
+        if (currentTarget instanceof SpiralGoddess) {
+            const hpPercent = currentTarget.currentHp / currentTarget.maxHp;
+            // 階段三觸發 (從階段二進入)
+            if (currentTarget.phase === 2 && !currentTarget.phase3_triggered && hpPercent <= 0.75) {
+                currentTarget.phase3_triggered = true; // 標記已觸發，避免重複
+                attacker.phase = 3; 
+                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase3_start}」`, 'enemy');
+
+                // 對我方所有單位施加 "女體化" Debuff
+                this.combat.allies.forEach(ally => {
+                    ally.statusEffects.push({
+                        type: 'feminized',
+                        duration: Infinity 
+                    });
+                    ally.updateHp(this.isStarving); 
+                });
+                this.logMessage('combat', '一陣奇異的光芒籠罩了我方全體，身體的構造似乎發生了不可逆的變化！', 'player');
+            }
+            if (currentTarget.phase === 3 && !currentTarget.phase4_triggered && hpPercent <= 0.50) {
+                currentTarget.phase4_triggered = true;
+                currentTarget.phase = 4;
+                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase4_start}」`, 'enemy');
+
+                // 執行男體化：將魅力平均分配到四圍
+                const charismaValue = currentTarget.stats.charisma;
+                const bonusPerStat = Math.floor(charismaValue / 4);
+                currentTarget.stats.strength += bonusPerStat;
+                currentTarget.stats.agility += bonusPerStat;
+                currentTarget.stats.intelligence += bonusPerStat;
+                currentTarget.stats.luck += bonusPerStat;
+                currentTarget.stats.charisma = 0;
+
+                this.logMessage('combat', '女神捨棄了魅力，將其轉化為純粹的力量！', 'system');
+            }
+            // 階段五觸發 (從階段四進入)
+            else if (currentTarget.phase === 4 && !currentTarget.phase5_triggered && hpPercent <= 0.25) {
+                currentTarget.phase5_triggered = true;
+                currentTarget.phase = 5;
+                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase5_start}」`, 'enemy');
+
+                // 執行異性相吸：從玩家俘虜中召喚
+                const captivesToSummon = [...this.captives].sort(() => 0.5 - Math.random()).slice(0, 20);
+                if (captivesToSummon.length > 0) {
+                    const summonedUnits = captivesToSummon.map(c => {
+                        const summoned = new FemaleHuman(c.name, c.stats, c.profession, c.visual);
+                        // 強化被召喚的單位
+                        Object.keys(summoned.stats).forEach(stat => {
+                            summoned.stats[stat] = Math.floor(summoned.stats[stat] * 1.5);
+                        });
+                        summoned.updateHp();
+                        return summoned;
+                    });
+                    this.combat.enemies.push(...summonedUnits);
+                    this.logMessage('combat', `你過去擄來的 ${summonedUnits.length} 名女性出現在戰場上，她們的眼神充滿了敵意！`, 'enemy');
+                }
+            } 
+        }
         
         // 如果造成了傷害 (或0點傷害)，就顯示傷害數字
         if (finalDamage >= 0) {
             showFloatingText(currentTarget.id, finalDamage, 'damage');
         }
-
         // --- 攻擊者與防禦者「命中後」觸發效果 ---
         if (attacker.isAlive()) { // 攻擊方吸血
             let vampiricAffixCount = 0;
@@ -3692,6 +4128,17 @@ const gameLogic = {
 
         // 後續處理
         if (!currentTarget.isAlive()) {
+            // --- 使徒「螺旋的權能」復活判定 ---
+            if (currentTarget.profession === '使徒' && rollPercentage(25)) {
+                const reviveSkill = currentTarget.skills.find(s => s.id === 'apostle_spiral');
+                const proliferateSkill = currentTarget.skills.find(s => s.id === 'apostle_proliferate');
+                if (reviveSkill && proliferateSkill) {
+                    currentTarget.currentHp = Math.floor(currentTarget.maxHp * 0.5); // 恢復50%生命
+                    proliferateSkill.currentCooldown = 0; // 重置複製技能CD
+                    this.logMessage('combat', `${currentTarget.name} 在 [螺旋的權能] 的影響下復活了，並準備再次繁衍！`, 'crit');
+                    return; // 使用 return 提前結束函式，跳過後續的死亡處理
+                }
+            }
             this.logMessage('combat', `${currentTarget.name} 被擊敗了！`, 'system');
             const isTargetAnAlly = this.combat.allies.some(a => a.id === currentTarget.id);
             if (isTargetAnAlly) {
@@ -4133,7 +4580,86 @@ const gameLogic = {
         }
     },
 
+    showInBattleDialogue(unit, dialogueKey) {
+        const data = unit instanceof ApostleMaiden ? SPECIAL_BOSSES.apostle_maiden : SPECIAL_BOSSES.spiral_goddess_mother;
+        if (!data || !data.dialogues[dialogueKey]) return;
+
+        unit.triggeredDialogues.add(dialogueKey); // 標記此對話已觸發
+
+        const modal = this.modals.narrative;
+        modal.isOpen = true;
+        modal.title = unit.name;
+        modal.type = "tutorial";
+        modal.isLoading = false;
+        modal.isAwaitingConfirmation = false;
+        modal.avatarUrl = data.avatar;
+        modal.content = `<p class="text-lg leading-relaxed">${data.dialogues[dialogueKey]}</p>`;
+
+        // 戰鬥中的對話不需要特殊回呼，關閉即可
+        modal.onConfirm = () => {
+            modal.isOpen = false;
+        };
+    },
+
     endCombat(victory) {
+        // --- 使徒戰鬥結算 ---
+        const wasApostleBattle = this.combat.currentEnemyGroup.some(e => e instanceof ApostleMaiden);
+        if (wasApostleBattle) {
+            if (victory) {
+                // 勝利：捕獲特殊俘虜
+                this.logMessage('tribe', `你成功擊敗了螺旋女神的使徒！`, 'success');
+                
+                // 根據GDD創建俘虜
+                const captiveApostle = new FemaleHuman(
+                    '使徒 露娜',
+                    { strength: 180, agility: 180, intelligence: 180, luck: 180, charisma: 120 },
+                    '使徒',
+                    SPECIAL_BOSSES.apostle_maiden.visual, // 直接使用我們定義好的外觀
+                    'hell' // 標記為最高難度來源
+                );
+
+                this.captives.push(captiveApostle);
+                this.logMessage('tribe', `使徒的分身 [露娜] 被你捕獲，出現在了地牢中！`, 'crit');
+
+            } else {
+                // 失敗：重置繁衍計數器
+                this.logMessage('tribe', `你在使徒的無限增殖面前倒下了...`, 'enemy');
+                this.totalBreedingCount = 0;
+                this.logMessage('tribe', `你對繁衍的渴望似乎減退了。 (總繁衍次數已重置)`, 'system');
+            }
+            if (!this.flags.defeatedApostle) {
+            this.flags.defeatedApostle = true;
+            this.logMessage('tribe', `你獲得了關鍵物品 [繁衍之證]！繁衍系技能樹已解鎖！`, 'system');
+            }
+        }
+        else if (this.combat.currentEnemyGroup.some(e => e instanceof SpiralGoddess)) {
+            if (victory) {
+                this.logMessage('tribe', `你戰勝了神之試煉，證明了哥布林存在的價值！`, 'success');
+
+                // 根據GDD創建俘虜
+                const captiveGoddess = new FemaleHuman(
+                    '女神 露娜',
+                    SPECIAL_BOSSES.spiral_goddess_mother.captiveFormStats,
+                    '女神',
+                    SPECIAL_BOSSES.spiral_goddess_mother.visual,
+                    'hell'
+                );
+                this.captives.push(captiveGoddess);
+                this.logMessage('tribe', `女神的分身 [露娜] 出現在了你的地牢中，她似乎失去了大部分的力量...`, 'crit');
+
+                if (!this.flags.defeatedGoddess) {
+                    this.flags.defeatedGoddess = true;
+                    this.logMessage('tribe', `你獲得了關鍵物品 [螺旋的權能]！權能系被動技能已解鎖！`, 'system');
+                }
+
+                this.pendingDecisions.push({ type: 'crone_dialogue' });
+
+            } else {
+                this.logMessage('tribe', `你在絕對的神力面前化為了塵埃...`, 'enemy');
+                // 女神戰失敗沒有特殊懲罰，玩家會在重生後繼續
+            }
+        }
+
         // 這個檢查將覆蓋所有後續的勝利/失敗邏輯。
         if (this.player && !this.player.isAlive()) {
             this.initiateRebirth();
@@ -4545,7 +5071,17 @@ const gameLogic = {
         if (decision.type === 'partner') {
             // 如果是夥伴寢室已滿的決策，呼叫新的夥伴管理視窗
             this.openPartnerManagementModal(decision.list, decision.limit, decision.context);
-        } else {
+        } 
+        else if (decision.type === 'apostle_battle') {
+            this.triggerApostleBattle();
+        } 
+        else if (decision.type === 'goddess_battle') {
+            this.triggerGoddessBattle();
+        } 
+        else if (decision.type === 'crone_dialogue') {
+            this.triggerCroneDialogue();
+        }
+        else {
             // 否則，維持舊的邏輯，呼叫統一俘虜管理視窗
             this.openCaptiveManagementModal(
                 decision.type,
@@ -4670,6 +5206,8 @@ const gameLogic = {
             merchant: this.merchant,// 儲存更完整的商人資訊
             tempStatIncreases: this.tempStatIncreases,//能力點
             dlc: this.dlc,
+            totalBreedingCount: this.totalBreedingCount,
+            flags: this.flags,
         };
         localStorage.setItem('goblinKingSaveFile', JSON.stringify(saveData));
         this.showCustomAlert('遊戲進度已儲存！');
@@ -4768,6 +5306,10 @@ const gameLogic = {
                         }
                     }
                 }
+                // 確保舊存檔的俘虜也有 breedingCount 屬性
+                if (UnitClass === FemaleHuman || UnitClass === FemaleKnightOrderUnit) {
+                    newUnit.breedingCount = unitData.breedingCount || 0;
+                }
                 return newUnit;
             };
             
@@ -4811,15 +5353,20 @@ const gameLogic = {
                 barracks: { level: 0, name: "寢室" }, armory: { level: 0, name: "兵工廠" },
                 maternity: { level: 0, name: "產房" }, trainingGround: { level: 0, name: "訓練場" }, 
                 merchantCamp: { level: 0, name: "商人營地" },
+                watchtower: { level: 0, name: "哨塔" },
             };
             this.buildings = { ...defaultBuildings, ...parsedData.buildings };
             
             this.day = parsedData.day;
+            this.totalBreedingCount = parsedData.totalBreedingCount || 0;
+            this.flags = parsedData.flags || { defeatedApostle: false, defeatedGoddess: false };
             this.year = Math.floor((this.day - 1) / 360) ;
             this.month = Math.floor(((this.day - 1) % 360) / 30) + 1;
             this.currentDate = ((this.day - 1) % 30) + 1;
 
-            this.dispatch = parsedData.dispatch || { hunting: [], logging: [], mining: [] }; 
+            const defaultDispatch = { hunting: [], logging: [], mining: [], watchtower: [] };
+            this.dispatch = { ...defaultDispatch, ...parsedData.dispatch };
+            
             this.narrativeMemory = parsedData.narrativeMemory;
 
             if (parsedData.dlc) {
@@ -5272,15 +5819,18 @@ const gameLogic = {
         return parts.join('<br>');
     },
 
+    //更新這個計算屬性，讓它排除所有已指派的夥伴
     get availablePartnersForDispatch() {
         // 取得所有未被派遣的夥伴
         const dispatchedIds = new Set([
             ...this.dispatch.hunting,
             ...this.dispatch.logging,
-            ...this.dispatch.mining
+            ...this.dispatch.mining,
+            ...this.dispatch.watchtower // 加入哨塔成員
         ]);
         return this.partners.filter(p => !dispatchedIds.has(p.id));
     },
+
     get availablePartnersForParty() {
         // 這份清單只會顯示「沒有」被派遣的哥布林
         const dispatchedIds = new Set([
@@ -5408,7 +5958,16 @@ const gameLogic = {
         if (!skill.dependencies || skill.dependencies.length === 0) {
             return true;
         }
-        return skill.dependencies.every(depId => this.player.learnedSkills.hasOwnProperty(depId));
+        return skill.dependencies.every(depId => {
+            if (depId === 'post_apostle_boss') {
+                return this.flags.defeatedApostle;
+            }
+            if (depId === 'post_final_boss') {
+                return this.flags.defeatedGoddess;
+            }
+            // 原有的判斷邏輯保留
+            return this.player.learnedSkills.hasOwnProperty(depId);
+        });
     },
 
     learnSkill(skillId) {
