@@ -1096,7 +1096,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.56 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.58 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -5175,22 +5175,98 @@ const gameLogic = {
         }
     },
 
-    unlockDlc() {
+    redeemCode() {
         const code = this.$refs.dlc_code_input.value.trim().toUpperCase();
-        
-        if (code === "HELLKNIGHTS20147") { // 這就是我們的解鎖碼
-            if (!this.dlc.hells_knights) {
-                this.dlc.hells_knights = true;
-                this.showCustomAlert('「王國騎士團」DLC 已成功啟用！新內容將在下次遊戲或讀檔後生效。');
-                this.saveGame(); // 自動存檔以保存解鎖狀態
-            } else {
-                this.showCustomAlert('您已經擁有此 DLC！');
-            }
-        } else {
-            this.showCustomAlert('無效的解鎖碼。');
+        if (!code) return; // 如果沒輸入，就沒反應
+
+        // 為了相容性，如果玩家物件上沒有兌換紀錄，先幫他建立一個
+        if (!this.player.redeemedCodes) {
+            this.player.redeemedCodes = [];
         }
-        
-        this.$refs.dlc_code_input.value = '';
+
+        // 檢查序號是否已經使用過
+        if (this.player.redeemedCodes.includes(code)) {
+            this.showCustomAlert('此序號已被使用。');
+            this.$refs.dlc_code_input.value = '';
+            return;
+        }
+
+        let success = false;
+        let message = '兌換成功！';
+
+        switch (code) {
+            // 保留舊的 DLC 序號
+            case "HELLKNIGHTS20147":
+                this.dlc.hells_knights = true;
+                message = '「王國騎士團」DLC 已成功啟用！';
+                success = true;
+                break;
+
+            // 新增：47 技能點
+            case "47SKILL":
+                this.player.skillPoints += 47;
+                message = '你獲得了 47 點技能點！';
+                success = true;
+                break;
+
+            // 新增：47 能力點
+            case "47STATS":
+                this.player.attributePoints += 47;
+                message = '你獲得了 47 點能力點！';
+                success = true;
+                break;
+
+            // 新增：隨機公主
+            case "NEEDPRINCESS":
+                if (this.captives.length >= this.captiveCapacity) {
+                    message = '地牢已滿，無法新增俘虜！';
+                    success = false;
+                } else {
+                    const princessStats = {
+                        strength: 20, agility: 20, intelligence: 20, luck: 20, charisma: randomInt(150, 200)
+                    };
+                    const princess = new FemaleHuman(
+                        FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)],
+                        princessStats,
+                        '公主',
+                        generateVisuals()
+                    );
+                    this.captives.push(princess);
+                    message = `一位名叫 ${princess.name} 的公主出現在你的地牢中！`;
+                    success = true;
+                }
+                break;
+
+            // 新增：世紀的分身
+            case "HELLOCENTURY":
+                if (this.captives.length >= this.captiveCapacity) {
+                    message = '地牢已滿，無法新增俘虜！';
+                    success = false;
+                } else {
+                    const shijiClone = new FemaleHuman(
+                        '世紀的分身',
+                        { strength: 20, agility: 20, intelligence: 20, luck: 20, charisma: 147 },
+                        '魅魔',
+                        { hairColor: '深棕色', hairStyle: '波波頭', height: 168, age: '未知', bust: 'E', personality: '悶騷', clothing: '魅魔裝' }
+                    );
+                    this.captives.push(shijiClone);
+                    message = '「世紀的分身」出現在你的地牢中！';
+                    success = true;
+                }
+                break;
+
+            default:
+                message = '無效的序號。';
+                success = false;
+        }
+
+        // 如果兌換成功，就記錄下來
+        if (success) {
+            this.player.redeemedCodes.push(code);
+        }
+
+        this.showCustomAlert(message);
+        this.$refs.dlc_code_input.value = ''; // 清空輸入框
     },
 
     checkAndProcessDecisions() {
@@ -5351,6 +5427,10 @@ const gameLogic = {
             // 為玩家重塑 Player 物件
             this.player = rehydrateUnit(parsedData.player, Player);
 
+            // 為了舊存檔的相容性，如果讀取的玩家資料沒有 redeemedCodes 屬性，就幫他加上
+            if (!this.player.redeemedCodes) {
+                this.player.redeemedCodes = [];
+            }
             // --- 後續的讀檔邏輯維持不變 ---
             const partnersMap = new Map(this.partners.map(p => [p.id, p]));
             this.player.party = (parsedData.player.party || [])
