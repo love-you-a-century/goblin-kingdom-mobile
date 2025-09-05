@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.56</title>
+    <title>哥布林王國v5.58</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -442,10 +442,10 @@
                                 </div>
                             </div>
                             <div class="game-container relative p-4 rounded-lg pt-10">
-                                <h2 class="game-title font-medieval">DLC 解鎖</h2>
+                                <h2 class="game-title font-medieval">序號兌換</h2> 
                                 <div class="flex space-x-2">
-                                    <input type="text" x-ref="dlc_code_input" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="請輸入 DLC 解鎖碼...">
-                                    <button @click="unlockDlc()" class="btn btn-primary">解鎖</button>
+                                    <input type="text" x-ref="dlc_code_input" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="請輸入特典序號...">
+                                    <button @click="redeemCode()" class="btn btn-primary">兌換</button>
                                 </div>
                                 <p x-show="dlc.hells_knights" class="text-green-400 mt-2">「王國騎士團」DLC 已成功啟用！</p>
                             </div>
