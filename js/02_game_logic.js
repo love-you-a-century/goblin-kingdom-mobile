@@ -1666,7 +1666,7 @@ const gameLogic = {
         const building = this.buildings[type];
         if (!building) return { food: 0, wood: 0, stone: 0 };
         const level = building.level;
-
+        const multiplier = Math.pow(2, level);
         let cost = { food: 0, wood: 0, stone: 0 };
 
         switch (type) {
