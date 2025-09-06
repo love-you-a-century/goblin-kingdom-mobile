@@ -895,7 +895,7 @@ const gameLogic = {
                     if (effect) {
                         const statName = STAT_NAMES[effect.stat] || effect.stat; // 將 'agility' 轉為 '敏捷'
                         const percentage = effect.multiplier * 100; // 將 0.2 轉為 20
-                        const effectString = `傷害增加 ${percentage}% 有效${statName}`;
+                        const effectString = `傷害 +${percentage}% 有效${statName}`;
                         parts.push(`<span class="text-green-400">${affix.name}: ${effectString}</span>`);
                     }
                 }           
@@ -1096,7 +1096,7 @@ const gameLogic = {
 
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.58 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.59 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -2262,13 +2262,12 @@ const gameLogic = {
     },
 
     cleanupDispatchLists() {
-        // 取得一份當前所有合法夥伴ID的集合，方便快速查找
-        const allCurrentPartnerIds = new Set(this.partners.map(p => p.id));
+    const allCurrentPartnerIds = new Set(this.partners.map(p => p.id));
 
-        // 過濾每一個派遣列表，只保留ID存在於合法夥伴ID集合中的成員
         this.dispatch.hunting = this.dispatch.hunting.filter(id => allCurrentPartnerIds.has(id));
         this.dispatch.logging = this.dispatch.logging.filter(id => allCurrentPartnerIds.has(id));
         this.dispatch.mining = this.dispatch.mining.filter(id => allCurrentPartnerIds.has(id));
+        this.dispatch.watchtower = this.dispatch.watchtower.filter(id => allCurrentPartnerIds.has(id));
     },
 
     finalizeReleasePartner(partner) {
@@ -4492,7 +4491,8 @@ const gameLogic = {
                 case 'plate':
                     baseStats = {
                         attackBonus: PLATE_ARMOR_STATS[tier].attackBonus,
-                        damageReduction: PLATE_ARMOR_STATS[tier].damageReduction
+                        damageReduction: PLATE_ARMOR_STATS[tier].damageReduction,
+                        allStats: PLATE_ARMOR_STATS[tier].allStats
                     };
                     break;
                 case 'leather':
@@ -4559,9 +4559,9 @@ const gameLogic = {
 
         // 如果技能沒觸發，則執行正常的死亡邏輯
         this.logMessage('combat', `你的夥伴 ${partner.name} 在戰鬥中陣亡了！他將永遠離開你...`, 'enemy');
-        this.partners = this.partners.filter(p => p.id !== partnerId);
-        this.player.party = this.player.party.filter(p => p.id !== partnerId);
-        this.player.updateHp(this.isStarving);
+        this._removePartnerFromAllAssignments(partnerId); // <-- 移除舊的出擊隊伍邏輯
+        this.partners = this.partners.filter(p => p.id !== partnerId); // <-- 從總夥伴中移除
+        this.player.updateHp(this.isStarving); // <-- 更新玩家狀態
     },
 
     async attemptSneakEscape() {
@@ -5300,6 +5300,36 @@ const gameLogic = {
         this.showCustomAlert('遊戲進度已儲存！');
         this.hasSaveFile = true;
     },
+    _patchMissingArmorStats(data) {
+        if (!data || typeof data !== 'object') return;
+
+        if (Array.isArray(data)) {
+            data.forEach(item => this._patchMissingArmorStats(item));
+        } else {
+            // 核心修改：判斷是否為一個「胸甲」物件且缺少有效的 allStats
+            if (data.slot === 'chest' && data.stats && !data.stats.allStats) {
+                const tier = data.material?.tier;
+                const statsTable = {
+                    '鎧甲': PLATE_ARMOR_STATS,
+                    '皮甲': LEATHER_ARMOR_STATS,
+                    '布服': CLOTH_ARMOR_STATS
+                }[data.baseName];
+
+                if (tier && statsTable && statsTable[tier]) {
+                    data.stats.allStats = statsTable[tier].allStats;
+                    console.log(`修補了舊裝備 ${data.name} 的 allStats 屬性。`);
+                }
+            }
+
+            // 遞迴檢查物件的其他屬性
+            for (const key in data) {
+                if (Object.prototype.hasOwnProperty.call(data, key)) {
+                    this._patchMissingArmorStats(data[key]);
+                }
+            }
+        }
+    },
+
     // 存檔拯救函式，用於修復汙染的舊存檔
     // 存檔拯救函式，增加強制ID清洗功能
     salvageSaveData() {
@@ -5470,8 +5500,14 @@ const gameLogic = {
             this.breedingChargesLeft = parsedData.breedingChargesLeft;
             this.merchant = { ...this.merchant, ...parsedData.merchant };
 
+            this.salvageSaveData(); // 這是原本就有的ID修復函式
+
+            this._patchMissingArmorStats(this); // +++ 新增這一行，用來修補舊鎧甲 +++
+
             this.player.updateHp(this.isStarving);
             this.partners.forEach(p => p.updateHp(this.isStarving));
+
+            this.cleanupDispatchLists(); // 在讀取完所有資料後，清理一次派遣列表
 
             if (parsedData.tempStatIncreases) {
                 this.tempStatIncreases = parsedData.tempStatIncreases;
@@ -5821,7 +5857,7 @@ const gameLogic = {
             const bonusText = item.qualityBonus > 0 ? `+${item.qualityBonus}` : item.qualityBonus;
             let bonusName = '';
             if (item.type === 'armor' || item.baseName === '盾') {
-                bonusName = '防禦加成';
+                bonusName = '迴避加成';
             } else if (item.type === 'weapon') {
                 bonusName = '命中加成';
             }
@@ -5835,7 +5871,7 @@ const gameLogic = {
             const formattedBaseStats = Object.entries(item.stats).map(([key, value]) => {
                 const nameMap = {
                     damage: '傷害',
-                    attackBonus: '攻擊加成',
+                    attackBonus: '傷害',
                     damageReduction: '傷害減免',
                     allStats: '全屬性',
                     blockTarget: '格擋目標值'
@@ -5863,14 +5899,14 @@ const gameLogic = {
                 parts.push(`<span class="text-green-400">${affix.name}: ${effectString}</span>`);
 
             } else if (affix.type === 'proc') {
-                // 【優化】顯示更詳細的機率性效果描述
+                // 顯示更詳細的機率性效果描述
                 const procDescMap = {
-                    'vampiric': `(${affix.procInfo.value * 100}% 吸血)`,
-                    'spiky': `(${affix.procInfo.value * 100}% 反傷)`,
-                    'multi_hit': '(機率連擊)',
-                    'regenerating': `(每回合恢復 ${affix.procInfo.value * 100}% 生命)`,
-                    'blocking': '(機率格擋)',
-                    'penetrating': `(${affix.procInfo.value * 100}% 穿透)`
+                    'vampiric': `(10%機率恢復我方造成${affix.procInfo.value * 100}%傷害)`,
+                    'spiky': `(${affix.procInfo.value * 100}%機率反彈10%傷害)`,
+                    'multi_hit': '(5%機率連擊)',
+                    'regenerating': `(每回合恢復${affix.procInfo.value * 100}%生命)`,
+                    'blocking': '(5%機率無效攻擊)',
+                    'penetrating': `(10%機率給予目標${affix.procInfo.value * 100}%傷害)`
                 };
                 const procDesc = procDescMap[affix.key] || '(機率性效果)';
                 parts.push(`<span class="text-blue-400">${affix.name} ${procDesc}</span>`);
@@ -5879,15 +5915,31 @@ const gameLogic = {
                 if (effect) {
                     const statName = STAT_NAMES[effect.stat] || effect.stat; // 將 'strength' 轉為 '力量'
                     const percentage = effect.multiplier * 100; // 將 0.3 轉為 30
-                    const effectString = `傷害增加 ${percentage}% 有效${statName}`;
+                    const effectString = `傷害+${percentage}%有效${statName}`;
                     parts.push(`<span class="text-green-400">${affix.name}: ${effectString}</span>`);
                 }
             } else if (affix.type === 'proc_rate_enhancer') {
                 const effect = affix.effects;
                 if (effect) {
-                    const effectString = `所有機率性詞綴發動率 +${effect.value}%`;
+                    const effectString = `詞綴發動率+${effect.value}%`;
                     // 使用藍色，與其他機率性詞綴保持一致
                     parts.push(`<span class="text-blue-400">${affix.name}: ${effectString}</span>`);
+                }
+            }else if (affix.type === 'crit_mod') {
+                const effect = affix.effects;
+                if (effect && effect.crit_damage_bonus) {
+                    const percentage = effect.crit_damage_bonus * 100;
+                    const effectString = `爆擊傷害+${percentage}%`;
+                    // 使用黃色來突顯這個強大的效果
+                    parts.push(`<span class="text-yellow-400">${affix.name}: ${effectString}</span>`);
+                }
+            }
+            else if (affix.type === 'crit_chance') {
+                const effect = affix.effects;
+                if (effect && effect.value) {
+                    const effectString = `爆擊機率+${effect.value}%`;
+                    // 使用黃色來突顯
+                    parts.push(`<span class="text-yellow-400">${affix.name}: ${effectString}</span>`);
                 }
             }
         });

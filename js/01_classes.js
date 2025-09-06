@@ -271,6 +271,7 @@ class Player extends Goblin {
         this.party = [];
         this.avatarUrl = null;
         this.inventory = [];
+        this.redeemedCodes = [];
     }
 
     getPartyHpBonus(isStarving = false) {
