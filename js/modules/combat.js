@@ -1,0 +1,1031 @@
+// js/modules/combat.js
+
+const combatModule = {
+    // 啟動戰鬥
+    startCombat(enemyGroup, enemyFirstStrike = false, alliesOverride = null) {
+        this.resetAllSkillCooldowns();
+
+        enemyGroup.forEach(enemy => {
+            if (enemy instanceof ApostleMaiden || enemy instanceof SpiralGoddess) {
+                enemy.triggeredDialogues = new Set();
+            }
+        });
+
+        let combatAllies;
+
+        if (!this.currentRaid) {
+            const dispatchedIds = new Set([
+                ...this.dispatch.hunting,
+                ...this.dispatch.logging,
+                ...this.dispatch.mining
+            ]);
+            const availablePartners = this.partners.filter(p => !dispatchedIds.has(p.id));
+            combatAllies = [this.player, ...availablePartners];
+            this.logMessage('tribe', `部落全員動員，抵禦入侵者！`, 'system');
+        } else {
+            combatAllies = [this.player, ...this.player.party];
+        }
+
+        this.combat.allies = (alliesOverride || combatAllies).filter(u => u.isAlive());
+        this.combat.enemies = enemyGroup.filter(u => u.isAlive());
+        this.combat.currentEnemyGroup = enemyGroup;
+        this.combat.turn = 1;
+        this.combat.isProcessing = false;
+        this.combat.playerActionTaken = false;
+        this.screen = 'combat';
+        this.logs.combat = [];
+        this.logMessage('combat', `戰鬥開始！`, 'system');
+        
+        if (enemyFirstStrike) {
+            this.logMessage('combat', '敵人發動了突襲！', 'enemy');
+            this.executeTurn(true); 
+        } else {
+            this.logMessage('combat', '等待你的指令...', 'system');
+        }
+        if (enemyGroup[0] instanceof SpiralGoddess) {
+            this.startGoddessQnA();
+        }
+    },
+
+    // 結束戰鬥
+    endCombat(victory) {
+        const wasApostleBattle = this.combat.currentEnemyGroup.some(e => e instanceof ApostleMaiden);
+        if (wasApostleBattle) {
+            if (victory) {
+                this.logMessage('tribe', `你成功擊敗了螺旋女神的使徒！`, 'success');
+                const captiveApostle = new FemaleHuman(
+                    '使徒 露娜',
+                    { strength: 180, agility: 180, intelligence: 180, luck: 180, charisma: 120 },
+                    '使徒',
+                    SPECIAL_BOSSES.apostle_maiden.visual,
+                    'hell'
+                );
+                this.captives.push(captiveApostle);
+                this.logMessage('tribe', `使徒的分身 [露娜] 被你捕獲，出現在了地牢中！`, 'crit');
+            } else {
+                this.logMessage('tribe', `你在使徒的無限增殖面前倒下了...`, 'enemy');
+                this.totalBreedingCount = 0;
+                this.logMessage('tribe', `你對繁衍的渴望似乎減退了。 (總繁衍次數已重置)`, 'system');
+            }
+            if (!this.flags.defeatedApostle) {
+                this.flags.defeatedApostle = true;
+                this.logMessage('tribe', `你獲得了關鍵物品 [繁衍之證]！繁衍系技能樹已解鎖！`, 'system');
+            }
+        }
+        else if (this.combat.currentEnemyGroup.some(e => e instanceof SpiralGoddess)) {
+            if (victory) {
+                this.logMessage('tribe', `你戰勝了神之試煉，證明了哥布林存在的價值！`, 'success');
+                const captiveGoddess = new FemaleHuman(
+                    '女神 露娜',
+                    SPECIAL_BOSSES.spiral_goddess_mother.captiveFormStats,
+                    '女神',
+                    SPECIAL_BOSSES.spiral_goddess_mother.visual,
+                    'hell'
+                );
+                this.captives.push(captiveGoddess);
+                this.logMessage('tribe', `女神的分身 [露娜] 出現在了你的地牢中，她似乎失去了大部分的力量...`, 'crit');
+
+                if (!this.flags.defeatedGoddess) {
+                    this.flags.defeatedGoddess = true;
+                    this.logMessage('tribe', `你獲得了關鍵物品 [螺旋的權能]！權能系被動技能已解鎖！`, 'system');
+                }
+                this.pendingDecisions.push({ type: 'crone_dialogue' });
+            } else {
+                this.logMessage('tribe', `你在絕對的神力面前化為了塵埃...`, 'enemy');
+            }
+        }
+
+        if (this.player && !this.player.isAlive()) {
+            this.initiateRebirth();
+            return;
+        }
+
+        if (this.currentRaid && this.raidTimeExpired) {
+            this.raidTimeExpired = false;
+            if (victory) {
+                this.triggerReinforcementBattle();
+            } else {
+                this.prepareToEndRaid(true);
+            }
+            if (this.postBattleBirths.length > 0) {
+                this.postBattleBirths.forEach(birth => {
+                    this.pendingDecisions.push({
+                        type: 'partner',
+                        list: [...this.partners, birth.newborn],
+                        limit: this.partnerCapacity,
+                        context: { mother: birth.mother, newborn: birth.newborn }
+                    });
+                });
+                this.postBattleBirths = [];
+                this.checkAndProcessDecisions();
+            }
+            return;
+        }
+
+        if (!this.currentRaid) {
+            if (victory) {
+                this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
+                const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+                if (defeatedFemales.length > 0) {
+                    if ((this.dungeonCaptives.length + defeatedFemales.length) > this.captiveCapacity) {
+                        this.logMessage('tribe', '地牢空間不足...', 'warning');
+                        this.pendingDecisions.push({
+                            type: 'dungeon',
+                            list: [...this.dungeonCaptives, ...defeatedFemales],
+                            limit: this.captiveCapacity,
+                            context: { postBattleBirths: this.postBattleBirths }
+                        });
+                    } else {
+                        this.captives.push(...defeatedFemales);
+                        this.logMessage('tribe', `你俘虜了 ${defeatedFemales.length} 名戰敗的敵人。`, 'info');
+                    }
+                }
+                this.finishCombatCleanup(true);
+                this.processDailyUpkeep();
+            } else {
+                this.logMessage('tribe', '你在部落保衛戰中失敗了！', 'enemy');
+                this.removeAllCaptives('rescued');
+            }
+            return;
+        }
+
+        const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+        if (defeatedFemales.length > 0) {
+            const newCaptives = defeatedFemales.map(enemy => {
+                const newCaptive = new FemaleHuman(
+                    enemy.name,
+                    enemy.stats,
+                    enemy.profession,
+                    enemy.visual,
+                    enemy.originDifficulty
+                );
+                newCaptive.maxHp = newCaptive.calculateMaxHp();
+                newCaptive.currentHp = newCaptive.maxHp;
+                return newCaptive;
+            });
+            this.currentRaid.carriedCaptives.push(...newCaptives);
+        }
+
+        if (this.player && !this.player.isAlive()) {
+            this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
+        }
+
+        if (this.combat.isReinforcementBattle) {
+            if (this.isRetreatingWhenTimeExpired) {
+                this.logMessage('tribe', '你擊敗了前來阻截的騎士團，成功帶著戰利品返回部落！', 'success');
+                this.prepareToEndRaid(false);
+            } else {
+                this.currentRaid.timeRemaining = Infinity;
+                this.currentRaid.reinforcementsDefeated = true;
+                this.logMessage('raid', '你擊敗了騎士團的增援部隊！時間壓力消失了，你可以繼續探索這座城鎮。', 'success');
+                this.finishCombatCleanup();
+            }
+            this.isRetreatingWhenTimeExpired = false;
+        } else {
+            if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
+                this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
+            } else {
+                this.finishCombatCleanup();
+            }
+        }
+    },
+
+    async executeTurn(isEnemyFirstStrike = false) {
+        if (this.combat.isGoddessQnA) {
+            this.combat.isProcessing = false;
+            return;
+        }
+        if (this.combat.isProcessing) return;
+        this.combat.isProcessing = true;
+
+        if (this.combat.turn > 15) {
+            const oldestTurnToKeep = this.combat.turn - 15;
+            this.logs.combat = this.logs.combat.filter(entry => entry.turn >= oldestTurnToKeep);
+        }
+        
+        if (this.currentRaid) {
+            this.currentRaid.timeRemaining--;
+            this.checkRaidTime();
+            this.logMessage('combat', `--- 第 ${this.combat.turn} 回合 (-1 分鐘) ---`, 'system');
+        } else {
+            this.logMessage('combat', `--- 第 ${this.combat.turn} 回合 ---`, 'system');
+        }
+
+        const livingEnemies = this.combat.enemies.filter(e => e.isAlive());
+        for (const unit of livingEnemies) {
+            if (!unit.isAlive()) continue;
+            await this.processAiAction(unit);
+        }
+        
+        await new Promise(res => setTimeout(res, 200));
+
+        if (!isEnemyFirstStrike) {
+            const livingPartners = this.combat.allies.filter(p => p.id !== this.player.id && p.isAlive());
+            for (const unit of livingPartners) {
+                    if (!unit.isAlive()) continue;
+                    await this.processAiAction(unit);
+            }
+        }
+        this.tickStatusEffects();
+        [...this.combat.allies, ...this.combat.enemies].forEach(u => u.tickCooldowns());
+
+        const livingAlliesCount = this.combat.allies.filter(u => u.isAlive()).length;
+        const livingEnemiesCount = this.combat.enemies.filter(u => u.isAlive()).length;
+
+        if (livingAlliesCount === 0) {
+            this.logMessage('combat', `戰鬥失敗... 你的隊伍被全滅了。`, 'enemy');
+            this.endCombat(false);
+        } else if (livingEnemiesCount === 0) {
+            this.logMessage('combat', `戰鬥勝利！`, 'success');
+            this.endCombat(true);
+        } else {
+            this.combat.turn++;
+            this.combat.isProcessing = false;
+            if (!this.player.isAlive()) {
+                this.logMessage('combat', '哥布林王倒下了！夥伴們將繼續戰鬥！', 'system');
+                setTimeout(() => this.executeTurn(false), 1500);
+            } else {
+                this.combat.playerActionTaken = false;
+                this.logMessage('combat', '等待你的指令...', 'system');
+            }
+        }
+    },
+        
+    async processAiAction(attacker) {
+        if (attacker instanceof SpiralGoddess) {
+            if (attacker.phase === 1) {
+                const result = await this.promptGoddessQuestionAndWaitForAnswer();
+                if (!result.finished) {
+                    const playerNumericAnswer = parseInt(result.answer.trim());
+                    const qnaData = SPECIAL_BOSSES.spiral_goddess_mother.qna;
+                    const currentQnA = qnaData[attacker.qnaIndex];
+                    let correctAnswer;
+                    switch (currentQnA.check) {
+                        case 'playerHeight': correctAnswer = this.player.height; break;
+                        case 'partnerCount': correctAnswer = this.partners.length; break;
+                        case 'penisSize':   correctAnswer = this.player.penisSize; break;
+                        case 'captiveCount': correctAnswer = this.captives.length; break;
+                        default: correctAnswer = -999; break;
+                    }
+                    if (!isNaN(playerNumericAnswer) && playerNumericAnswer === correctAnswer) {
+                        this.logMessage('combat', `你回答了：「${playerNumericAnswer}」。女神點了點頭。`, 'player');
+                    } else {
+                        const penaltyDamage = correctAnswer * 10;
+                        await this.showCustomAlert(
+                            `女神：「謊言...是沒有意義的。」`,
+                            async () => {
+                                this.logMessage('combat', `你回答了：「${playerNumericAnswer || '無效的回答'}」。女神對你的謊言降下懲罰！(正確答案: ${correctAnswer})`, 'enemy');
+                                await this.processAttack(attacker, this.player, false, penaltyDamage);
+                            }
+                        );
+                    }
+                    attacker.qnaIndex++;
+                }
+                if (attacker.qnaIndex >= SPECIAL_BOSSES.spiral_goddess_mother.qna.length && !attacker.phase2_triggered) {
+                    attacker.phase2_triggered = true;
+                    attacker.phase = 2; 
+                    this.logMessage('combat', '問答的試煉結束了...女神的氣息改變了！', 'system');
+                    this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase2_start}」`, 'enemy');
+                    this.combat.allies.forEach(ally => {
+                        ally.statusEffects.push({ type: 'root_debuff', duration: Infinity });
+                        ally.updateHp(this.isStarving); 
+                    });
+                    this.logMessage('combat', '我方全體感受到了靈魂深處的撕裂，生命力的根源被削弱了！', 'player');
+                }
+            } else if (attacker.phase === 2) {
+                const target = this.combat.allies.filter(a => a.isAlive())[0];
+                if (target) await this.processAttack(attacker, target);
+            } else if (attacker.phase === 3) {
+                const repulsionSkillData = SPECIAL_BOSSES.spiral_goddess_mother.skills.find(s => s.id === 'goddess_repulsion');
+                let skillToUse = attacker.skills.find(s => s.id === 'goddess_repulsion');
+                if (!skillToUse) {
+                    skillToUse = { ...repulsionSkillData, currentCooldown: 0 };
+                    attacker.skills.push(skillToUse);
+                }
+                if (skillToUse.currentCooldown === 0) {
+                    this.logMessage('combat', `女神施放了 <span class="text-pink-400">[${skillToUse.name}]</span>！`, 'skill');
+                    skillToUse.currentCooldown = skillToUse.baseCooldown;
+                    for (const ally of this.combat.allies.filter(a => a.isAlive())) {
+                        const charismaDamage = ally.getTotalStat('charisma', this.isStarving);
+                        ally.currentHp = Math.max(0, ally.currentHp - charismaDamage);
+                        this.logMessage('combat', `奇異的力量在你體內奔流，對 ${ally.name} 造成了 ${charismaDamage} 點真實傷害！`, 'player');
+                    }
+                } else {
+                    const target = this.combat.allies.filter(a => a.isAlive())[0];
+                    if (target) await this.processAttack(attacker, target);
+                }
+            } else if (attacker.phase === 4 || attacker.phase === 5) {
+                const target = this.combat.allies.filter(a => a.isAlive())[0];
+                if (target) await this.processAttack(attacker, target);
+            }
+            return; 
+        }
+
+        if (attacker.profession === '使徒') {
+            const proliferateSkill = attacker.skills.find(s => s.id === 'apostle_proliferate');
+            const apostleCount = this.combat.enemies.filter(e => e.profession === '使徒').length;
+            if (proliferateSkill && proliferateSkill.currentCooldown === 0 && apostleCount < 20) {
+                this.logMessage('combat', `${attacker.name} 施放了 <span class="text-pink-400">[繁衍的權能]</span>！`, 'skill');
+                const newClone = this.cloneApostle(attacker);
+                this.combat.enemies.push(newClone);
+                proliferateSkill.currentCooldown = proliferateSkill.baseCooldown;
+                const cloneSkill = newClone.skills.find(s => s.id === 'apostle_proliferate');
+                if (cloneSkill) {
+                    cloneSkill.currentCooldown = cloneSkill.baseCooldown;
+                }
+                this.logMessage('combat', `一個新的 ${newClone.name} 出現在戰場上！`, 'enemy');
+                this.logMessage('combat', `在 [重現的權能] 的影響下，${attacker.name} 立即再次行動！`, 'skill');
+                const livingAllies = this.combat.allies.filter(a => a.isAlive());
+                if (livingAllies.length > 0) {
+                    const target = livingAllies[randomInt(0, livingAllies.length - 1)];
+                    await this.processAttack(attacker, target, false);
+                }
+                return; 
+            }
+        }
+        
+        const isAlly = this.combat.allies.some(a => a.id === attacker.id);
+        const allies = isAlly ? this.combat.allies.filter(u => u.isAlive()) : this.combat.enemies.filter(u => u.isAlive());
+        const enemies = isAlly ? this.combat.enemies.filter(u => u.isAlive()) : this.combat.allies.filter(u => u.isAlive());
+
+        if (enemies.length === 0) return;
+
+        let actionTaken = false;
+
+        if (attacker.skills && attacker.skills.length > 0) {
+            const skill = attacker.skills[0];
+            if (skill.currentCooldown === 0) {
+                if (skill.type === 'team_heal') {
+                    const totalMaxHp = allies.reduce((sum, a) => sum + a.maxHp, 0);
+                    const totalCurrentHp = allies.reduce((sum, a) => sum + a.currentHp, 0);
+                    if ((totalCurrentHp / totalMaxHp) < skill.triggerHp) {
+                        await this.executeSkill(skill, attacker, allies, enemies);
+                        actionTaken = true;
+                    }
+                } else if (skill.type === 'charge_nuke') {
+                    const isCasting = attacker.statusEffects.some(e => e.type === 'charge_nuke');
+                    if (!isCasting) {
+                        await this.executeSkill(skill, attacker, allies, enemies);
+                        actionTaken = true;
+                    }
+                } else {
+                    const isEffectActive = attacker.statusEffects.some(e => e.type === skill.type);
+                    if (!isEffectActive) {
+                        await this.executeSkill(skill, attacker, allies, enemies);
+                        actionTaken = true;
+                    }
+                }
+            }
+        }
+        
+        const chargingEffect = attacker.statusEffects.find(e => e.type === 'charge_nuke');
+        if (chargingEffect) {
+            if (chargingEffect.chargeTurns <= 0) {
+                this.logMessage('combat', `[${attacker.name}] 的 [破滅法陣] 詠唱完畢！`, 'skill');
+                const damage = Math.floor(attacker.getTotalStat('intelligence') * chargingEffect.multiplier);
+                for (const target of enemies) {
+                    if (target.isAlive()) {
+                        target.currentHp = Math.max(0, target.currentHp - damage);
+                        this.logMessage('combat', `法陣衝擊了 ${target.name}，造成 ${damage} 點無法閃避的傷害。`, 'enemy');
+                        if (!target.isAlive()) this.logMessage('combat', `${target.name} 被擊敗了！`, 'system');
+                    }
+                }
+                attacker.statusEffects = attacker.statusEffects.filter(e => e.type !== 'charge_nuke');
+            } else {
+                this.logMessage('combat', `${attacker.name} 正在詠唱... (剩餘 ${chargingEffect.chargeTurns} 回合)`, 'info');
+            }
+            actionTaken = true;
+        }
+
+        if (!actionTaken) {
+            const target = enemies[randomInt(0, enemies.length - 1)];
+            await this.processAttack(attacker, target, false);
+        }
+        
+        await new Promise(res => setTimeout(res, 300));
+    },
+
+    async processAttack(attacker, target, isExtraAttack = false, overrideDamage = null) {
+        const isAllyAttacking = this.combat.allies.some(a => a.id === attacker.id);
+        const logType = isAllyAttacking ? 'player' : 'enemy';
+        const enemyTeam = isAllyAttacking ? this.combat.enemies : this.combat.allies;
+        let currentTarget = target;
+
+        const taunter = enemyTeam.find(e => e.statusEffects.some(s => s.type === 'taunt'));
+        if (taunter && taunter.id !== currentTarget.id && taunter.isAlive()) {
+            this.logMessage('combat', `${attacker.name} 的攻擊被 ${taunter.name} 吸引了！`, 'info');
+            currentTarget = taunter;
+        }
+
+        const weapon = attacker.equipment.mainHand;
+        const weaponType = weapon ? weapon.baseName : '徒手';
+        if (!isExtraAttack) {
+            this.logMessage('combat', `${attacker.name} 使用 [${weaponType}] 攻擊 ${currentTarget.name}！`, logType);
+        }
+
+        const weaponJudgementMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence', '徒手': 'strength' };
+        const judgementStat = weaponJudgementMap[weaponType] || 'strength';
+
+        const attackerStatValue = attacker.getTotalStat(judgementStat, this.isStarving);
+        const attackerDiceCount = Math.max(1, Math.floor(attackerStatValue / 20));
+        const attackerQualityBonus = attacker.equipment.mainHand?.qualityBonus || 0;
+        const attackerRoll = rollDice(`${attackerDiceCount}d20`);
+        const attackerTotal = attackerRoll.total + attackerQualityBonus;
+
+        const defenderStatValue = currentTarget.getTotalStat(judgementStat, this.isStarving);
+        const defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 20));
+        const defenderArmorBonus = currentTarget.equipment.chest?.qualityBonus || 0;
+        const defenderShieldBonus = currentTarget.equipment.offHand?.qualityBonus || 0;
+        const defenderRoll = rollDice(`${defenderDiceCount}d20`);
+        const defenderTotal = defenderRoll.total + defenderArmorBonus + defenderShieldBonus;
+
+        if (attacker.id === this.player.id || currentTarget.id === this.player.id) {
+            const isAllyAttacking = this.combat.allies.some(a => a.id === attacker.id);
+            let playerSideRolls = isAllyAttacking ? attackerRoll : defenderRoll;
+            let enemySideRolls = isAllyAttacking ? defenderRoll : attackerRoll;
+            const animationTitle = isAllyAttacking ? '攻擊判定' : '迴避判定';
+            await this.showDiceRollAnimation(animationTitle, 
+                playerSideRolls.rolls.map(r => ({ sides: playerSideRolls.sides, result: r })), 
+                enemySideRolls.rolls.map(r => ({ sides: enemySideRolls.sides, result: r }))
+            );
+        }
+        
+        this.logMessage('combat', `> 攻擊方 (${judgementStat}): ${attackerRoll.total}(擲骰) + ${attackerQualityBonus}(品質) = ${attackerTotal}`, 'info');
+        this.logMessage('combat', `> 防守方 (${judgementStat}): ${defenderRoll.total}(擲骰) + ${defenderArmorBonus}(防具) + ${defenderShieldBonus}(盾牌) = ${defenderTotal}`, 'info');
+
+        if (attackerTotal <= defenderTotal) { 
+            this.logMessage('combat', `${attacker.name} 的攻擊被 ${currentTarget.name} 閃過了！`, logType === 'player' ? 'enemy' : 'player');
+            showFloatingText(currentTarget.id, 'MISS', 'miss');
+            return;
+        }
+        
+        this.logMessage('combat', `攻擊命中！`, 'success');
+
+        let damage;
+        if (overrideDamage !== null) {
+            damage = overrideDamage;
+            this.logMessage('combat', `一股神聖的力量形成了懲罰！`, 'system');
+        } else {
+            damage = attacker.calculateDamage(this.isStarving);
+            damage += (attacker.equipment.chest?.stats.attackBonus || 0) + (attacker.equipment.offHand?.stats.attackBonus || 0);
+        }
+
+        let attackerGamblerBonus = 0;
+        let critAffixCount = 0;
+        let penetratingAffixCount = 0;
+        let devastatingAffixCount = 0;
+
+        Object.values(attacker.equipment).forEach(item => {
+            if (!item) return;
+            item.affixes.forEach(affix => {
+                if (affix.key === 'gambler' && affix.effects) attackerGamblerBonus += affix.effects.value;
+                if (affix.key === 'critical_strike') critAffixCount++;
+                if (affix.key === 'penetrating') penetratingAffixCount++;
+                if (affix.key === 'devastating') devastatingAffixCount++;
+            });
+        });
+
+        const totalCritChance = 5.0 + (critAffixCount * 10) + attackerGamblerBonus;
+        if (rollPercentage(totalCritChance)) {
+            this.logMessage('combat', `致命一擊！`, 'crit');
+            const baseCritMultiplier = 1.5;
+            let baseCritDamage = Math.floor(damage * baseCritMultiplier);
+            if (devastatingAffixCount > 0) {
+                const devastatingAffixData = STANDARD_AFFIXES.devastating;
+                const bonusPerAffix = devastatingAffixData.effects.crit_damage_bonus;
+                const bonusDamage = Math.floor((damage * baseCritMultiplier * bonusPerAffix) * devastatingAffixCount);
+                this.logMessage('combat', `[毀滅的] 效果觸發 x${devastatingAffixCount}，額外造成 ${bonusDamage} 點爆擊傷害！`, 'skill');
+                damage = baseCritDamage + bonusDamage;
+            } else {
+                damage = baseCritDamage;
+            }
+        }
+
+        let penetrationEffect = 0;
+        if (penetratingAffixCount > 0) {
+            const totalPenetratingChance = (penetratingAffixCount * 10) + attackerGamblerBonus;
+            if (rollPercentage(totalPenetratingChance)) {
+                const affixInstance = Object.values(attacker.equipment).flatMap(i => i ? i.affixes : []).find(a => a.key === 'penetrating');
+                if (affixInstance) {
+                    penetrationEffect = affixInstance.procInfo.value;
+                    this.logMessage('combat', `${attacker.name} 的 [穿透的] 詞綴發動，削弱了目標的防禦！`, 'skill');
+                }
+            }
+        }
+
+        const armor = currentTarget.equipment.chest;
+        if (armor && armor.stats.damageReduction) {
+            const effectiveReduction = armor.stats.damageReduction * (1 - penetrationEffect);
+            damage = Math.floor(damage * (1 - effectiveReduction / 100));
+            this.logMessage('combat', `> ${currentTarget.name} 的 ${armor.baseName} 減免了 ${effectiveReduction.toFixed(1)}% 的傷害。`, 'info');
+        }
+        
+        let defenderGamblerBonus = 0;
+        let blockingAffixCount = 0;
+        Object.values(currentTarget.equipment).forEach(item => {
+            if (!item) return;
+            item.affixes.forEach(affix => {
+                if (affix.key === 'gambler') defenderGamblerBonus += affix.effects.value;
+                if (affix.key === 'blocking') blockingAffixCount++;
+            });
+        });
+        
+        let wasBlockedByAffix = false;
+        if (blockingAffixCount > 0) {
+            const totalBlockingChance = (blockingAffixCount * 5) + defenderGamblerBonus;
+            if (rollPercentage(totalBlockingChance)) {
+                damage = 0; wasBlockedByAffix = true;
+                this.logMessage('combat', `${currentTarget.name} 的 [格擋的] 詞綴發動，完全格擋了本次傷害！`, 'skill');
+            }
+        }
+
+        const shield = currentTarget.equipment.offHand;
+        if (!wasBlockedByAffix && shield && shield.baseName === '盾') {
+            const baseBlockChance = (20 - (shield.stats.blockTarget || 20)) * 5;
+            const finalBlockChance = baseBlockChance + defenderGamblerBonus;
+            this.logMessage('combat', `> ${currentTarget.name} 進行盾牌格擋: 機率 ${finalBlockChance.toFixed(1)}%`, 'info');
+            if (rollPercentage(finalBlockChance)) {
+                damage = Math.floor(damage * 0.75);
+                this.logMessage('combat', `${currentTarget.name} 的盾牌成功格擋了攻擊，傷害大幅降低！`, 'skill');
+            }
+        }
+
+        let finalDamage = Math.max(0, Math.floor(damage)); 
+        if (currentTarget.profession === '使徒' && finalDamage > 0 && rollPercentage(25)) {
+            const nullifySkill = currentTarget.skills.find(s => s.id === 'apostle_nullify');
+            if (nullifySkill) {
+                const healAmount = Math.floor(finalDamage * 0.5);
+                currentTarget.currentHp = Math.min(currentTarget.maxHp, currentTarget.currentHp + healAmount);
+                this.logMessage('combat', `${currentTarget.name} 的 [歸零的權能] 觸發！傷害變為0，並恢復了 ${healAmount} 點生命！`, 'crit');
+                finalDamage = 0;
+            }
+        }
+
+        currentTarget.currentHp = Math.max(0, currentTarget.currentHp - finalDamage);
+        this.logMessage('combat', `${attacker.name} 對 ${currentTarget.name} 造成了 ${finalDamage} 點傷害。`, isAllyAttacking ? 'player' : 'enemy');
+
+        const hpPercent = currentTarget.currentHp / currentTarget.maxHp;
+        if (currentTarget instanceof ApostleMaiden && currentTarget.isAlive()) {
+            if (hpPercent <= 0.25 && !currentTarget.triggeredDialogues.has('hp_25')) this.showInBattleDialogue(currentTarget, 'hp_25');
+            else if (hpPercent <= 0.50 && !currentTarget.triggeredDialogues.has('hp_50')) this.showInBattleDialogue(currentTarget, 'hp_50');
+            else if (hpPercent <= 0.75 && !currentTarget.triggeredDialogues.has('hp_75')) this.showInBattleDialogue(currentTarget, 'hp_75');
+        }
+        
+        if (currentTarget.id === this.player.id && attacker instanceof ApostleMaiden) {
+            if (hpPercent <= 0.50 && !attacker.triggeredDialogues.has('player_hp_50')) this.showInBattleDialogue(attacker, 'player_hp_50');
+        }
+
+        if (currentTarget instanceof SpiralGoddess) {
+            const hpPercent = currentTarget.currentHp / currentTarget.maxHp;
+            if (currentTarget.phase === 2 && !currentTarget.phase3_triggered && hpPercent <= 0.75) {
+                currentTarget.phase3_triggered = true;
+                attacker.phase = 3; 
+                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase3_start}」`, 'enemy');
+                this.combat.allies.forEach(ally => {
+                    ally.statusEffects.push({ type: 'feminized', duration: Infinity });
+                    ally.updateHp(this.isStarving); 
+                });
+                this.logMessage('combat', '一陣奇異的光芒籠罩了我方全體，身體的構造似乎發生了不可逆的變化！', 'player');
+            }
+            if (currentTarget.phase === 3 && !currentTarget.phase4_triggered && hpPercent <= 0.50) {
+                currentTarget.phase4_triggered = true;
+                currentTarget.phase = 4;
+                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase4_start}」`, 'enemy');
+                const charismaValue = currentTarget.stats.charisma;
+                const bonusPerStat = Math.floor(charismaValue / 4);
+                currentTarget.stats.strength += bonusPerStat;
+                currentTarget.stats.agility += bonusPerStat;
+                currentTarget.stats.intelligence += bonusPerStat;
+                currentTarget.stats.luck += bonusPerStat;
+                currentTarget.stats.charisma = 0;
+                this.logMessage('combat', '女神捨棄了魅力，將其轉化為純粹的力量！', 'system');
+            }
+            else if (currentTarget.phase === 4 && !currentTarget.phase5_triggered && hpPercent <= 0.25) {
+                currentTarget.phase5_triggered = true;
+                currentTarget.phase = 5;
+                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase5_start}」`, 'enemy');
+                const captivesToSummon = [...this.captives].sort(() => 0.5 - Math.random()).slice(0, 20);
+                if (captivesToSummon.length > 0) {
+                    const summonedUnits = captivesToSummon.map(c => {
+                        const summoned = new FemaleHuman(c.name, c.stats, c.profession, c.visual);
+                        Object.keys(summoned.stats).forEach(stat => {
+                            summoned.stats[stat] = Math.floor(summoned.stats[stat] * 1.5);
+                        });
+                        summoned.updateHp();
+                        return summoned;
+                    });
+                    this.combat.enemies.push(...summonedUnits);
+                    this.logMessage('combat', `你過去擄來的 ${summonedUnits.length} 名女性出現在戰場上，她們的眼神充滿了敵意！`, 'enemy');
+                }
+            } 
+        }
+        
+        if (finalDamage >= 0) {
+            showFloatingText(currentTarget.id, finalDamage, 'damage');
+        }
+        
+        if (attacker.isAlive()) {
+            let vampiricAffixCount = 0;
+            Object.values(attacker.equipment).forEach(item => {
+                if(item && item.affixes.some(a => a.key === 'vampiric')) vampiricAffixCount++;
+            });
+            if (vampiricAffixCount > 0) {
+                const totalVampiricChance = (vampiricAffixCount * 10) + attackerGamblerBonus;
+                if(rollPercentage(totalVampiricChance)) {
+                    const healAmount = Math.floor(finalDamage * 0.5);
+                    attacker.currentHp = Math.min(attacker.maxHp, attacker.currentHp + healAmount);
+                    this.logMessage('combat', `${attacker.name} 的 [吸血的] 詞綴發動，恢復了 ${healAmount} 點生命。`, 'skill');
+                }
+            }
+        }
+        if (currentTarget.isAlive()) {
+            let spikyAffixCount = 0;
+            Object.values(currentTarget.equipment).forEach(item => {
+                if (item && item.affixes.some(a => a.key === 'spiky')) spikyAffixCount++;
+            });
+            if (spikyAffixCount > 0) {
+                const totalSpikyChance = (spikyAffixCount * 10) + defenderGamblerBonus;
+                if (rollPercentage(totalSpikyChance)) {
+                    const thornsDamage = Math.floor(finalDamage * 0.1);
+                    if(thornsDamage > 0) {
+                         attacker.currentHp = Math.max(0, attacker.currentHp - thornsDamage);
+                         this.logMessage('combat', `${currentTarget.name} 的 [尖刺的] 詞綴發動，對 ${attacker.name} 反彈了 ${thornsDamage} 點傷害！`, 'skill');
+                    }
+                }
+            }
+        }
+        if (!isExtraAttack && attacker.isAlive() && currentTarget.isAlive()) {
+            let multiHitAffixCount = 0;
+            Object.values(attacker.equipment).forEach(item => {
+                if(item && item.affixes.some(a => a.key === 'multi_hit')) multiHitAffixCount++;
+            });
+            if (multiHitAffixCount > 0) {
+                const totalMultiHitChance = (multiHitAffixCount * 5) + attackerGamblerBonus;
+                if(rollPercentage(totalMultiHitChance)) {
+                    this.logMessage('combat', `${attacker.name} 的 [連擊的] 詞綴發動，發起了追擊！`, 'skill');
+                    await new Promise(res => setTimeout(res, 500));
+                    await this.processAttack(attacker, currentTarget, true);
+                }
+            }
+        }
+
+        if (!currentTarget.isAlive()) {
+            if (currentTarget.profession === '使徒' && rollPercentage(25)) {
+                const reviveSkill = currentTarget.skills.find(s => s.id === 'apostle_spiral');
+                const proliferateSkill = currentTarget.skills.find(s => s.id === 'apostle_proliferate');
+                if (reviveSkill && proliferateSkill) {
+                    currentTarget.currentHp = Math.floor(currentTarget.maxHp * 0.5);
+                    proliferateSkill.currentCooldown = 0;
+                    this.logMessage('combat', `${currentTarget.name} 在 [螺旋的權能] 的影響下復活了，並準備再次繁衍！`, 'crit');
+                    return;
+                }
+            }
+            this.logMessage('combat', `${currentTarget.name} 被擊敗了！`, 'system');
+            const isTargetAnAlly = this.combat.allies.some(a => a.id === currentTarget.id);
+            if (isTargetAnAlly) {
+                if (currentTarget.id !== this.player.id) this.handlePartnerDeath(currentTarget.id);
+            } else {
+                this.gainResourcesFromEnemy(currentTarget);
+                this.handleLootDrop(currentTarget);
+            }
+        }
+    },
+    
+    async executePlayerAction(action) {
+        if (this.combat.isProcessing || this.combat.playerActionTaken || !this.player || !this.player.isAlive()) return;
+        this.combat.playerActionTaken = true;
+
+        let continueToEnemyTurn = true;
+
+        if (action === 'attack') {
+            if (this.player.activeSkillBuff?.id === 'combat_powerful_strike') {
+                this.logMessage('combat', `[強力一擊] 效果觸發！`, 'crit');
+            }
+            const livingEnemies = this.combat.enemies.filter(t => t.isAlive());
+            if (livingEnemies.length > 0) {
+                const target = livingEnemies[randomInt(0, livingEnemies.length - 1)];
+                await this.processAttack(this.player, target, false);
+            }
+        } else if (action === 'escape') {
+            const result = await this.attemptSneakEscape();
+            if (result === 'escaped') {
+                continueToEnemyTurn = false;
+            }
+        }
+
+        if (continueToEnemyTurn && this.combat.enemies.filter(e => e.isAlive()).length > 0) {
+            this.executeTurn(false);
+        } else if (!continueToEnemyTurn) {
+            // Escaped, do nothing
+        } else {
+            this.endCombat(true);
+        }
+    },
+    
+    async useSkill(skillId) {
+        if (this.combat.isProcessing || this.combat.playerActionTaken) return;
+        
+        const skillData = this.learnedActiveSkills.find(s => s.id === skillId);
+        
+        if (!skillData || skillData.currentCooldown > 0) {
+            this.showCustomAlert('技能尚未冷卻或無法使用！');
+            return;
+        }
+        
+        this.combat.playerActionTaken = true;
+        this.modals.combatSkills.isOpen = false;
+        this.logMessage('combat', `${this.player.name} 施放了技能 [${skillData.name}]！`, 'skill');
+
+        const playerSkillInstance = this.player.skills.find(s => s.id === skillId);
+        if (playerSkillInstance) {
+            playerSkillInstance.currentCooldown = this.player.getFinalCooldown(skillData);
+        }
+
+        const zeroAuthId = 'combat_zero_authority';
+        if (this.player && this.player.learnedSkills[zeroAuthId] && playerSkillInstance) {
+            const zeroAuthData = SKILL_TREES.combat.find(s => s.id === zeroAuthId);
+            if (rollPercentage(zeroAuthData.levels[0].effect.chance * 100)) {
+                playerSkillInstance.currentCooldown = 0;
+                this.logMessage('combat', `「歸零的權能」觸發！[${skillData.name}] 的冷卻時間被立即清除了！`, 'crit');
+            }
+        }
+
+        const strikeSkills = ['combat_powerful_strike', 'combat_agile_strike', 'combat_enchanted_strike', 'combat_lucky_strike'];
+        if (strikeSkills.includes(skillId)) {
+            const skillLevel = this.player.learnedSkills[skillId];
+            const effect = skillData.levels[skillLevel - 1].effect;
+            
+            this.player.activeSkillBuff = {
+                id: skillId,
+                multiplier: effect.multiplier,
+                stat: effect.stat || 'strength'
+            };
+
+            const livingEnemies = this.combat.enemies.filter(t => t.isAlive());
+            if (livingEnemies.length > 0) {
+                const target = livingEnemies[randomInt(0, livingEnemies.length - 1)];
+                await this.processAttack(this.player, target);
+            }
+        } 
+
+        if (this.combat.enemies.filter(e => e.isAlive()).length > 0) {
+            await this.executeTurn(false);
+        } else {
+            this.endCombat(true);
+        }
+    },
+    
+    async attemptSneakEscape() {
+        this.logMessage('combat', '你嘗試潛行脫離戰鬥...', 'player');
+        
+        const playerParty = this.combat.allies;
+        const enemyParty = this.combat.enemies.filter(e => e.isAlive());
+        const contestResult = this.performAbilityContest(playerParty, enemyParty);
+
+        await this.showDiceRollAnimation('脫離判定', 
+            contestResult.partyA_Details.rolls.map(r => ({ sides: 20, result: r })), 
+            contestResult.partyB_Details.rolls.map(r => ({ sides: 20, result: r }))
+        );
+
+        this.logMessage('combat', `我方脫離擲骰: ${contestResult.partyA_Value - contestResult.partyA_Details.partySize} + 人數 ${contestResult.partyA_Details.partySize} = ${contestResult.partyA_Value}`, 'info');
+        this.logMessage('combat', `敵方追擊擲骰: ${contestResult.partyB_Value - contestResult.partyB_Details.partySize} + 人數 ${contestResult.partyB_Details.partySize} = ${contestResult.partyB_Value}`, 'info');
+        
+        if (contestResult.partyA_Value > contestResult.partyB_Value) { 
+            this.logMessage('combat', '脫離成功！', 'success');
+            this.finishCombatCleanup();
+            return 'escaped';
+        } else {
+            this.logMessage('combat', '脫離失敗！', 'enemy');
+            return 'failed';
+        }
+    },
+    
+    triggerRevengeSquadBattle(difficulty, pendingBirths = []) {
+        this.postBattleBirths = pendingBirths;
+
+        const squadCompositions = {
+            easy:   { knights: { '士兵': 1, '盾兵': 1 }, residents: 4 },
+            normal: { knights: { '士兵': 2, '盾兵': 1, '槍兵': 1, '弓兵': 1 }, residents: 5 },
+            hard:   { knights: { '士兵': 2, '盾兵': 1, '槍兵': 1, '弓兵': 1, '騎士': 1, '法師': 1 }, residents: 6 },
+            hell:   { knights: { '士兵': 3, '盾兵': 2, '槍兵': 2, '弓兵': 1, '騎士': 1, '法師': 1, '祭司': 1 }, residents: 7 }
+        };
+        const knightStatRanges = {
+            easy: [65, 120], normal: [120, 190], hard: [190, 280], hell: [280, 360]
+        };
+        const residentStatRanges = {
+            easy: [20, 20], normal: [20, 40], hard: [40, 80], hell: [80, 140]
+        };
+
+        const composition = squadCompositions[difficulty];
+        const knightStatRange = knightStatRanges[difficulty];
+        const residentStatRange = residentStatRanges[difficulty];
+        let revengeSquad = [];
+
+        for (const unitType in composition.knights) {
+            for (let i = 0; i < composition.knights[unitType]; i++) {
+                const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
+                const unit = rollPercentage(50) 
+                    ? new FemaleKnightOrderUnit(unitType, totalStatPoints, difficulty)
+                    : new KnightOrderUnit(unitType, totalStatPoints, difficulty);
+                this.equipEnemy(unit, difficulty);
+                revengeSquad.push(unit);
+            }
+        }
+
+        for (let i = 0; i < composition.residents; i++) {
+            const totalStatPoints = randomInt(residentStatRange[0], residentStatRange[1]);
+            let unit; 
+            if (rollPercentage(50)) {
+                const profession = PROFESSIONS[randomInt(0, PROFESSIONS.length - 1)];
+                unit = new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)], distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), profession, generateVisuals(), difficulty);
+            } else {
+                unit = new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length - 1)], distributeStats(totalStatPoints), '男性居民', difficulty);
+            }
+            this.equipEnemy(unit, difficulty);
+            revengeSquad.push(unit);
+        }
+        
+        this.combat.isReinforcementBattle = false;
+        this.combat.isUnescapable = true;
+        this.startCombat(revengeSquad, true);
+    },
+    
+    cloneApostle(attacker) {
+        const newClone = new ApostleMaiden(this.combat);
+        newClone.currentHp = attacker.currentHp;
+        newClone.skills = JSON.parse(JSON.stringify(attacker.skills));
+        newClone.statusEffects = JSON.parse(JSON.stringify(attacker.statusEffects));
+        return newClone;
+    },  
+
+    triggerApostleBattle() {
+        const apostleData = SPECIAL_BOSSES.apostle_maiden;
+        this.logMessage('tribe', `你無盡的繁衍似乎觸動了世界的某種禁忌...空間被撕裂了...`, 'enemy');
+
+        const modal = this.modals.narrative;
+        modal.isOpen = true;
+        modal.title = apostleData.name;
+        modal.type = "tutorial";
+        modal.isLoading = false;
+        modal.isAwaitingConfirmation = false;
+        modal.avatarUrl = apostleData.avatar;
+        modal.content = `<p class="text-lg leading-relaxed">${apostleData.dialogues.intro.join('<br><br>')}</p>`;
+        
+        modal.onConfirm = () => {
+            const apostle = new ApostleMaiden(this.combat);
+            this.startCombat([apostle], true);
+        };
+    },
+
+    triggerGoddessBattle() {
+        const goddessData = SPECIAL_BOSSES.spiral_goddess_mother;
+        this.logMessage('tribe', `整個世界似乎都在震動...一股無法抗拒的、神聖而威嚴的意志降臨到了你的部落！`, 'enemy');
+
+        const modal = this.modals.narrative;
+        modal.isOpen = true;
+        modal.title = goddessData.name;
+        modal.type = "tutorial";
+        modal.isLoading = false;
+        modal.isAwaitingConfirmation = false;
+        modal.avatarUrl = goddessData.avatar;
+        modal.content = `<p class="text-lg leading-relaxed">${goddessData.dialogues.intro}</p>`;
+        
+        modal.onConfirm = () => {
+            const goddess = new SpiralGoddess(this.combat);
+            this.startCombat([goddess], false);
+        };
+    },
+
+    promptGoddessQuestionAndWaitForAnswer() {
+        return new Promise(resolve => {
+            const goddess = this.combat.enemies[0];
+            const qnaData = SPECIAL_BOSSES.spiral_goddess_mother.qna;
+            if (goddess.qnaIndex < qnaData.length) {
+                this.combat.isGoddessQnA = true;
+                this.combat.goddessQuestion = qnaData[goddess.qnaIndex].question;
+                this.combat.playerAnswer = '';
+                this.combat.resolveGoddessAnswer = resolve; 
+            } else {
+                resolve({ finished: true });
+            }
+        });
+    },
+
+    submitGoddessAnswer() {
+        if (this.combat.isGoddessQnA && typeof this.combat.resolveGoddessAnswer === 'function') {
+            this.combat.isGoddessQnA = false;
+            this.combat.resolveGoddessAnswer({ answer: this.combat.playerAnswer });
+            this.combat.resolveGoddessAnswer = null;
+        }
+    },
+    
+    resetAllSkillCooldowns() {
+        if (!this.player || !this.player.skills) return;
+        this.player.skills.forEach(skillInstance => {
+            skillInstance.currentCooldown = 0;
+        });
+    },
+    
+    tickStatusEffects() {
+        const allUnitsForRegen = [...this.combat.allies, ...this.combat.enemies];
+        allUnitsForRegen.forEach(unit => {
+            if (!unit.isAlive() || !unit.equipment) return;
+            const regeneratingAffix = Object.values(unit.equipment).flatMap(i => i ? i.affixes : []).find(a => a.key === 'regenerating');
+            if (regeneratingAffix) {
+                const healAmount = Math.floor(unit.maxHp * regeneratingAffix.procInfo.value);
+                if (healAmount > 0) {
+                    unit.currentHp = Math.min(unit.maxHp, unit.currentHp + healAmount);
+                    this.logMessage('combat', `${unit.name} 的 [再生] 詞綴發動，恢復了 ${healAmount} 點生命。`, 'skill');
+                }
+            }
+        });
+        const allUnits = [...this.combat.allies, ...this.combat.enemies];
+        allUnits.forEach(unit => {
+            if (!unit.statusEffects) unit.statusEffects = [];
+            unit.statusEffects.forEach(effect => {
+                if(effect.duration > 0) effect.duration--;
+                if(effect.type === 'charge_nuke' && effect.chargeTurns > 0) effect.chargeTurns--;
+            });
+            unit.statusEffects = unit.statusEffects.filter(effect => effect.duration > 0);
+        });
+    },
+
+    async executeSkill(skill, caster, allies, enemies) {
+        this.logMessage('combat', `${caster.name} 施放了 <span class="text-pink-400">[${skill.name}]</span>！`, 'skill');
+        if(caster.skills[0]) caster.skills[0].currentCooldown = skill.cd;
+
+        switch (skill.type) {
+            case 'aoe_str':
+            case 'aoe_agi':
+                const damageStat = skill.type === 'aoe_str' ? 'strength' : 'agility';
+                const damage = Math.floor(caster.getTotalStat(damageStat) * skill.multiplier);
+                for (const target of enemies) {
+                    if (target.isAlive()) {
+                        target.currentHp = Math.max(0, target.currentHp - damage);
+                        this.logMessage('combat', `[${skill.name}] 對 ${target.name} 造成了 ${damage} 點傷害。`, 'enemy');
+                        if (!target.isAlive()) this.logMessage('combat', `${target.name} 被擊敗了！`, 'system');
+                    }
+                }
+                break;
+            case 'taunt':
+                caster.statusEffects.push({ type: 'taunt', duration: skill.duration + 1 });
+                this.logMessage('combat', `${caster.name} 吸引了所有人的注意！`, 'info');
+                break;
+            case 'reflect_buff':
+                const existingBuff = allies.some(a => a.statusEffects.some(e => e.type === 'reflect_buff'));
+                if (!existingBuff) {
+                    allies.forEach(ally => ally.statusEffects.push({ type: 'reflect_buff', duration: skill.duration, damagePercent: skill.damagePercent }));
+                    this.logMessage('combat', '騎士團啟用了槍陣，攻擊他們將會反噬自身！', 'info');
+                }
+                break;
+            case 'king_nuke':
+                const king = enemies.find(e => e.id === this.player.id);
+                if (king && king.isAlive()) {
+                    const kingDamage = caster.getTotalStat('strength') + caster.getTotalStat('agility');
+                    king.currentHp = Math.max(0, king.currentHp - kingDamage);
+                    this.logMessage('combat', `[騎士道] 無視了你的夥伴，對哥布林王造成了 ${kingDamage} 點巨大傷害！`, 'enemy');
+                    if (!king.isAlive()) this.logMessage('combat', `${king.name} 被擊敗了！`, 'system');
+                }
+                break;
+            case 'charge_nuke':
+                caster.statusEffects.push({ 
+                    type: 'charge_nuke', 
+                    duration: skill.chargeTime + 1, 
+                    chargeTurns: skill.chargeTime, 
+                    multiplier: skill.multiplier
+                });
+                this.logMessage('combat', `${caster.name} 開始詠唱咒文，空氣變得凝重起來...`, 'info');
+                break;
+            case 'team_heal':
+                const healAmount = caster.getTotalStat('intelligence') * allies.length;
+                allies.forEach(ally => {
+                    if(ally.isAlive()) {
+                        ally.currentHp = Math.min(ally.maxHp, ally.currentHp + healAmount);
+                    }
+                });
+                this.logMessage('combat', `聖光籠罩了騎士團，每名成員恢復了 ${healAmount} 點生命！`, 'success');
+                break;
+        }
+        await new Promise(res => setTimeout(res, 500));
+    },
+
+    handlePartnerDeath(partnerId) {
+        const partner = this.partners.find(p => p.id === partnerId);
+        if (!partner) return;
+
+        const skillId = 'tribe_spiral_authority';
+        if (this.player && this.player.learnedSkills[skillId]) {
+            const skillData = SKILL_TREES.tribe.find(s => s.id === skillId);
+            if (rollPercentage(skillData.levels[0].effect.chance * 100)) {
+                partner.currentHp = partner.maxHp;
+                this.logMessage('combat', `在「螺旋的權能」的守護下，${partner.name} 奇蹟般地從死亡邊緣歸來！`, 'crit');
+                return; 
+            }
+        }
+
+        this.logMessage('combat', `你的夥伴 ${partner.name} 在戰鬥中陣亡了！他將永遠離開你...`, 'enemy');
+        this._removePartnerFromAllAssignments(partnerId);
+        this.partners = this.partners.filter(p => p.id !== partnerId);
+        this.player.updateHp(this.isStarving);
+    },
+};
