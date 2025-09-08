@@ -115,6 +115,7 @@ const gameLogic = {
             currentMessageIndex: 0, // 當前問題的索引
             onConfirm: null // 確認到底後要執行的動作
         },
+        exportSave: { isOpen: false, data: '' },
     },
 
     // --- 角色創建/重生專用狀態 ---
@@ -1195,16 +1196,30 @@ const gameLogic = {
             return;
         }
 
-        // 使用 Clipboard API 進行自動複製
-        navigator.clipboard.writeText(saveData)
-            .then(() => {
-                this.showCustomAlert('遊戲存檔已複製到剪貼簿！請貼到安全的地方保存。');
-            })
-            .catch(err => {
-                console.error('自動複製失敗:', err);
-                // 如果自動複製失敗，回退到傳統的彈出視窗方式
-                this.showCustomAlert('自動複製失敗，請手動複製以下文字並妥善保存：<br><br>' + saveData);
-            });
+        //不再直接嘗試複製，而是打開新的 modal
+        this.modals.exportSave.data = saveData;
+        this.modals.exportSave.isOpen = true;
+        
+        // 使用 nextTick 確保 textarea 渲染完成後再選取內容
+        this.$nextTick(() => {
+            this.$refs.export_save_data.select();
+        });
+    },
+    copySaveToClipboard() {
+        // 這個函式由新 modal 中的按鈕觸發
+        const saveData = this.modals.exportSave.data;
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(saveData)
+                .then(() => {
+                    this.showCustomAlert('已成功複製到剪貼簿！');
+                })
+                .catch(err => {
+                    this.showCustomAlert('自動複製失敗，請手動複製文字框中的內容。');
+                });
+        } else {
+            // 如果瀏覽器環境不支援，直接提示手動複製
+            this.showCustomAlert('你的瀏覽器不支援自動複製，請手動複製文字框中的內容。');
+        }
     },
     checkForSaveFile() {
         if (localStorage.getItem('goblinKingSaveFile')) {
