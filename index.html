@@ -441,6 +441,19 @@
                                     <button @click="importGame()" class="btn btn-primary w-full mt-2">匯入存檔</button>
                                 </div>
                             </div>
+
+                            <div id="export-save-modal" x-show="modals.exportSave.isOpen" class="modal">
+                                <div class="modal-content game-container relative p-6 rounded-lg max-w-lg pt-10">
+                                    <h2 class="game-title font-medieval">匯出存檔</h2>
+                                    <p class="mb-4">請複製以下文字框中的所有內容，並將其妥善保存在文字檔案中。</p>
+                                    <textarea x-ref="export_save_data" x-model="modals.exportSave.data" rows="8" class="w-full bg-gray-900 border-2 border-gray-600 rounded px-3 py-2 text-gray-400" readonly></textarea>
+                                    <div class="text-center mt-6 flex justify-center space-x-4">
+                                        <button @click="copySaveToClipboard()" class="btn btn-primary">複製到剪貼簿</button>
+                                        <button @click="modals.exportSave.isOpen = false" class="btn btn-secondary">關閉</button>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="game-container relative p-4 rounded-lg pt-10">
                                 <h2 class="game-title font-medieval">序號兌換</h2> 
                                 <div class="flex space-x-2">
