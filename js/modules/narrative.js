@@ -36,15 +36,16 @@ const narrativeModule = {
                 this.player.attributePoints++;
                 captive.breedingCount = (captive.breedingCount || 0) + 1;
                 this.totalBreedingCount++;
-                if (this.totalBreedingCount === 69) {
-                    this.pendingDecisions.push({ type: 'apostle_battle' }); 
-                    break; 
-                }
-                if (this.flags.defeatedApostle && this.totalBreedingCount === 88) {
-                    this.pendingDecisions.push({ type: 'goddess_battle' }); 
-                    break;
-                }
             }
+        }
+
+        // 檢查使徒
+        if (this.totalBreedingCount >= 69 && !this.flags.defeatedApostle && !this.pendingDecisions.some(d => d.type === 'apostle_battle')) {
+            this.pendingDecisions.push({ type: 'apostle_battle' });
+        }
+        // 檢查女神 (確保已擊敗使徒)
+        if (this.totalBreedingCount >= 88 && this.flags.defeatedApostle && !this.flags.defeatedGoddess && !this.pendingDecisions.some(d => d.type === 'goddess_battle')) {
+            this.pendingDecisions.push({ type: 'goddess_battle' });
         }
 
         this.breedingChargesLeft -= selectedCount;
@@ -191,9 +192,18 @@ const narrativeModule = {
                 captive.pregnancyTimer = 3;
                 this.player.attributePoints++;
                 captive.breedingCount = (captive.breedingCount || 0) + 1;
-                this.totalBreedingCount++; 
+                this.totalBreedingCount++;
             }
         });
+
+        // 檢查使徒
+        if (this.totalBreedingCount >= 69 && !this.flags.defeatedApostle && !this.pendingDecisions.some(d => d.type === 'apostle_battle')) {
+            this.pendingDecisions.push({ type: 'apostle_battle' });
+        }
+        // 檢查女神 (確保已擊敗使徒)
+        if (this.totalBreedingCount >= 88 && this.flags.defeatedApostle && !this.flags.defeatedGoddess && !this.pendingDecisions.some(d => d.type === 'goddess_battle')) {
+            this.pendingDecisions.push({ type: 'goddess_battle' });
+        }
 
         this.breedingChargesLeft -= selectedCount;
         this.logMessage('tribe', `你與 ${selectedCount} 名女性進行了繁衍，獲得了 ${selectedCount} 點能力點。`, 'success');
@@ -221,15 +231,16 @@ const narrativeModule = {
                 this.player.attributePoints++;
                 captive.breedingCount = (captive.breedingCount || 0) + 1;
                 this.totalBreedingCount++;
-                if (this.totalBreedingCount === 69) {
-                    this.pendingDecisions.push({ type: 'apostle_battle' });
-                    break; 
-                }
-                if (this.flags.defeatedApostle && this.totalBreedingCount === 88) {
-                    this.pendingDecisions.push({ type: 'goddess_battle' });
-                    break;
-                }
             }
+        }
+
+        // 檢查使徒
+        if (this.totalBreedingCount >= 69 && !this.flags.defeatedApostle && !this.pendingDecisions.some(d => d.type === 'apostle_battle')) {
+            this.pendingDecisions.push({ type: 'apostle_battle' });
+        }
+        // 檢查女神 (確保已擊敗使徒)
+        if (this.totalBreedingCount >= 88 && this.flags.defeatedApostle && !this.flags.defeatedGoddess && !this.pendingDecisions.some(d => d.type === 'goddess_battle')) {
+            this.pendingDecisions.push({ type: 'goddess_battle' });
         }
 
         this.breedingChargesLeft -= selectedCount;
@@ -313,8 +324,16 @@ const narrativeModule = {
 
         try {
             const text = await this.callGeminiAPI(prompt, 0.5);
-            modal.content = text.replace(/\n/g, '<br>');
-            modal.context[modal.context.length - 1].model = text;
+            
+            // 處理 API 返回 null 的情況
+            if (text === null) {
+                modal.content = "（由於內容限制，AI 敘事生成失敗。請直接繁衍，或返回部落。）";
+                modal.context.pop(); // 移除失敗的上下文
+            } else {
+                modal.content = text.replace(/\n/g, '<br>');
+                modal.context[modal.context.length - 1].model = text;
+            }
+
         } catch (error) {
             modal.content = error.message;
             modal.context.pop();
@@ -328,38 +347,57 @@ const narrativeModule = {
             return "（AI 敘事功能需要 API 金鑰。請刷新頁面，在初始畫面中輸入您的金鑰。）";
         }
 
-        let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-        const payload = { 
-            contents: chatHistory,
+        const payload = {
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
             generationConfig: {
                 temperature: temperature
-            }
+            },
+            // 【新增】加入安全設定，嘗試放寬一些限制
+            safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" }, // 保持對露骨內容的過濾
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+            ]
         };
-        const apiKey = this.userApiKey; 
+        const apiKey = this.userApiKey;
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
 
-        if (!response.ok) {
-            if (response.status === 400) return "（您的 API 金鑰無效或已過期，請刷新頁面重新輸入。）";
-            if (response.status === 429) return "（對AI的請求過於頻繁，已觸發流量限制，請稍後再試。）";
-            throw new Error(`API request failed with status ${response.status}`);
-        }
-        const result = await response.json();
-        
-        if (result.candidates && result.candidates[0]?.content?.parts?.[0]) {
-            return result.candidates[0].content.parts[0].text;
-        } else {
-            console.error("Unexpected API response structure:", result);
-            let errorMessage = "無法生成故事，可能是因為內容限制。";
-            if (result.promptFeedback && result.promptFeedback.blockReason) {
-                errorMessage += ` (原因: ${result.promptFeedback.blockReason})`;
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error("API Error Response:", errorData);
+                if (response.status === 400) return "（您的 API 金鑰無效或格式錯誤，請刷新頁面重新輸入。）";
+                if (response.status === 429) return "（對AI的請求過於頻繁，已觸發流量限制，請稍後再試。）";
+                return `（API 請求失敗，狀態碼: ${response.status}）`;
             }
-            return `（${errorMessage}）`;
+
+            const result = await response.json();
+
+            // 【修改】這是最關鍵的部分
+            // 如果 API 回應沒有候選內容 (通常是因為安全阻擋)，我們回傳 null
+            if (!result.candidates || result.candidates.length === 0) {
+                console.warn("API returned no candidates, likely due to safety filters.", result.promptFeedback);
+                return null; // 回傳 null 表示生成失敗
+            }
+            
+            if (result.candidates[0]?.content?.parts?.[0]) {
+                return result.candidates[0].content.parts[0].text;
+            } else {
+                // 這種情況比較少見，但還是處理一下
+                console.error("Unexpected API response structure:", result);
+                return null; // 同樣視為失敗
+            }
+
+        } catch (error) {
+            console.error("Fetch API Error:", error);
+            return `（網路連線錯誤，無法連接至 AI 伺服器。）`;
         }
     },
 
