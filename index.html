@@ -326,10 +326,10 @@
                                                 <p class="font-bold text-amber-200" :class="{'text-red-400': isStarving}">總能力值
                                                     <span x-show="isStarving">(飢餓中 -25%)</span>:
                                                 </p>
-                                               <p class="text-sm"><strong>生命值:</strong>
+                                                <p class="text-sm"><strong>生命值:</strong>
                                                     <span x-text="player.currentHp"></span> / <span x-text="player.getBaseMaxHp(isStarving)"></span>
                                                     <span class="text-green-400" x-show="player.getPartyHpBonus(isStarving) !== 0" x-text="` (+${player.getPartyHpBonus(isStarving)})`"></span>
-                                                    <span class="text-blue-400" x-show="player.getEquipmentBonus('hp') !== 0" x-text="formatBonus(player.getEquipmentBonus('hp'))"></span>
+                                                    <span class="text-blue-400" x-show="player.getEquipmentHpBonus() !== 0" x-text="formatBonus(player.getEquipmentHpBonus())"></span>
                                                 </p>
                                                 <ul class="space-y-1 text-sm pt-1">
                                                     <template x-for="stat in ['strength', 'agility', 'intelligence', 'luck']" :key="stat">
