@@ -190,7 +190,31 @@ class Goblin extends Unit {
     
     getPartyHpBonus(isStarving = false) { return 0; }
 
-    getEquipmentHpBonus() { return this.getEquipmentBonus('hp'); }
+    getEquipmentHpBonus() {
+        if (!this.equipment) return 0;
+        
+        // 初始化一個變數來累加總加成
+        let totalHpBonus = 0;
+
+        // 首先，加上來自裝備基礎屬性的HP (例如某些胸甲自帶的HP)
+        totalHpBonus += this.getEquipmentBonus('hp');
+
+        // 接著，遍歷所有裝備的詞綴，加上詞綴提供的純HP
+        Object.values(this.equipment).forEach(item => {
+            if (!item) return;
+            item.affixes.forEach(affix => {
+                if (affix.type === 'stat') {
+                    affix.effects.forEach(effect => {
+                        if (effect.stat === 'hp' && effect.type !== 'multiplier') {
+                            totalHpBonus += effect.value;
+                        }
+                    });
+                }
+            });
+        });
+
+        return totalHpBonus;
+    }
 
     getEffectiveEquipmentBonus(stat) {
         const totalStat = this.getTotalStat(stat, this.isStarving);
@@ -219,18 +243,32 @@ class Goblin extends Unit {
         let maxHp = this.getBaseMaxHp(isStarving);
         maxHp += this.getPartyHpBonus(isStarving);
         maxHp += this.getEquipmentBonus('hp');
+
+        // 初始化一個變數來累加來自詞綴的純生命值
+        let flatAffixHpBonus = 0;
         let hpMultiplier = 1.0;
+
         Object.values(this.equipment).forEach(item => {
             if (!item) return;
             item.affixes.forEach(affix => {
                 if (affix.type !== 'stat') return;
                 affix.effects.forEach(effect => {
-                    if (effect.stat === 'hp' && effect.type === 'multiplier') {
-                        hpMultiplier *= effect.value;
+                    // 原本只有乘法邏輯，現在加入對純數值的判斷
+                    if (effect.stat === 'hp') {
+                        if (effect.type === 'multiplier') {
+                            hpMultiplier *= effect.value;
+                        } else {
+                            // 如果不是乘法，就是純數值加成
+                            flatAffixHpBonus += effect.value;
+                        }
                     }
                 });
             });
         });
+
+        // 在套用百分比乘法前，先把所有純數值加總
+        maxHp += flatAffixHpBonus;
+        
         maxHp = Math.floor(maxHp * hpMultiplier);
         return Math.max(1, maxHp);
     }
