@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.61</title>
+    <title>哥布林王國v5.71</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -260,10 +260,9 @@
             <div id="tutorial-query-screen" x-cloak>
                 <div class="max-w-xl mx-auto game-container relative p-8 rounded-lg pt-10 text-center">
                     <h1 class="game-title font-medieval">引導</h1>
-                    <p class="text-lg mb-6">王，您已降臨於此。本遊戲與您所知的可能不盡相同，初期將充滿挑戰。您需要基本的引導嗎？</p>
+                    <p class="text-lg mb-6">王，您已降臨於此。本遊戲系統龐大，若您是初次遊玩，建議善用畫面右下角的「輔助說明」功能來熟悉遊戲操作。</p>
                     <div class="flex justify-center space-x-4">
-                        <button @click="startTutorial(true)" class="btn btn-primary">是，我需要引導</button>
-                        <button @click="startTutorial(false)" class="btn btn-secondary">否，祝我在這世界玩得愉快</button>
+                        <button @click="screen = 'tribe'" class="btn btn-primary">我明白了，開始遊戲</button>
                     </div>
                 </div>
             </div>
@@ -280,13 +279,11 @@
                                 <div class="grid grid-cols-3 md:grid-cols-5 gap-4">
                                     <button @click="handleRaidButtonClick()" 
                                             class="btn btn-primary" 
-                                            :class="{ 'glow-pulse': shouldRaidButtonGlow }"
-                                            title="必須先建造地牢與產房">
+                                            title="必須先建造地牢才能抓捕俘虜">
                                         出擊掠奪
                                     </button>
                                     <button @click="handleConstructionClick()" 
-                                            class="btn btn-primary" 
-                                            :class="{ 'glow-pulse': shouldConstructionButtonGlow }">
+                                            class="btn btn-primary">
                                         部落建設
                                     </button>
                                     <button @click="openMerchant()" 
@@ -344,7 +341,7 @@
 
                                                                 <span class="text-red-400" x-show="isStarving" x-text="` -> ${player.getTotalStat(stat, isStarving)}`"></span>
                                                             </div>
-                                                            <button @click="addTempPoint(stat)" x-show="player.attributePoints > 0 && (player.attributePoints - Object.values(tempStatIncreases).reduce((a, b) => a + b, 0)) > 0" class="btn btn-sm btn-primary ml-2 w-8" :class="{'glow-pulse': tutorial.active && !tutorial.finishedAttributePoints && player.attributePoints > 0}">+</button>
+                                                            <button @click="addTempPoint(stat)" x-show="player.attributePoints > 0 && (player.attributePoints - Object.values(tempStatIncreases).reduce((a, b) => a + b, 0)) > 0" class="btn btn-sm btn-primary ml-2 w-8" >+</button>
                                                         </li>
                                                     </template>
                                                 </ul>
@@ -460,7 +457,10 @@
                                     <input type="text" x-ref="dlc_code_input" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="請輸入特典序號...">
                                     <button @click="redeemCode()" class="btn btn-primary">兌換</button>
                                 </div>
-                                <p x-show="dlc.hells_knights" class="text-green-400 mt-2">「王國騎士團」DLC 已成功啟用！</p>
+                                <div class="flex space-x-4 mt-2">
+                                    <span x-show="dlc.hells_knights" class="text-green-400">「王國騎士團」DLC 已成功啟用！</span>
+                                    <span x-show="dlc.races_of_aetheria" class="text-green-400">「精靈與亞獸人」DLC 已成功啟用！</span>
+                                </div>
                             </div>
                             <!--音樂撥放器-->
                             <div class="game-container relative p-4 rounded-lg pt-10">
@@ -496,17 +496,49 @@
             <div id="raid-selection-screen" x-cloak>
                 <div class="max-w-2xl mx-auto game-container relative p-8 rounded-lg pt-10">
                     <h1 class="game-title font-medieval">選擇掠奪目標</h1>
-                    <div class="space-y-4">
-                        <template x-for="raid in raidOptions">
-                            <button x-show="raid.difficulty !== 'hell' || dlc.hells_knights" @click="startRaid(raid.difficulty)" class="w-full text-left p-4 rounded-lg transition bg-gray-700 hover:bg-gray-600" :disabled="buildings.dungeon.level === 0" :class="{ 'glow-pulse': tutorial.active && tutorial.step === 5 && raid.difficulty === 'easy' }">    
-                                <div>
-                                    <h3 class="text-xl font-bold" x-text="raid.name"></h3>
-                                    <p x-text="raid.description"></p>
-                                </div>
-                                <p x-show="buildings.dungeon.level === 0" class="text-red-400 text-sm mt-1">需要先建造地牢才能出擊！</p>
-                            </button>
-                        </template>
+                    
+                    <div class="flex border-b border-gray-600 mb-4 overflow-x-auto">
+                        <button @click="modals.raidSelection.activeTab = 'human'" :class="{ 'bg-gray-700 text-white': modals.raidSelection.activeTab === 'human' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">人類城市</button>
+                        
+                        <button @click="modals.raidSelection.activeTab = 'elf'" 
+                                :class="{ 'bg-gray-700 text-white': modals.raidSelection.activeTab === 'elf', 'opacity-50': !dlc.races_of_aetheria }" 
+                                class="flex-shrink-0 py-2 px-4 rounded-t-lg">
+                                精靈部落
+                        </button>
+                        <button @click="modals.raidSelection.activeTab = 'beastkin'" 
+                                :class="{ 'bg-gray-700 text-white': modals.raidSelection.activeTab === 'beastkin', 'opacity-50': !dlc.races_of_aetheria }" 
+                                class="flex-shrink-0 py-2 px-4 rounded-t-lg">
+                                亞獸人部落
+                        </button>
                     </div>
+
+                    <div class="space-y-4 min-h-[200px]">
+                        
+                        <div x-show="(modals.raidSelection.activeTab === 'elf' || modals.raidSelection.activeTab === 'beastkin') && !dlc.races_of_aetheria" 
+                            class="flex items-center justify-center h-full text-yellow-400 text-lg p-8">
+                            需要「精靈與亞獸人」DLC
+                        </div>
+
+                        <div x-show="modals.raidSelection.activeTab === 'human' || ((modals.raidSelection.activeTab === 'elf' || modals.raidSelection.activeTab === 'beastkin') && dlc.races_of_aetheria)">
+                            <template x-for="raid in raidOptions.filter(r => r.category === modals.raidSelection.activeTab)">
+                                <button @click="startRaid(raid.difficulty)" 
+                                        class="w-full text-left p-4 rounded-lg transition bg-gray-700 hover:bg-gray-600"
+                                        :disabled="buildings.dungeon.level === 0"
+                                        :class="{ 'opacity-50 cursor-not-allowed': raid.requires && !dlc[raid.requires] }"
+                                        :title="raid.requires && !dlc[raid.requires] ? '需要解鎖對應的DLC' : ''">
+                                    <div>
+                                        <h3 class="text-xl font-bold" x-text="raid.name"></h3>
+                                        <p x-text="raid.description"></p>
+                                        <p x-show="raid.requires && !dlc[raid.requires]" class="text-yellow-400 text-sm mt-1">
+                                            <span x-text="raid.requires === 'hells_knights' ? '需要「王國騎士團」DLC' : '需要「精靈與亞獸人」DLC'"></span>
+                                        </p>
+                                    </div>
+                                    <p x-show="buildings.dungeon.level === 0" class="text-red-400 text-sm mt-1">需要先建造地牢才能出擊！</p>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
                     <div class="text-center mt-6">
                         <button @click="screen = 'tribe'" class="btn btn-secondary">返回部落</button>
                     </div>
@@ -528,7 +560,7 @@
 
                                     <button @click="modals.raidCaptives.isOpen = true" class="btn btn-secondary">查看俘虜</button>
 
-                                    <button @click="sneakPastGuards()" class="btn btn-primary" x-show="currentRaid.currentZoneIndex === 0 && currentRaid.currentZone.buildings.find(b => b.type === '衛兵所' && b.occupants.length > 0)">潛行繞過守軍</button>
+                                    <button @click="sneakPastGuards()" class="btn btn-primary" x-show="currentRaid.currentZoneIndex === 0 && currentRaid.currentZone.buildings.find(b => (b.type === '衛兵所' || b.type === '前線哨站') && b.occupants.length > 0)">潛行繞過守軍</button>
                                     <button @click="advanceToNextZone()" class="btn btn-secondary" :disabled="!canAdvance()">深入內城</button>
                                     <button @click="handleRetreatAction()" class="btn btn-danger col-span-full">
                                         <span x-text="currentRaid && currentRaid.currentZoneIndex > 0 ? '撤退回上層' : '脫離城鎮'"></span>
@@ -810,7 +842,7 @@
                         <h2 class="game-title font-medieval">部落建設</h2>
                         <div class="pt-10 max-h-[80vh] overflow-y-auto">
                             <div class="flex border-b border-gray-600 mb-4 overflow-x-auto">
-                                <button @click="modals.construction.activeTab = 'dungeon'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'dungeon', 'glow-pulse': tutorial.active && tutorial.step === 3 }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">地牢</button>
+                                <button @click="modals.construction.activeTab = 'dungeon'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'dungeon' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">地牢</button>
                                 <button @click="modals.construction.activeTab = 'barracks'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'barracks' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">寢室</button>
                                 <button @click="modals.construction.activeTab = 'warehouse'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'warehouse' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">倉庫</button>
                                 <button @click="modals.construction.activeTab = 'armory'" :class="{ 'bg-gray-700 text-white': modals.construction.activeTab === 'armory' }" class="flex-shrink-0 py-2 px-4 rounded-t-lg">兵工廠</button>
@@ -821,8 +853,8 @@
                             <div x-show="modals.construction.activeTab === 'dungeon'">
                                 <div class="flex border-b border-gray-600 mb-4">
                                     <button @click="modals.dungeon.subTab = 'manage'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'manage' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">管理俘虜</button>
-                                    <button @click="modals.dungeon.subTab = 'breed'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'breed', 'glow-pulse': tutorial.active && tutorial.step === 5 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">繁衍後代</button>
-                                    <button @click="modals.dungeon.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'upgrade', 'glow-pulse': tutorial.active && tutorial.step === 3 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
+                                    <button @click="modals.dungeon.subTab = 'breed'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'breed' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">繁衍後代</button>
+                                    <button @click="modals.dungeon.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.dungeon.subTab === 'upgrade' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
                                 </div>
                                 <div x-show="modals.dungeon.subTab === 'manage'">
                                     <h3 class="text-xl font-bold mb-2">管理所有俘虜</h3>
@@ -926,7 +958,7 @@
                                                 <span x-text="getBuildingUpgradeCost('dungeon').wood"></span> 木材,
                                                 <span x-text="getBuildingUpgradeCost('dungeon').stone"></span> 礦石
                                             </p>
-                                            <button @click="upgradeBuilding('dungeon')" class="btn btn-primary mt-2" :disabled="!canAffordBuildingUpgrade('dungeon')" :class="{'glow-pulse': tutorial.active && tutorial.step === 3}">
+                                            <button @click="upgradeBuilding('dungeon')" class="btn btn-primary mt-2" :disabled="!canAffordBuildingUpgrade('dungeon')" >
                                                 <span x-text="buildings.dungeon.level === 0 ? '建造' : '升級'"></span>
                                             </button>
                                         </div>
@@ -937,7 +969,7 @@
                             </div>
                             <div x-show="modals.construction.activeTab === 'barracks'">
                                 <div class="flex border-b border-gray-600 mb-4">
-                                    <button @click="modals.barracks.subTab = 'manage'" :class="{ 'bg-gray-700 text-white': modals.barracks.subTab === 'manage', 'glow-pulse': tutorial.active && !tutorial.finishedPartyMgmt && partners.length > 0 }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">管理夥伴</button>
+                                    <button @click="modals.barracks.subTab = 'manage'" :class="{ 'bg-gray-700 text-white': modals.barracks.subTab === 'manage' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">管理夥伴</button>
                                     <button @click="modals.barracks.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.barracks.subTab === 'upgrade' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
                                 </div>
                                 <div x-show="modals.barracks.subTab === 'manage'">
@@ -1093,7 +1125,7 @@
                                         <div>
                                             <label>類型:</label>
                                             <select x-model="modals.armory.craftingType" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 w-full">
-                                                <template x-for="type in craftableTypes" :key="type.baseName">
+                                                <template x-for="type in craftableTypes.filter(t => !t.requires || dlc[t.requires])" :key="type.baseName">
                                                     <option :value="type.baseName" x-text="type.baseName"></option>
                                                 </template>
                                             </select>
@@ -1315,9 +1347,10 @@
                                                         <div><strong>年紀:</strong> <span x-text="unit.visual.age"></span></div>
                                                         <div><strong>髮色:</strong> <span x-text="unit.visual.hairColor"></span></div>
                                                         <div><strong>髮型:</strong> <span x-text="unit.visual.hairStyle"></span></div>
+                                                        <div><strong>服裝:</strong> <span x-text="unit.visual.clothing"></span></div>
                                                         <div><strong>胸圍:</strong> <span x-text="unit.visual.bust"></span></div>
-                                                        <div class="col-span-2"><strong>個性:</strong> <span x-text="unit.visual.personality"></span></div>
-                                                        <div class="col-span-2"><strong>服裝:</strong> <span x-text="unit.visual.clothing"></span></div>
+                                                        <div><strong>耳朵:</strong> <span x-text="unit.visual.elfEars"></span></div>
+                                                        <div><strong>個性:</strong> <span x-text="unit.visual.personality"></span></div>
                                                     </div>
                                                 </template>
                                             </div>
@@ -1388,8 +1421,10 @@
                                                 <div><strong>年紀:</strong> <span x-text="captive.visual.age"></span></div>
                                                 <div><strong>髮色:</strong> <span x-text="captive.visual.hairColor"></span></div>
                                                 <div><strong>髮型:</strong> <span x-text="captive.visual.hairStyle"></span></div>
+                                                <div><strong>服裝:</strong> <span x-text="unit.visual.clothing"></span></div>
                                                 <div><strong>胸圍:</strong> <span x-text="captive.visual.bust"></span></div>
-                                                <div class="col-span-2"><strong>個性:</strong> <span x-text="captive.visual.personality"></span></div>
+                                                <div><strong>耳朵:</strong> <span x-text="unit.visual.elfEars"></span></div>
+                                                <div><strong>個性:</strong> <span x-text="captive.visual.personality"></span></div>
                                             </div>
                                         </template>
                                         
@@ -1444,17 +1479,14 @@
                                         </div>
                                         <template x-if="captive.visual">
                                             <div class="mt-2 pt-2 border-t border-gray-600 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                                            <div><strong>身高:</strong> <span x-text="captive.visual.height"></span> cm</div>
-                                            <div><strong>年紀:</strong> <span x-text="captive.visual.age"></span></div>
-                                            <div><strong>髮色:</strong> <span x-text="captive.visual.hairColor"></span></div>
-                                            <div><strong>髮型:</strong> <span x-text="captive.visual.hair"></span></div>
+                                                <div><strong>身高:</strong> <span x-text="captive.visual.height"></span> cm</div>
+                                                <div><strong>年紀:</strong> <span x-text="captive.visual.age"></span></div>
+                                                <div><strong>髮色:</strong> <span x-text="captive.visual.hairColor"></span></div>
+                                                <div><strong>髮型:</strong> <span x-text="captive.visual.hair"></span></div>
+                                                <div><strong>服裝:</strong> <span x-text="unit.visual.clothing"></span></div>
                                                 <div><strong>胸圍:</strong> <span x-text="captive.visual.bust"></span></div>
-                                                <div class="col-span-2"><strong>個性:</strong>
-                                                    <span x-text="captive.visual.personality"></span>
-                                                </div>
-                                                <div class="col-span-2"><strong>服裝:</strong>
-                                                    <span x-text="captive.visual.clothing"></span>
-                                                </div>
+                                                <div><strong>耳朵:</strong> <span x-text="unit.visual.elfEars"></span></div>
+                                                <div><strong>個性:</strong> <span x-text="captive.visual.personality"></span></div>
                                             </div>
                                         </template>
                                     </div>
@@ -2079,6 +2111,57 @@
             </div>
         </template>
 
+        <template x-if="player">
+            <div id="help-widget-container"
+                :style="`top: ${helpWidget.position.y}px; left: ${helpWidget.position.x}px;`"
+                :class="{ 'minimized': helpWidget.isMinimized && !helpWidget.isOpen, 'dragging': helpWidget.isDragging, 'opens-left': helpWidget.opensToLeft }"
+                x-ref="helpWidget"
+                @mousedown="initDraggableWidget($event, $refs.helpWidget)"
+                @touchstart="initDraggableWidget($event, $refs.helpWidget)">
+
+                <button
+                    x-show="!helpWidget.isOpen"
+                    @click.stop="toggleHelpWidget()"
+                    @mouseover="helpWidget.isMinimized = false"
+                    class="help-widget-button">
+                    <span>?</span>
+                </button>
+
+                <div x-show="helpWidget.isOpen" @click.outside="helpWidget.isOpen = false" class="help-widget-panel" @mousedown.stop @touchstart.stop>
+                    <div class="help-widget-header">
+                        <h3 class="font-medieval text-xl text-amber-200">輔助說明</h3>
+                        <button @click="toggleHelpWidget()" class="close-button">&times;</button>
+                    </div>
+                    <div class="help-widget-body">
+                        <div class="help-tabs">
+                            <button @click="helpWidget.activeTab = 'basic'" :class="{'active': helpWidget.activeTab === 'basic'}">基礎</button>
+                            <button @click="helpWidget.activeTab = 'tribe'" :class="{'active': helpWidget.activeTab === 'tribe'}">部落</button>
+                            <button @click="helpWidget.activeTab = 'raid'" :class="{'active': helpWidget.activeTab === 'raid'}">掠奪</button>
+                            <button @click="helpWidget.activeTab = 'combat'" :class="{'active': helpWidget.activeTab === 'combat'}">戰鬥</button>
+                        </div>
+                        <div class="help-content">
+                            <div x-show="helpWidget.activeTab === 'basic'">
+                                <h4 class="font-bold text-lg mb-2">基礎操作</h4>
+                                <p>這裡是基礎操作的說明文字...</p>
+                            </div>
+                            <div x-show="helpWidget.activeTab === 'tribe'">
+                                <h4 class="font-bold text-lg mb-2">部落經營</h4>
+                                <p>這裡是部落經營的說明文字...</p>
+                            </div>
+                            <div x-show="helpWidget.activeTab === 'raid'">
+                                <h4 class="font-bold text-lg mb-2">出擊掠奪</h4>
+                                <p>這裡是出擊掠奪的說明文字...</p>
+                            </div>
+                            <div x-show="helpWidget.activeTab === 'combat'">
+                                <h4 class="font-bold text-lg mb-2">戰鬥系統</h4>
+                                <p>這裡是戰鬥系統的說明文字...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
         <script src="js/00_constants_and_utils.js"></script>
         <script src="js/01_classes.js"></script>
         
@@ -2088,7 +2171,10 @@
         <script src="js/modules/item.js"></script>
         <script src="js/modules/unitManager.js"></script>
         <script src="js/modules/narrative.js"></script>
-        <script src="js/modules/ui.js"></script>         <script src="js/modules/skill.js"></script>      <script src="js/02_game_logic.js"></script>
+        <script src="js/modules/ui.js"></script>
+        <script src="js/modules/skill.js"></script>
+        <script src="js/modules/helpWidget.js"></script>
+        <script src="js/02_game_logic.js"></script>
         <script src="js/game.js"></script>
         <script>
             document.addEventListener('alpine:init', () => {
