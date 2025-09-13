@@ -10,6 +10,7 @@ function filterInventory(inventory, filter) {
 
 const gameLogic = {
     // --- 導入所有模組 ---
+    ...helpWidgetModule,
     ...combatModule,
     ...raidModule,
     ...tribeModule,
@@ -50,13 +51,17 @@ const gameLogic = {
     // --- 遊戲中的各種旗標和暫存資料 ---
     pendingDecisions: [],
     dlc: {
-        hells_knights: false // 「王國騎士團」DLC，預設為未解鎖
+        hells_knights: false, // 「王國騎士團」DLC，預設為未解鎖
+        races_of_aetheria: false,// 控制精靈與亞獸人DLC的總開關
+        elf_tribe_unlocked: false,
+        beastkin_tribe_unlocked: false,
     },
     bailoutCounter: 0, // 用來計算玩家求助的次數
     totalBreedingCount: 0, // 用於追蹤觸發使徒BOSS戰的總繁衍次數
     flags: {
         defeatedApostle: false,
-        defeatedGoddess: false
+        defeatedGoddess: false,
+        merchantIntroduced: false,
     },
     isStarving: false,
     narrativeMemory: '',
@@ -80,6 +85,7 @@ const gameLogic = {
 
     // --- 各類 UI 視窗的狀態 ---
     modals: {
+        raidSelection: { activeTab: 'human' },
         dice: {
             isOpen: false,
             title: '',      // 視窗標題，例如 "攻擊判定"
@@ -152,18 +158,18 @@ const gameLogic = {
         selectedCaptiveIds: [],
     },
 
-    // --- 教學狀態 ---
-    tutorial: {
-        active: false, // 總開關，判斷玩家是否需要教學
-        pendingTutorial: null, //   用於存放待處理的教學事件
-        // --- 以下為各教學模組的完成狀態旗標 ---
-        finishedIntro: false,         // 完成初級教學 (建築->掠奪->繁衍)
-        finishedPartyMgmt: false,     // 完成夥伴管理教學
-        finishedEquipping: false,     // 完成裝備教學
-        finishedDecomposing: false,   // 完成分解教學
-        finishedAttributePoints: false, // 完成屬性點教學
-        // 保留商人旗標
-        merchantMet: false
+    // --- 浮動輔助視窗狀態 ---
+    helpWidget: {
+        isOpen: false,
+        isMinimized: false,
+        // 根據螢幕寬度決定初始位置
+        position: { 
+            x: window.innerWidth < 768 ? 20 : window.innerWidth - 90, // 手機在左邊(20px)，桌面在右邊(右邊緣-90px)
+            y: window.innerWidth < 768 ? window.innerHeight - 90 : 20 // 手機在下面(底部-90px)，桌面在上面(20px)
+        },
+        opensToLeft: false,
+        activeTab: 'basic',
+        isDragging: false,
     },
 
     // --- 其他狀態... ---
@@ -183,10 +189,23 @@ const gameLogic = {
         '法師': { top: '70%', left: '95%' }, // 第四排右 (遠程)
     },
     raidOptions: [
-        { difficulty: 'easy', name: '簡單', description: '居民(15-20), 守軍(5-10)' },
-        { difficulty: 'normal', name: '普通', description: '居民(20-25), 守軍(10-15)' },
-        { difficulty: 'hard', name: '困難', description: '居民(25-30), 守軍(15-20)' },
-        { difficulty: 'hell', name: '地獄', description: '居民(30-35), 守軍(20-25)' },
+        // 人類城市
+        { difficulty: 'easy',   name: '簡單', description: '居民(15-20), 守軍(5-10)',   category: 'human' },
+        { difficulty: 'normal', name: '普通', description: '居民(20-25), 守軍(10-15)', category: 'human' },
+        { difficulty: 'hard',   name: '困難', description: '居民(25-30), 守軍(15-20)', category: 'human' },
+        { difficulty: 'hell',   name: '地獄', description: '居民(30-35), 守軍(20-25)', category: 'human', requires: 'hells_knights' },
+        
+        // 精靈部落 (修正 requires 條件)
+        { difficulty: 'dlc_elf_easy',   name: '簡單 (精靈)', description: '精靈(15-20), 守衛(5-10)',   category: 'elf', requires: 'elf_tribe_unlocked' },
+        { difficulty: 'dlc_elf_normal', name: '普通 (精靈)', description: '精靈(20-25), 守衛(10-15)', category: 'elf', requires: 'elf_tribe_unlocked' },
+        { difficulty: 'dlc_elf_hard',   name: '困難 (精靈)', description: '精靈(25-30), 守衛(15-20)', category: 'elf', requires: 'elf_tribe_unlocked' },
+        { difficulty: 'dlc_elf_hell',   name: '地獄 (精靈)', description: '精靈(30-35), 守衛(20-25)', category: 'elf', requires: 'elf_tribe_unlocked' },
+        
+        // 亞獸人部落 (修正 requires 條件)
+        { difficulty: 'dlc_beastkin_easy',   name: '簡單 (亞獸人)', description: '亞獸人(15-20), 鬥士(5-10)',   category: 'beastkin', requires: 'beastkin_tribe_unlocked' },
+        { difficulty: 'dlc_beastkin_normal', name: '普通 (亞獸人)', description: '亞獸人(20-25), 鬥士(10-15)', category: 'beastkin', requires: 'beastkin_tribe_unlocked' },
+        { difficulty: 'dlc_beastkin_hard',   name: '困難 (亞獸人)', description: '亞獸人(25-30), 鬥士(15-20)', category: 'beastkin', requires: 'beastkin_tribe_unlocked' },
+        { difficulty: 'dlc_beastkin_hell',   name: '地獄 (亞獸人)', description: '亞獸人(30-35), 鬥士(20-25)', category: 'beastkin', requires: 'beastkin_tribe_unlocked' }
     ],
     craftableTypes: [
         // 武器
@@ -196,6 +215,14 @@ const gameLogic = {
         { baseName: '弓', type: 'weapon', slot: 'mainHand', materialCategory: 'wood' },
         { baseName: '法杖', type: 'weapon', slot: 'mainHand', materialCategory: 'wood' },
         { baseName: '盾', type: 'weapon', slot: 'offHand', materialCategory: 'metal' },
+        // 【新增】七種新武器 (加上 requires 標籤)
+        { baseName: '短刀', type: 'weapon', slot: 'mainHand', materialCategory: 'metal', requires: 'races_of_aetheria' },
+        { baseName: '爪', type: 'weapon', slot: 'mainHand', materialCategory: 'metal', requires: 'races_of_aetheria' },
+        { baseName: '拐棍', type: 'weapon', slot: 'mainHand', materialCategory: 'wood', requires: 'races_of_aetheria' },
+        { baseName: '斧頭', type: 'weapon', slot: 'mainHand', materialCategory: 'metal', requires: 'races_of_aetheria' },
+        { baseName: '彎刀', type: 'weapon', slot: 'mainHand', materialCategory: 'metal', requires: 'races_of_aetheria' },
+        { baseName: '長鞭', type: 'weapon', slot: 'mainHand', materialCategory: 'leather', requires: 'races_of_aetheria' },
+        { baseName: '拳套', type: 'weapon', slot: 'mainHand', materialCategory: 'leather', requires: 'races_of_aetheria' },
         // 防具
         { baseName: '鎧甲', type: 'armor', slot: 'chest', armorType: 'plate', materialCategory: 'metal' },
         { baseName: '皮甲', type: 'armor', slot: 'chest', armorType: 'leather', materialCategory: 'leather' },
@@ -349,25 +376,19 @@ const gameLogic = {
         return activeSkills;
     },
     get canExecuteBreeding() {
-        if (!this.player) return false; // 安全檢查
-
+        if (!this.player) return true;
         const selectedCount = this.modals.dungeon.selectedBreedIds.length;
-
-        if (selectedCount === 0) return true; // 如果沒選人，按鈕應該是可用的（但點了會提示）
-        if (selectedCount > this.breedingChargesLeft) return true;
-        if (this.maternityCapacity === 0) return true;
-        if ((this.mothers.length + selectedCount) > this.maternityCapacity) return true;
-        
-        return false; // 所有條件都滿足，按鈕不禁用
+        if (selectedCount === 0) {
+            return true;
+        }
+        // 如果選擇的人數超過剩餘次數，則禁用按鈕
+        if (selectedCount > this.breedingChargesLeft) {
+            return true;
+        }      
+        return false;
     },
     get isMerchantButtonDisabled() {// 判斷「商人營地」按鈕是否應該被禁用
         return !this.merchant.isPresent;
-    },
-    get shouldRaidButtonGlow() {// 判斷「出擊掠奪」按鈕是否應該發光
-        return this.tutorial.active && this.tutorial.step === 5;
-    },
-    get shouldConstructionButtonGlow() {// 判斷「部落建設」按鈕是否應該發光
-        return this.tutorial.active && this.tutorial.step === 2;
     },
     get currentlyEditingPartner() {
         if (!this.modals.partnerEquipment.partnerId) return null;
@@ -398,6 +419,7 @@ const gameLogic = {
         const unit = Array.isArray(unitOrGroup) ? unitOrGroup[0] : unitOrGroup;
         if (!unit) return 'bg-gray-500'; // 安全備用
         if (unit.id === this.player.id) return 'bg-green-500';
+        if (unit.profession === '氣味標記假人') return 'bg-white';
         if (unit.profession === '公主') return 'bg-yellow-400';
         if (Object.keys(KNIGHT_ORDER_UNITS).includes(unit.profession)) return 'bg-orange-500';
         if (unit.profession === '城市守軍') return 'bg-red-500';
@@ -539,13 +561,15 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.61 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.71 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
             if (newScreen === 'tribe' && this.pendingDecisions.length > 0) {
                 // 使用 setTimeout 確保畫面已完全切換，避免彈窗閃爍
-                setTimeout(() => this.processNextDecision(), 100);
+                setTimeout(() => {
+                        this.processNextDecision();
+                    }, 100);
             }
         });
         this.$watch('modals.construction.isOpen', (isOpen) => {
@@ -571,18 +595,30 @@ const gameLogic = {
             }
         });
 
-        // 【智慧播放監聽器】
-        this.$watch('screen', (newScreen) => {
+        // 監聽掠奪剩餘時間的變化
+        this.$watch(() => this.currentRaid?.timeRemaining, (newValue, oldValue) => {
+            // 只有在掠奪中，且時間確實發生變化時，才執行更新
+            if (this.currentRaid && newValue !== oldValue) {
+                this.updateRaidTimeCycle();
+            }
+        });
+
+        this.$watch('screen', (newScreen) => {// 【智慧播放監聽器】
             // 當前畫面符合設定時，且音樂是播放狀態，就播放
             if (newScreen === this.musicSettings.playOnScreen && this.musicSettings.isPlaying) {
                 if (this.$refs.audioPlayer.paused) {
-                    this.$refs.audioPlayer.currentTime = 0; // 【新增此行】將音樂拉回開頭
+                    this.$refs.audioPlayer.currentTime = 0; // 將音樂拉回開頭
                     this.$refs.audioPlayer.play().catch(e => {});
                 }
             } else { // 否則就暫停
                 if (!this.$refs.audioPlayer.paused) {
                     this.$refs.audioPlayer.pause();
                 }
+            }
+        });
+        window.addEventListener('resize', () => {
+            if (this.$refs.helpWidget) {
+                this.checkWidgetBounds(this.$refs.helpWidget);
             }
         });
     },
@@ -637,12 +673,7 @@ const gameLogic = {
                 this.logMessage('tribe', `你獲得了受詛咒的裝備：[${cursedItem.name}]！`, 'system');
                 this.player.updateHp();
             }
-
-            if (this.tutorial.active) {
-                this.advanceTutorial(1);
-            } else {
-                this.logMessage('tribe', `第 ${this.day} 天：偉大的哥布林王 ${this.player.name} 的傳奇開始了！`, 'system');
-            }
+            this.logMessage('tribe', `第 ${this.day} 天：偉大的哥布林王 ${this.player.name} 的傳奇開始了！`, 'system');
         };
 
         if (itemToGenerate) {
@@ -651,10 +682,6 @@ const gameLogic = {
             startTribeActions();
         }
         this.breedingChargesLeft = this.totalBreedingCharges;
-
-        if (this.tutorial.pendingTutorial) {
-            this.triggerTutorial(this.tutorial.pendingTutorial);
-        }
     },
     async createCharacter() {
             // 檢查剩餘點數是否剛好為 0
@@ -786,208 +813,6 @@ const gameLogic = {
         }
     },
 
-    processDailyUpkeep() {
-        // --- 日期計算與事件觸發 ---
-        this.day++;
-        this.year = Math.floor((this.day - 1) / 360) ;
-        this.month = Math.floor(((this.day - 1) % 360) / 30) + 1;
-        this.currentDate = ((this.day - 1) % 30) + 1;
-
-        this.logMessage('tribe', `--- 第 ${this.year} 年 ${this.month} 月 ${this.currentDate} 日 (總天數: ${this.day}) ---`, 'system');
-
-        if (this.player && this.player.tribeSkillCooldowns) {
-            for (const skillId in this.player.tribeSkillCooldowns) {
-                if (this.player.tribeSkillCooldowns[skillId] > 0) {
-                    this.player.tribeSkillCooldowns[skillId]--;
-                }
-            }
-        }
-
-        if (this.merchant.isPresent) {
-            this.merchant.stayDuration--;
-            if (this.merchant.stayDuration <= 0) {
-                this.logMessage('tribe', '旅行商人「世紀」已經收拾行囊，離開了你的部落。', 'info');
-                this.merchant = {
-                    dialogue: '',
-                    avatar: null, // <-- 重置頭像
-                    isPresent: false,
-                    goods: [],
-                    stayDuration: 0,
-                    purchases: this.merchant.purchases,
-                    selectedItemIds: [],
-                    selectedCaptiveIds: [],
-                };
-            }
-        } else {
-            // 原有的商人出現邏輯，保留不變
-            if (this.day === 9 && !this.tutorial.merchantMet) {
-                this.merchant.isPresent = true;
-                this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
-                this.generateMerchantGoods();
-                this.logMessage('tribe', `一位名叫「世紀」的魅魔商人來到了你的營地！她將停留 ${this.merchant.stayDuration} 天。`, 'success');
-                this.advanceTutorial(7);
-                this.tutorial.merchantMet = true;
-            } else if (this.day > 9) {
-                const arrivalChance = [10, 15, 20, 25, 30][this.buildings.merchantCamp.level || 0] || 10;
-                if (rollPercentage(arrivalChance)) {
-                    this.merchant.isPresent = true;
-                    this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
-                    this.generateMerchantGoods();
-                    this.logMessage('tribe', `一位名叫「世紀」的魅魔商人來到了你的營地！她將停留 ${this.merchant.stayDuration} 天。`, 'success');
-                }
-            }
-        }
-
-        this.checkForEvents();
-
-        this.postBattleBirths = []; 
-
-        this.captives.forEach(c => {
-            if (c.isPregnant) {
-                let gaveBirthEarly = false;
-                const skillId = 'breed_breeding_authority';
-                if (this.player && this.player.learnedSkills[skillId]) {
-                    const skillData = SKILL_TREES.breeding.find(s => s.id === skillId);
-                    if (rollPercentage(skillData.levels[0].effect.chance * 100)) {
-                        this.logMessage('tribe', `在「繁衍的權能」影響下，${c.name} 的生產週期瞬間完成了！`, 'crit');
-                        this.giveBirth(c);
-                        gaveBirthEarly = true;
-                    }
-                }
-
-                if (!gaveBirthEarly) {
-                    c.pregnancyTimer--;
-                    if (c.pregnancyTimer <= 0) {
-                        this.giveBirth(c);
-                    }
-                }
-            }
-        });
-
-        if (this.postBattleBirths.length > 0) {
-            const newborns = this.postBattleBirths.map(b => b.newborn);
-            if ((this.partners.length + newborns.length) > this.partnerCapacity) {
-                this.logMessage('tribe', `有 ${newborns.length} 個新生命誕生了，但寢室已滿！您需要做出選擇...`, 'warning');
-                this.pendingDecisions.push({
-                    type: 'partner',
-                    list: [...this.partners, ...newborns],
-                    limit: this.partnerCapacity,
-                    context: { newborns: this.postBattleBirths }
-                });
-            } else {
-                this.postBattleBirths.forEach(birth => {
-                    this.partners.push(birth.newborn);
-                    this.player.skillPoints++;
-                    this.logMessage('tribe', `${birth.mother.name} 誕下了一個新的哥布林夥伴：${birth.newborn.name}！你獲得了 1 點技能點。`, 'success');
-                    if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
-                        this.triggerTutorial('firstBirth');
-                    }
-                });
-            }
-            this.postBattleBirths = [];
-        }
-
-        const milkProduced = this.mothers.filter(m => !m.isPregnant).reduce((total, mother) => {
-            return total + Math.floor((mother.stats.charisma || 0) * 1);
-        }, 0);
-        if (milkProduced > 0) {
-            this.resources.food += milkProduced;
-            this.logMessage('tribe', `產房的孕母們生產了 ${milkProduced} 單位食物。`, 'success');
-        }
-
-        this.resources.food -= this.dailyFoodConsumption;
-        if (this.resources.food < 0) {
-            if (!this.isStarving) {
-                this.logMessage('tribe', `食物不足！部落成員陷入飢餓狀態，所有能力下降25%！`, 'enemy');
-                this.isStarving = true;
-            }
-            this.resources.food = 0;
-        } else {
-            if (this.isStarving) {
-                this.logMessage('tribe', `食物充足，飢餓狀態解除了。`, 'success');
-                this.isStarving = false;
-            }
-        }
-
-        this.player.updateHp(this.isStarving);
-        this.partners.forEach(p => {
-            p.maxHp = p.calculateMaxHp(this.isStarving);
-            p.currentHp = Math.min(p.currentHp, p.maxHp);
-        });
-
-        this.calculateDispatchYields();
-        this.breedingChargesLeft = this.totalBreedingCharges;
-    },
-    nextDay() {
-        // --- 事件偵測階段 ---
-        let pendingRevengeInfo = null;
-        const captivesByDifficulty = {};
-        this.captives.forEach(c => {
-            if (c.profession === '使徒' || c.profession === '女神') {
-                return; // 跳過特殊俘虜，不計入復仇計算
-            }
-            if (c.originDifficulty) {
-                if (!captivesByDifficulty[c.originDifficulty]) {
-                    captivesByDifficulty[c.originDifficulty] = 0;
-                }
-                captivesByDifficulty[c.originDifficulty]++;
-            }
-        });
-
-        for (const difficulty in captivesByDifficulty) {
-            if (pendingRevengeInfo) break;
-            const count = captivesByDifficulty[difficulty];
-            const coefficient = REVENGE_DIFFICULTY_COEFFICIENT[difficulty] || 0;
-            
-            // 加入哨塔的減免計算
-            let triggerChance = count * coefficient;
-            
-            const watchtowerLevel = this.buildings.watchtower.level;
-            if (watchtowerLevel > 0) {
-                const stationedCount = this.dispatch.watchtower.length;
-                // 效果陣列，索引 0 代表 0 級，索引 1 代表 1 級...
-                const reductionPerPartner = [0, 2, 4, 6, 8, 10][watchtowerLevel];
-                const totalReduction = stationedCount * reductionPerPartner;
-
-                if (totalReduction > 0) {
-                    this.logMessage('tribe', `哨塔的守衛使復仇機率降低了 ${totalReduction}%。`, 'info');
-                }
-                
-                triggerChance -= totalReduction;
-            }
-            
-            // 確保機率不會變成負數
-            triggerChance = Math.max(0, triggerChance);
-
-            if (rollPercentage(triggerChance)) {
-                pendingRevengeInfo = { difficulty: difficulty };
-            }
-        }
-
-        // --- 流程控制 ---
-        if (pendingRevengeInfo) {
-            // 如果偵測到復仇事件，顯示提示框，今天的結算將在戰鬥結束後進行
-            const difficulty = pendingRevengeInfo.difficulty;
-            const nameConfig = CITY_NAMES[difficulty];
-            const locationName = nameConfig.prefixes[randomInt(0, nameConfig.prefixes.length - 1)] + nameConfig.suffix;
-
-            this.logMessage('tribe', `你從 ${locationName} 掠來的俘虜引來了追兵...`, 'enemy');
-
-            this.showCustomAlert(
-                `警報！一支來自「${locationName}」的復仇小隊襲擊了你的部落！`,
-                () => {
-                    this.triggerRevengeSquadBattle(difficulty, []);
-                }
-            );
-            // 注意：這裡直接 return，不執行 processDailyUpkeep
-        } else {
-            // 如果沒有任何突發事件，直接執行正常的每日結算
-            this.processDailyUpkeep();
-            // 在每日結算後，立即檢查是否有待辦事項
-            this.checkAndProcessDecisions();
-        }
-    },
-
     saveGame() {
         const saveData = {
             player: this.player,
@@ -999,7 +824,6 @@ const gameLogic = {
             day: this.day,
             dispatch: this.dispatch, 
             narrativeMemory: this.narrativeMemory,
-            tutorial: this.tutorial,
             breedingChargesLeft: this.breedingChargesLeft,
             merchant: this.merchant,// 儲存更完整的商人資訊
             tempStatIncreases: this.tempStatIncreases,//能力點
@@ -1130,7 +954,6 @@ const gameLogic = {
                 this.dlc = { hells_knights: false };
             }
 
-            this.tutorial = { ...{ active: false, step: 0, merchantMet: false }, ...parsedData.tutorial };
             this.breedingChargesLeft = parsedData.breedingChargesLeft;
             this.merchant = { ...this.merchant, ...parsedData.merchant };
 
@@ -1297,35 +1120,6 @@ const gameLogic = {
         console.log(`ID Sanitation complete: Regenerated IDs for ${itemsSanitized} item instances.`);
         if (itemsSanitized > 0) {
             this.logMessage('tribe', `系統偵測到並修復了 ${itemsSanitized} 個存檔中的物品ID衝突。`, 'system');
-        }
-    },
-    processNextDecision() {
-        if (this.pendingDecisions.length === 0) return;
-
-        const decision = this.pendingDecisions.shift();
-
-        if (decision.type === 'partner') {
-            // 如果是夥伴寢室已滿的決策，呼叫新的夥伴管理視窗
-            this.openPartnerManagementModal(decision.list, decision.limit, decision.context);
-        } 
-        else if (decision.type === 'apostle_battle') {
-            this.triggerApostleBattle();
-        } 
-        else if (decision.type === 'goddess_battle') {
-            this.triggerGoddessBattle();
-        } 
-        else if (decision.type === 'crone_dialogue') {
-            this.triggerCroneDialogue();
-        }
-        else {
-            // 否則，維持舊的邏輯，呼叫統一俘虜管理視窗
-            this.openCaptiveManagementModal(
-                decision.type,
-                decision.list,
-                decision.limit,
-                decision.dungeonLimit,
-                decision.context
-            );
         }
     },
     checkAndProcessDecisions() {
@@ -1507,46 +1301,6 @@ const gameLogic = {
 
     merchantDialogueTimeout: null,
     
-    triggerTutorial(eventName) {
-        if (!this.tutorial.active) return;
-
-        //    如果玩家不在部落，則將教學事件暫存起來
-        if (this.screen !== 'tribe') {
-            this.tutorial.pendingTutorial = eventName;
-            return; // 暫不執行，等待玩家返回部落
-        }
-
-        // 如果玩家在部落，則正常執行教學
-        switch (eventName) {
-            case 'firstAttributePoint':
-                if (!this.tutorial.finishedAttributePoints) {
-                    this.showCustomAlert('王，您因繁衍而變得更強，獲得了「能力點」！請在您的狀態欄中，點擊能力值旁邊發光的「+」按鈕來分配它，提升您的實力。');
-                    this.tutorial.finishedAttributePoints = true;
-                }
-                break;
-            case 'firstBirth':
-                if (!this.tutorial.finishedPartyMgmt) {
-                    this.showCustomAlert('恭喜！您的第一個孩子誕生了。請前往「部落建設」->「寢室」->「管理夥伴」，將他加入您的出擊隊伍，他將為您提供戰力加成！');
-                    this.tutorial.finishedPartyMgmt = true;
-                }
-                break;
-            case 'firstLoot':
-                if (!this.tutorial.finishedEquipping) {
-                    this.showCustomAlert('您獲得了第一件裝備！它被存放在「部落建設」->「倉庫」->「玩家背包」中。您可以將它裝備在自己或夥伴身上以增強戰力。');
-                    this.tutorial.finishedEquipping = true;
-                }
-                break;
-            case 'armoryBuilt':
-                if (!this.tutorial.finishedDecomposing) {
-                    this.showCustomAlert('兵工廠已建成！現在您可以將多餘或老舊的裝備「分解」成資源了。這在「倉庫」管理介面中進行操作。');
-                    this.tutorial.finishedDecomposing = true;
-                }
-                break;
-        }
-        // 觸發後清除暫存
-        this.tutorial.pendingTutorial = null;
-    },
-    
     isGeneratingAvatar: false,
 
     handleMapClick(target, event) {
@@ -1623,71 +1377,6 @@ const gameLogic = {
         playerAnswer: ''      // 玩家的輸入
     },
     
-    startTutorial(choice) {
-    this.tutorial.active = choice;
-    this.screen = 'tribe'; // 只切換畫面，初始化交給 x-init
-    },
-    advanceTutorial(step) {
-        this.tutorial.step = step;
-        switch(step) {
-            //  步驟1: 僅作為一次性的裝備提示，確認後直接推進到步驟2
-            case 1:
-                this.showCustomAlert(
-                    '你在部落中發現了一些基礎裝備！你可以隨時在「部落建設」->「倉庫」->「玩家背包」中找到並穿上它們。',
-                    () => { this.advanceTutorial(2); } // 點擊確認後，立即執行下一步教學
-                );
-                break;
-            //  步驟2: 引導點擊「部落建設」
-            case 2:
-                this.showCustomAlert('一個強大的部落需要穩固的根基。讓我們點擊發光的『部落建設』按鈕，來規劃您的部落。');
-                break;
-            //  步驟3: 引導建造「地牢」
-            case 3:
-                this.modals.construction.isOpen = true;
-                this.modals.construction.activeTab = 'dungeon';
-                this.modals.dungeon.subTab = 'upgrade';
-                this.showCustomAlert('做得好！現在請點擊發光的『升級』分頁，並為您的部落打下第一個根基。');
-                break;
-            //  步驟4: 引導建造「產房」
-            case 4:
-                this.modals.construction.activeTab = 'maternity';
-                this.modals.maternity.subTab = 'upgrade';
-                break;
-            //  步驟5: 引導「出擊掠奪」
-            case 5:
-                this.modals.construction.isOpen = false;
-                setTimeout(() => {
-                    this.showCustomAlert('太棒了！所有基礎設施都已就緒。關閉此視窗，點擊發光的『出擊掠奪』為部落帶來第一批女性吧！');
-                }, 100);
-                break;
-            // ... 後續步驟 5.5, 6, 7 維持不變 ...
-            case 5.5: 
-                this.showCustomAlert('王，知己知彼，百戰不殆。在未知的土地上，首先使用『偵查環境』來探查周遭的危險與機遇吧。');
-                break;
-            case 6:
-                this.showCustomAlert('恭喜王！您帶回了部落的第一批戰利品。現在，再次進入「部落建設」，找到「地牢」中的「繁衍後代」功能。您可以根據剩餘次數，選擇一位或多位對象，為您的部落產下更強大的哥布林戰士吧！');
-                break;
-            case 7:
-                const modal = this.modals.narrative;
-                modal.isOpen = true;
-                modal.title = "與神秘商人的相遇";
-                modal.type = "tutorial"; 
-                modal.isLoading = false;
-                modal.isAwaitingConfirmation = false;
-                modal.content = `
-                    <p>呵呵...哥布林王...我有很多好東西...。</p>
-                    <p>叫我『世紀』就好，一個四處遊蕩，尋找『有趣』事物的旅行商人，絕對不是什麼可疑的人，嘿...。</p>
-                    <br>
-                    <p>把那些抓來的妹子...嘿嘿...給ㄨㄛ...咳!我是說交易，會給你一些收藏的寶貝作為回報。</p>
-                    <br>
-                    <p><b>左邊是我的商品，右邊是你的『貨幣』(你懂的...)。選好商品，再湊齊足夠素質的俘虜，就能完成交易了。</b></p>
-                    <br>
-                    <p>很簡單吧？我很期待...嘿嘿嘿...(口水)</p>
-                `;
-                break;
-        }
-    },
-
     releaseCarriedCaptive(captiveId) {
         if (!this.currentRaid) return;
 
@@ -1768,6 +1457,9 @@ const gameLogic = {
             normal: { res: [10, 20], guard: [20, 30] },
             hard:   { res: [20, 40], guard: [40, 60] },
             hell:   { res: [40, 80], guard: [80, 120] },
+            // 【新增】為 DLC 難度添加對應的設定，暫時參照 normal
+            dlc_elf_normal: { res: [10, 20], guard: [20, 30] },
+            dlc_beastkin_normal: { res: [10, 20], guard: [20, 30] },
         };
         const difficulty = this.currentRaid.difficulty;
         let foodDrop = 0, woodDrop = 0, stoneDrop = 0;
@@ -1815,8 +1507,12 @@ const gameLogic = {
         };
         const possibleTiers = materialTiers[difficulty];
 
-        // 4. 隨機決定要掉落的裝備「類型」
-        const randomItemType = this.craftableTypes[randomInt(0, this.craftableTypes.length - 1)];
+        // 4. 根據玩家擁有的 DLC 過濾出可用的掉落池
+        const availableLootPool = this.craftableTypes.filter(t => !t.requires || this.dlc[t.requires]);
+        if (availableLootPool.length === 0) return; // 如果沒有可掉落的物品，直接結束
+
+        // 從過濾後的掉落池中隨機選擇
+        const randomItemType = availableLootPool[randomInt(0, availableLootPool.length - 1)];
         const baseName = randomItemType.baseName;
         const category = randomItemType.materialCategory;
 
@@ -1863,9 +1559,6 @@ const gameLogic = {
         
         // 8. 成功獲得物品
         this.player.inventory.push(newItem);
-        if (this.tutorial.active && !this.tutorial.finishedEquipping) {
-            this.triggerTutorial('firstLoot');
-        }
         
         const logPanel = this.currentRaid ? 'raid' : 'tribe';
         this.logMessage(logPanel, `你從 ${sourceName} 獲得了 <span style="color:${newItem.quality.color};">[${newItem.name}]</span>！`, 'success');
@@ -2008,10 +1701,13 @@ const gameLogic = {
                 return;
             }
             const materialTiers = {
-                easy: { metal: [1, 3], wood: [1, 3] },
-                normal: { metal: [2, 4], wood: [2, 4] },
-                hard: { metal: [3, 5], wood: [3, 5] },
-                hell: { metal: [4, 6], wood: [4, 6] },
+                easy:   { metal: [1, 3], wood: [1, 3], leather: [1, 3], cloth: [1, 3] },
+                normal: { metal: [2, 4], wood: [2, 4], leather: [2, 4], cloth: [2, 4] },
+                hard:   { metal: [3, 5], wood: [3, 5], leather: [3, 5], cloth: [3, 5] },
+                hell:   { metal: [4, 6], wood: [4, 6], leather: [4, 6], cloth: [4, 6] },
+                // 【新增】為 DLC 難度添加對應的設定，暫時參照 normal
+                dlc_elf_normal: { metal: [2, 4], wood: [2, 4], leather: [2, 4], cloth: [2, 4] },
+                dlc_beastkin_normal: { metal: [2, 4], wood: [2, 4], leather: [2, 4], cloth: [2, 4] },
             };
             const possibleTiers = materialTiers[difficulty] || materialTiers['easy'];
             
@@ -2236,5 +1932,278 @@ const gameLogic = {
         // 這一步是為了確保即使只是文字變動，畫面也能強制刷新
         this.currentRaid.currentZone = { ...this.currentRaid.currentZone };
     },
-    
+
+    nextDay() {
+        // 1. 執行計算階段，取得今天會發生的所有事件列表
+        const todaysEvents = this.calculateDailyChangesAndQueueEvents();
+        
+        // 2. 將今天的所有事件加入到全域的待辦事項佇列中
+        this.pendingDecisions.push(...todaysEvents);
+        
+        // 3. 開始執行佇列中的第一個事件
+        this.processNextDecision();
+    },
+
+    calculateDailyChangesAndQueueEvents() {
+        const events = []; 
+
+        this.day++;
+        this.year = Math.floor((this.day - 1) / 360) ;
+        this.month = Math.floor(((this.day - 1) % 360) / 30) + 1;
+        this.currentDate = ((this.day - 1) % 30) + 1;
+        this.logMessage('tribe', `--- 第 ${this.year} 年 ${this.month} 月 ${this.currentDate} 日 (總天數: ${this.day}) ---`, 'system');
+
+        if (this.player && this.player.tribeSkillCooldowns) {
+            for (const skillId in this.player.tribeSkillCooldowns) {
+                if (this.player.tribeSkillCooldowns[skillId] > 0) this.player.tribeSkillCooldowns[skillId]--;
+            }
+        }
+        if (this.merchant.isPresent) {
+            this.merchant.stayDuration--;
+            if (this.merchant.stayDuration <= 0) {
+                this.logMessage('tribe', '旅行商人「世紀」已經收拾行囊，離開了你的部落。', 'info');
+                this.merchant = { ...this.merchant, isPresent: false, goods: [], stayDuration: 0, selectedItemIds: [], selectedCaptiveIds: [] };
+            }
+        } else {
+            if (this.day > 9 && rollPercentage([10, 15, 20, 25, 30][this.buildings.merchantCamp.level || 0] || 10)) {
+                this.merchant.isPresent = true;
+                this.merchant.stayDuration = 1 + (this.buildings.merchantCamp.level || 0);
+                this.generateMerchantGoods();
+                this.logMessage('tribe', `一位名叫「世紀」的魅魔商人來到了你的營地！她將停留 ${this.merchant.stayDuration} 天。`, 'success');
+            }
+        }
+        this.checkForEvents();
+
+        // --- 首次商人介紹事件 ---
+        if (this.day >= 9 && this.buildings.merchantCamp.level > 0 && !this.flags.merchantIntroduced) {
+            this.flags.merchantIntroduced = true; // 標記為已觸發，確保只發生一次
+
+            // 確保商人當天一定會出現
+            if (!this.merchant.isPresent) {
+                this.merchant.isPresent = true;
+                this.merchant.stayDuration = 1 + this.buildings.merchantCamp.level;
+                this.generateMerchantGoods();
+            }
+
+            // 將介紹對話加入待辦事項佇列，確保在畫面穩定後才彈出
+            events.push({ type: 'merchant_intro' });
+        }
+
+        this.postBattleBirths = [];
+        this.captives.forEach(c => {
+            if (c.isPregnant) {
+                let gaveBirthEarly = false;
+                if (this.player && this.player.learnedSkills['breed_breeding_authority']) {
+                    const skillData = SKILL_TREES.breeding.find(s => s.id === 'breed_breeding_authority');
+                    if (rollPercentage(skillData.levels[0].effect.chance * 100)) {
+                        this.logMessage('tribe', `在「繁衍的權能」影響下，${c.name} 的生產週期瞬間完成了！`, 'crit');
+                        this.giveBirth(c);
+                        gaveBirthEarly = true;
+                    }
+                }
+                if (!gaveBirthEarly) {
+                    c.pregnancyTimer--;
+                    if (c.pregnancyTimer <= 0) this.giveBirth(c);
+                }
+            }
+        });
+        const milkProduced = this.mothers.filter(m => !m.isPregnant).reduce((total, mother) => total + Math.floor((mother.stats.charisma || 0) * 1), 0);
+        if (milkProduced > 0) {
+            this.resources.food += milkProduced;
+            this.logMessage('tribe', `產房的孕母們生產了 ${milkProduced} 單位食物。`, 'success');
+        }
+        const foodGained = this.getDispatchedPartners('hunting').reduce((sum, goblin) => sum + this.getGoblinYield(goblin, 'hunting'), 0);
+        const woodGained = this.getDispatchedPartners('logging').reduce((sum, goblin) => sum + this.getGoblinYield(goblin, 'logging'), 0);
+        const stoneGained = this.getDispatchedPartners('mining').reduce((sum, goblin) => sum + this.getGoblinYield(goblin, 'mining'), 0);
+        if (foodGained > 0) this.logMessage('tribe', `打獵隊帶回了 ${foodGained} 單位食物。`, 'success');
+        if (woodGained > 0) this.logMessage('tribe', `伐木隊帶回了 ${woodGained} 單位木材。`, 'success');
+        if (stoneGained > 0) this.logMessage('tribe', `採礦隊帶回了 ${stoneGained} 單位礦石。`, 'success');
+        this.resources.food = Math.min(this.foodCapacity, this.resources.food + foodGained);
+        this.resources.wood = Math.min(this.woodCapacity, this.resources.wood + woodGained);
+        this.resources.stone = Math.min(this.stoneCapacity, this.resources.stone + stoneGained);
+
+        // --- 派遣遭遇事件排程 ---
+        const dispatchTasks = [
+            { task: 'logging', chance: this.dispatch.logging.length, race: 'elf', unlockedFlag: 'elf_tribe_unlocked' },
+            { task: 'hunting', chance: this.dispatch.hunting.length, race: 'beastkin', unlockedFlag: 'beastkin_tribe_unlocked' }
+        ];
+        for (const encounter of dispatchTasks) {
+            if (events.length > 0) break;
+            if (encounter.chance > 0 && !this.dlc[encounter.unlockedFlag] && true) {
+                let enemyUnit, tribeName, alertMessage;
+                if (encounter.race === 'elf') {
+                    const totalStatPoints = randomInt(120, 190);
+                    enemyUnit = new MaleHuman('精靈遊俠', distributeStatsWithRatio(totalStatPoints, HIGH_ELF_GUARDS['精靈遊俠'].ratio), '精靈遊俠', 'easy', 'elf');
+                    this.equipEnemy(enemyUnit, 'normal');
+                    tribeName = '銀月森林';
+                    alertMessage = `你的伐木隊在森林深處遭遇了一名警惕的精靈遊俠！`;
+                } else if (encounter.race === 'beastkin') {
+                    const totalStatPoints = randomInt(120, 190);
+                    enemyUnit = new MaleHuman('亞獸人武鬥家', distributeStatsWithRatio(totalStatPoints, BEASTKIN_CHAMPIONS['亞獸人戰士'].ratio), '亞獸人武鬥家', 'easy', 'beastkin');
+                    this.equipEnemy(enemyUnit, 'normal');
+                    tribeName = '咆哮平原';
+                    alertMessage = `你的狩獵隊在平原上驚動了一位正在磨練技藝的亞獸人武鬥家！`;
+                }
+                if (enemyUnit) {
+                    events.push({
+                        type: 'dispatch_battle',
+                        context: { enemyUnit, tribeName, alertMessage, unlockedFlag: encounter.unlockedFlag }
+                    });
+                }
+            }
+        }
+
+        // --- 食物消耗與狀態更新 ---
+        this.resources.food -= this.dailyFoodConsumption;
+        if (this.resources.food < 0) {
+            if (!this.isStarving) {
+                this.logMessage('tribe', `食物不足！部落成員陷入飢餓狀態，所有能力下降25%！`, 'enemy');
+                this.isStarving = true;
+            }
+            this.resources.food = 0;
+        } else {
+            if (this.isStarving) {
+                this.logMessage('tribe', `食物充足，飢餓狀態解除了。`, 'success');
+                this.isStarving = false;
+            }
+        }
+        this.player.updateHp(this.isStarving);
+        this.partners.forEach(p => p.updateHp(this.isStarving));
+        this.breedingChargesLeft = this.totalBreedingCharges;
+        
+        // --- 復仇事件排程 ---
+        if (events.length === 0) {
+            let pendingRevengeInfo = null;
+            const captivesByDifficulty = {};
+            this.captives.forEach(c => {
+                if (c.profession === '使徒' || c.profession === '女神') return;
+                if (c.originDifficulty) {
+                    if (!captivesByDifficulty[c.originDifficulty]) captivesByDifficulty[c.originDifficulty] = 0;
+                    captivesByDifficulty[c.originDifficulty]++;
+                }
+            });
+            for (const difficulty in captivesByDifficulty) {
+                if (pendingRevengeInfo) break;
+                const count = captivesByDifficulty[difficulty];
+                let triggerChance = count * (REVENGE_DIFFICULTY_COEFFICIENT[difficulty] || 0);
+                const watchtowerLevel = this.buildings.watchtower.level;
+                if (watchtowerLevel > 0) {
+                    const stationedCount = this.dispatch.watchtower.length;
+                    const totalReduction = stationedCount * [0, 2, 4, 6, 8, 10][watchtowerLevel];
+                    if (totalReduction > 0) this.logMessage('tribe', `哨塔的守衛使復仇機率降低了 ${totalReduction}%。`, 'info');
+                    triggerChance -= totalReduction;
+                }
+                triggerChance = Math.max(0, triggerChance);
+                if (rollPercentage(triggerChance)) pendingRevengeInfo = { difficulty: difficulty };
+            }
+            if (pendingRevengeInfo) {
+                const nameConfig = CITY_NAMES[pendingRevengeInfo.difficulty];
+                const locationName = nameConfig.prefixes[randomInt(0, nameConfig.prefixes.length - 1)] + nameConfig.suffix;
+                this.logMessage('tribe', `你從 ${locationName} 掠來的俘虜引來了追兵...`, 'enemy');
+                events.push({
+                    type: 'revenge_battle',
+                    context: { difficulty: pendingRevengeInfo.difficulty, locationName: locationName }
+                });
+            }
+        }
+
+        return events; 
+    },
+
+    /**
+     * 【全新的待辦事項處理函式】
+     * 這是事件執行的核心，它會依序處理佇列中的事件，直到佇列清空。
+     */
+    processNextDecision() {
+        if (this.pendingDecisions.length === 0) {
+            // 所有事件都處理完畢後，才處理新生兒入住的問題
+            if (this.postBattleBirths.length > 0) {
+                const newborns = this.postBattleBirths.map(b => b.newborn);
+                if ((this.partners.length + newborns.length) > this.partnerCapacity) {
+                    this.openPartnerManagementModal([...this.partners, ...newborns], this.partnerCapacity, { newborns: this.postBattleBirths });
+                } else {
+                    this.postBattleBirths.forEach(birth => {
+                        this.partners.push(birth.newborn);
+                        this.player.skillPoints++;
+                        this.logMessage('tribe', `${birth.mother.name} 誕下了一個新的哥布林夥伴：${birth.newborn.name}！你獲得了 1 點技能點。`, 'success');
+                    });
+                }
+                this.postBattleBirths = []; // 清空處理完的新生兒
+            }
+            return;
+        }
+
+        const decision = this.pendingDecisions.shift();
+        const continueCallback = () => setTimeout(() => this.processNextDecision(), 100);
+
+        if (decision.type === 'partner') {
+            this.openPartnerManagementModal(decision.list, decision.limit, decision.context);
+        } 
+        else if (decision.type === 'revenge_battle') {
+            const { difficulty, locationName } = decision.context;
+            this.showCustomAlert(
+                `警報！一支來自「${locationName}」的復仇小隊襲擊了你的部落！`,
+                () => this.triggerRevengeSquadBattle(difficulty, [])
+            );
+        }
+        else if (decision.type === 'dispatch_battle') {
+            const { enemyUnit, alertMessage, unlockedFlag } = decision.context;
+            this.showCustomAlert(alertMessage, () => {
+                this.combat.isUnescapable = true;
+                this.combat.isDlcEncounterBattle = true;
+                this.combat.onVictoryCallback = () => {
+                    this.pendingDecisions.unshift({
+                        type: 'dlc_prompt',
+                        context: {
+                            hasDlc: this.dlc.races_of_aetheria,
+                            unlockedFlag: unlockedFlag,
+                            tribeName: decision.context.tribeName
+                        }
+                    });
+                    this.combat.onVictoryCallback = null;
+                };
+                this.startCombat([enemyUnit], true);
+            });
+        }
+        else if (decision.type === 'dlc_prompt') {
+            const { hasDlc, unlockedFlag, tribeName } = decision.context;
+            
+            const continueCallback = () => setTimeout(() => this.processNextDecision(), 100);
+
+            if (hasDlc) {
+                this.dlc[unlockedFlag] = true;
+                this.showCustomAlert(`你擊敗了對手，從他身上的信物得知了「${tribeName}」的位置！\n（已可在「出擊掠奪」中選擇）`, continueCallback);
+            } else {
+                this.showCustomAlert(`你擊敗了對手，但你對他們部落的語言和文化一無所知，無法找到他們的根據地。\n（需要啟用「精靈與亞獸人」DLC 才能解鎖他們的部落）`, continueCallback);
+            }
+        }else if (decision.type === 'apostle_battle') {
+            this.triggerApostleBattle();
+        } else if (decision.type === 'goddess_battle') {
+            this.triggerGoddessBattle();
+        } else if (decision.type === 'crone_dialogue') {
+            this.triggerCroneDialogue();
+        } else if (decision.type === 'merchant_intro') {
+            const modal = this.modals.narrative;
+            modal.isOpen = true;
+            modal.title = "與神秘商人的相遇";
+            modal.type = "tutorial"; // 重用教學的版面配置
+            modal.isLoading = false;
+            modal.isAwaitingConfirmation = false;
+            modal.avatarUrl = 'assets/century_avatar.png';
+            modal.content = `
+                <p>呵呵...哥布林王...我有很多好東西...。</p>
+                <p>叫我『世紀』就好，一個四處遊蕩，尋找『有趣』事物的旅行商人，絕對不是什麼可疑的人，嘿...。</p>
+                <br>
+                <p>把那些抓來的妹子...嘿嘿...給ㄨㄛ...咳!我是說交易，會給你一些收藏的寶貝作為回報。</p>
+                <br>
+                <p><b>左邊是我的商品，右邊是你的『貨幣』(你懂的...)。選好商品，再湊齊足夠素質的俘虜，就能完成交易了。</b></p>
+                <br>
+                <p>很簡單吧？我很期待...嘿嘿嘿...(口水)</p>
+            `;
+            // 這裡的對話視窗點擊確認後，會自動呼叫 processNextDecision 處理下一個事件
+        }else {
+            this.openCaptiveManagementModal(decision.type, decision.list, decision.limit, decision.dungeonLimit, decision.context);
+        }
+    },
+
 };

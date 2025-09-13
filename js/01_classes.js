@@ -1,3 +1,6 @@
+const LIGHT_DUAL_WIELD_WEAPONS = ['短刀', '爪', '拐棍'];
+const ONE_HANDED_DUAL_WIELD_WEAPONS = ['單手劍', '斧頭', '彎刀'];
+
 // --- 遊戲類別 ---
 class Equipment {
     constructor(baseName, type, slot, material, quality, affix = null) {
@@ -32,11 +35,12 @@ class Equipment {
 }
 
 class Unit {
-    constructor(name, stats, profession) {
+    constructor(name, stats, profession, race = 'human') {
         this.id = crypto.randomUUID();
         this.name = name;
         this.stats = { strength: 0, agility: 0, intelligence: 0, luck: 0, charisma: 0, ...stats };
         this.profession = profession;
+        this.race = race;
         this.maxHp = 0;
         this.currentHp = 0;
         this.skills = [];
@@ -60,8 +64,34 @@ class Unit {
         }, 0);
     }
 
-    getTotalStat(stat, isStarving = false) {
-        if (stat === 'hp') return this.calculateMaxHp(isStarving);
+    getEquipmentHpBonus() {
+        if (!this.equipment) return 0;
+        
+        // 初始化一個變數來累加總加成
+        let totalHpBonus = 0;
+
+        // 首先，加上來自裝備基礎屬性的HP (例如某些胸甲自帶的HP)
+        totalHpBonus += this.getEquipmentBonus('hp');
+
+        // 接著，遍歷所有裝備的詞綴，加上詞綴提供的純HP
+        Object.values(this.equipment).forEach(item => {
+            if (!item) return;
+            item.affixes.forEach(affix => {
+                if (affix.type === 'stat') {
+                    affix.effects.forEach(effect => {
+                        if (effect.stat === 'hp' && effect.type !== 'multiplier') {
+                            totalHpBonus += effect.value;
+                        }
+                    });
+                }
+            });
+        });
+
+        return totalHpBonus;
+    }
+
+    getTotalStat(stat, isStarving = false, gameState = null) {
+        if (stat === 'hp') return this.calculateMaxHp(isStarving, gameState);
         if (!this.stats.hasOwnProperty(stat) || !['strength', 'agility', 'intelligence', 'luck', 'charisma'].includes(stat)) {
             return 0;
         }
@@ -92,6 +122,16 @@ class Unit {
         });
         let total = Math.floor((baseValue + flatBonus) * multiplier);
         total = Math.max(0, total);
+        
+        // 日夜被動技能的邏輯
+        if (gameState && gameState.currentRaid && gameState.currentRaid.timeCycle) {
+            if (this.race === 'elf' && gameState.currentRaid.timeCycle === 'day') {
+                total = Math.floor(total * 1.2);
+            } else if (this.race === 'beastkin' && gameState.currentRaid.timeCycle === 'night') {
+                total = Math.floor(total * 1.2);
+            }
+        }
+
         return isStarving ? Math.floor(total * 0.75) : total;
     }
 
@@ -105,47 +145,101 @@ class Unit {
         }
     }
 
-    calculateDamage(isStarving = false) {
+    calculateDamage(isStarving = false, gameState = null) {
         const mainHand = this.equipment.mainHand;
-        let weaponDamage = 0;
+        const offHand = this.equipment.offHand;
+        let finalDamage = 0;
+
+        // --- 1. 計算主手傷害 ---
+        let mainHandDamage = 0;
         if (mainHand) {
             const baseDamage = mainHand.stats.damage || 0;
             const weaponType = mainHand.baseName;
             let mainStatValue = 0;
-            const hasShield = this.equipment.offHand?.baseName === '盾';
+
+            // 根據武器類型決定主要加成屬性
             switch (weaponType) {
                 case '劍':
                 case '雙手劍':
-                    mainStatValue = this.getTotalStat('strength', isStarving);
-                    weaponDamage = mainStatValue + baseDamage;
-                    if (weaponType === '雙手劍') weaponDamage = Math.floor(weaponDamage * 1.5);
+                case '斧頭':
+                case '彎刀':
+                    mainStatValue = this.getTotalStat('strength', isStarving, gameState);
                     break;
                 case '長槍':
-                    mainStatValue = this.getTotalStat('luck', isStarving);
-                    weaponDamage = mainStatValue + baseDamage;
+                    mainStatValue = this.getTotalStat('luck', isStarving, gameState);
                     break;
                 case '弓':
-                    mainStatValue = this.getTotalStat('agility', isStarving);
-                    weaponDamage = mainStatValue + baseDamage;
+                case '短刀':
+                case '爪':
+                case '拐棍':
+                case '長鞭':
+                case '拳套':
+                    mainStatValue = this.getTotalStat('agility', isStarving, gameState);
                     break;
                 case '法杖':
-                    mainStatValue = this.getTotalStat('intelligence', isStarving);
-                    weaponDamage = mainStatValue + baseDamage;
+                    mainStatValue = this.getTotalStat('intelligence', isStarving, gameState);
                     break;
                 default:
-                    mainStatValue = this.getTotalStat('strength', isStarving);
-                    weaponDamage = mainStatValue;
+                    mainStatValue = this.getTotalStat('strength', isStarving, gameState);
             }
-            if (hasShield && (weaponType === '長槍' || weaponType === '法杖')) {
-                weaponDamage = Math.floor(weaponDamage * 0.7);
-            }
+            mainHandDamage = mainStatValue + baseDamage;
         } else {
-            const totalStats = this.getTotalStat('strength', isStarving) + this.getTotalStat('agility', isStarving) + this.getTotalStat('intelligence', isStarving) + this.getTotalStat('luck', isStarving);
-            weaponDamage = Math.floor(totalStats / 10);
+            // 徒手傷害計算
+            const totalStats = this.getTotalStat('strength', isStarving, gameState) + this.getTotalStat('agility', isStarving, gameState) + this.getTotalStat('intelligence', isStarving, gameState) + this.getTotalStat('luck', isStarving, gameState);
+            mainHandDamage = Math.floor(totalStats / 10);
         }
-        const shieldBonus = this.equipment.offHand?.stats?.damage || 0;
-        const armorBonus = this.equipment.chest?.stats?.damage || 0;
-        return weaponDamage + shieldBonus + armorBonus;
+
+        // --- 2. 計算副手傷害 (雙持) ---
+        let offHandDamage = 0;
+        if (offHand && offHand.type === 'weapon' && offHand.baseName !== '盾') {
+            const baseDamage = offHand.stats.damage || 0;
+            const mainHandWeaponType = mainHand ? mainHand.baseName : '';
+            let mainStatValue = 0;
+            
+            // 雙持時，副手的加成屬性跟隨主手
+            switch (mainHandWeaponType) {
+                case '劍': case '斧頭': case '彎刀':
+                    mainStatValue = this.getTotalStat('strength', isStarving, gameState);
+                    break;
+                case '短刀': case '爪': case '拐棍': case '長鞭': case '拳套':
+                    mainStatValue = this.getTotalStat('agility', isStarving, gameState);
+                    break;
+                default:
+                    mainStatValue = this.getTotalStat('strength', isStarving, gameState);
+            }
+
+            // 根據武器類型決定副手傷害係數
+            let offHandMultiplier = 0.75; // 標準單手武器雙持時，副手只有 75% 的屬性加成
+            if (mainHand && LIGHT_DUAL_WIELD_WEAPONS.includes(mainHand.baseName) && LIGHT_DUAL_WIELD_WEAPONS.includes(offHand.baseName)) {
+                // 如果主副手都是輕型武器，則副手獲得 100% 屬性加成
+                offHandMultiplier = 1.0; 
+            }
+            offHandDamage = baseDamage + Math.floor(mainStatValue * offHandMultiplier);
+        }
+        
+        // --- 3. 處理特殊加成與懲罰 ---
+        // 原生的雙手武器，例如雙手劍，獲得額外 50% 總傷害加成
+        if (mainHand && mainHand.baseName === '雙手劍') {
+            mainHandDamage = Math.floor(mainHandDamage * 1.5);
+        }
+
+        // 「雙手持握」系統：持單手武器且副手為空時，獲得 25% 傷害加成
+        if (mainHand && ONE_HANDED_DUAL_WIELD_WEAPONS.includes(mainHand.baseName) && !offHand) {
+            mainHandDamage = Math.floor(mainHandDamage * 1.25);
+        }
+
+        // 長槍/法杖 + 盾牌的懲罰
+        if (mainHand && (mainHand.baseName === '長槍' || mainHand.baseName === '法杖') && offHand && offHand.baseName === '盾') {
+            mainHandDamage = Math.floor(mainHandDamage * 0.7);
+        }
+
+        // --- 4. 加總所有傷害來源 ---
+        const armorBonus = this.equipment.chest?.stats.attackBonus || 0;
+        const shieldAttackBonus = (offHand && offHand.baseName === '盾') ? (offHand.stats.attackBonus || 0) : 0;
+        
+        finalDamage = mainHandDamage + offHandDamage + armorBonus + shieldAttackBonus;
+        
+        return finalDamage;
     }
 }
 
@@ -189,32 +283,6 @@ class Goblin extends Unit {
     }
     
     getPartyHpBonus(isStarving = false) { return 0; }
-
-    getEquipmentHpBonus() {
-        if (!this.equipment) return 0;
-        
-        // 初始化一個變數來累加總加成
-        let totalHpBonus = 0;
-
-        // 首先，加上來自裝備基礎屬性的HP (例如某些胸甲自帶的HP)
-        totalHpBonus += this.getEquipmentBonus('hp');
-
-        // 接著，遍歷所有裝備的詞綴，加上詞綴提供的純HP
-        Object.values(this.equipment).forEach(item => {
-            if (!item) return;
-            item.affixes.forEach(affix => {
-                if (affix.type === 'stat') {
-                    affix.effects.forEach(effect => {
-                        if (effect.stat === 'hp' && effect.type !== 'multiplier') {
-                            totalHpBonus += effect.value;
-                        }
-                    });
-                }
-            });
-        });
-
-        return totalHpBonus;
-    }
 
     getEffectiveEquipmentBonus(stat) {
         const totalStat = this.getTotalStat(stat, this.isStarving);
@@ -414,11 +482,61 @@ class Player extends Goblin {
         const intBonus = Math.floor(effectiveInt / 80);
         return skill.baseDuration + intBonus;
     }
+    /**
+     * 【新增】專門計算由「集團策略」技能帶來的生命值加成。
+     * @param {boolean} isStarving - 是否處於飢餓狀態。
+     * @returns {number} - 技能提供的額外生命值。
+     */
+    getSkillHpBonus(isStarving = false) {
+        const skillId = 'tribe_01';
+        if (!this.learnedSkills || !this.learnedSkills[skillId]) {
+            return 0; // 如果沒學技能，則不提供加成
+        }
+
+        // 取得技能提供的四項屬性總和
+        const strBonus = this.getPartyBonus('strength');
+        const agiBonus = this.getPartyBonus('agility');
+        const intBonus = this.getPartyBonus('intelligence');
+        const lukBonus = this.getPartyBonus('luck');
+        let totalSkillStatBonus = strBonus + agiBonus + intBonus + lukBonus;
+
+        // 如果飢餓，技能提供的屬性也要打折
+        if (isStarving) {
+            totalSkillStatBonus = Math.floor(totalSkillStatBonus * 0.75);
+        }
+
+        // 使用與哥布林基礎血量計算相同的係數和懲罰
+        const hpMultiplier = this.statusEffects.some(e => e.type === 'root_debuff') ? 4 : 6;
+        let skillHpBonus = totalSkillStatBonus * hpMultiplier;
+
+        // 同樣要計算雙手武器的血量懲罰
+        if (this.equipment && this.equipment.mainHand && this.equipment.mainHand.baseName === '雙手劍') {
+            skillHpBonus = Math.floor(skillHpBonus * 0.85);
+        }
+
+        return skillHpBonus;
+    }
+
+    /**
+     * 覆蓋父類別(Goblin)的血量計算函式，以加入技能帶來的加成。
+     * @param {boolean} isStarving - 是否處於飢餓狀態。
+     * @returns {number} - 最終的最大生命值。
+     */
+    calculateMaxHp(isStarving = false) {
+        // 1. 先呼叫父類別的原始計算方法，取得基礎、夥伴、裝備詞綴帶來的血量
+        let maxHp = super.calculateMaxHp(isStarving);
+        
+        // 2. 然後，額外再加上由「集團策略」技能計算出的生命值
+        maxHp += this.getSkillHpBonus(isStarving);
+        
+        // 3. 回傳最終結果
+        return Math.max(1, maxHp);
+    }
 }
 
 class Human extends Unit {
-    constructor(name, stats, profession) {
-        super(name, stats, profession);
+    constructor(name, stats, profession, race = 'human') {
+        super(name, stats, profession, race);
         this.equipment = { mainHand: null, offHand: null, chest: null };
     }
 
@@ -429,12 +547,23 @@ class Human extends Unit {
     }
 
     calculateMaxHp(isStarving = false) {
-        const totalStr = this.getTotalStat('strength', isStarving);
-        const totalAgi = this.getTotalStat('agility', isStarving);
-        const totalInt = this.getTotalStat('intelligence', isStarving);
-        const totalLuc = this.getTotalStat('luck', isStarving);
-        let maxHp = (totalStr + totalAgi + totalInt + totalLuc) * 4;
-        maxHp += this.getEquipmentBonus('hp');
+        // 不再使用 getTotalStat，而是直接使用角色的基礎能力值 (this.stats)
+        const totalStr = this.stats.strength || 0;
+        const totalAgi = this.stats.agility || 0;
+        const totalInt = this.stats.intelligence || 0;
+        const totalLuc = this.stats.luck || 0;
+
+        let maxHp = (totalStr + totalAgi + totalInt + totalLuc) * 4; // 人類的血量係數為 4
+
+        // 直接呼叫我們之前修正過的 getEquipmentHpBonus 函式
+        // 這個函式只會計算裝備上明確標示的 HP 加成 (來自基礎屬性或詞綴)
+        maxHp += this.getEquipmentHpBonus();
+        
+        // 飢餓懲罰
+        if (isStarving) {
+            maxHp = Math.floor(maxHp * 0.75);
+        }
+
         return Math.max(1, maxHp);
     }
 
@@ -447,8 +576,8 @@ class Human extends Unit {
 }
 
 class FemaleHuman extends Human {
-    constructor(name, stats, profession, visual, originDifficulty = 'easy') { 
-        super(name, stats, profession);
+    constructor(name, stats, profession, visual, originDifficulty = 'easy', race = 'human') {
+        super(name, stats, profession, race);
         this.visual = visual;
         this.isPregnant = false;
         this.pregnancyTimer = 0;
@@ -461,8 +590,8 @@ class FemaleHuman extends Human {
 }
 
 class MaleHuman extends Human {
-    constructor(name, stats, profession, originDifficulty = 'easy') { 
-        super(name, stats, profession);
+    constructor(name, stats, profession, originDifficulty = 'easy', race = 'human') {
+        super(name, stats, profession, race);
         this.originDifficulty = originDifficulty; 
         this.maxHp = this.calculateMaxHp();
         this.currentHp = this.maxHp;

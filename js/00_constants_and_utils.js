@@ -352,6 +352,23 @@ const KNIGHT_ORDER_UNITS = {
     '祭司': { ratio: [1, 1, 4, 4], skill: { name: '聖光', cd: 10, type: 'team_heal', triggerHp: 0.8, description: '當騎士團隊伍總血量低於80%時施放，恢復所有團員生命。' } },
 };
 
+// 【新增】高等精靈守衛單位資料 (數值為臨時範例)
+const HIGH_ELF_GUARDS = {
+    '精靈劍士': { ratio: [2, 4, 3, 1], skill: { name: '月光斬', cd: 8, type: 'aoe_agi', multiplier: 0.6, description: '以自身敏捷0.6倍，對全體哥布林造成範圍傷害。' } },
+    '精靈護衛': { ratio: [3, 3, 3, 1], skill: { name: '樹皮護盾', cd: 7, type: 'taunt', duration: 3, description: '嘲諷全體哥布林，吸引所有傷害。' } },
+    '精靈遊俠': { ratio: [1, 7, 1, 1], skill: { name: '精準射擊', cd: 3, type: 'king_nuke', description: '無視哥布林夥伴加成，對哥布林王本體造成巨大傷害。' } },
+    '精靈法師': { ratio: [1, 1, 7, 1], skill: { name: '藤蔓纏繞', cd: 8, type: 'charge_nuke', multiplier: 1.8, chargeTime: 7, description: '詠唱7回合，結束後造成毀滅性範圍傷害。' } },
+    '精靈祭司': { ratio: [1, 1, 4, 4], skill: { name: '生命之泉', cd: 10, type: 'team_heal', triggerHp: 0.8, description: '當隊伍總血量低於80%時施放，恢復所有團員生命。' } },
+};
+
+// 【新增】亞獸人冠軍鬥士單位資料 (數值為臨時範例)
+const BEASTKIN_CHAMPIONS = {
+    '亞獸人戰士': { ratio: [4, 3, 2, 1], skill: { name: '野性衝鋒', cd: 9, type: 'aoe_str', multiplier: 0.7, description: '以自身力量0.7倍，對全體哥布林造成範圍傷害。' } },
+    '亞獸人蠻兵': { ratio: [7, 1, 1, 1], skill: { name: '獸血沸騰', cd: 6, type: 'reflect_buff', duration: 99, damagePercent: 2.5, description: '任何攻擊的哥布林，都會受到自身最大生命值2.5%的反噬傷害。' } },
+    '亞獸人獵手': { ratio: [3, 4, 1, 2], skill: { name: '致命投擲', cd: 4, type: 'king_nuke', description: '無視哥布林夥伴加成，對哥布林王本體造成巨大傷害。' } },
+    '亞獸人薩滿': { ratio: [1, 1, 4, 4], skill: { name: '先祖之魂', cd: 10, type: 'team_heal', triggerHp: 0.75, description: '當隊伍總血量低於75%時施放，恢復所有團員生命。' } },
+};
+
 // --- 特殊 BOSS 資料 ---
 const SPECIAL_BOSSES = {
     apostle_maiden: {
@@ -484,17 +501,25 @@ const FEMALE_NAMES = ['愛麗絲', '伊麗莎白', '凱瑟琳', '安妮', '瑪�
 const MALE_NAMES = ['亞瑟', '班', '查理', '丹尼爾', '伊森', '芬恩', '蓋文', '亨利', '丹尼', '傑克', '杰瑞', '傑森'];
 const PROFESSIONS = ['居民', '女僕', '修女', '農婦', '商人', '妓女', '麵包師', '廚師', '裁縫師' ,'吟遊詩人', '藝術家' ];
 const ENEMY_STAT_RANGES = {
-    easy:    { resident: [20, 20], guard: [20, 40] },
-    normal: { resident: [20, 40], guard: [40, 80] },
-    hard:    { resident: [40, 80], guard: [80, 140] },
-    hell:    { resident: [80, 140], guard: [140, 220] },
+    // 人類
+    easy:   { resident: [20, 20],  guard: [20, 40] },
+    normal: { resident: [20, 40],  guard: [40, 80] },
+    hard:   { resident: [40, 80],  guard: [80, 140] },
+    hell:   { resident: [80, 140], guard: [140, 220] },
+    // 精靈/亞獸人 (根據你提供的文件) 
+    dlc_easy:   { resident: [140, 160], guard: [200, 220], champion: [280, 300] },
+    dlc_normal: { resident: [160, 200], guard: [220, 260], champion: [300, 340] },
+    dlc_hard:   { resident: [200, 260], guard: [260, 320], champion: [340, 400] },
+    dlc_hell:   { resident: [260, 340], guard: [320, 400], champion: [400, 480] }
 };
 const VISUAL_OPTIONS = {
     hairColor: ['金色', '黑色', '棕色', '紅色', '銀色', '灰色', '白色', '藍色', '綠色', '焦糖色', '紅棕色', '藍黑色', '薰衣草灰', '薄荷綠', '蜂蜜色', '冷棕色', '霧感灰', '藍灰色'],
     hairStyle: ['長髮', '男孩風短髮', '馬尾', '大波浪捲髮', '雙馬尾', '狼尾剪短髮', '精靈短髮', '鮑伯頭', '齊瀏海短髮', '長瀏海短髮', '中長捲髮', '及肩髮', '公主切', '水波捲', '羊毛捲', '木馬捲', '蘋果頭', '水母頭'],
     bust: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'],
     personality: ['溫順', '倔強', '開朗', '害羞', '傲慢', '傲嬌', '男子氣', '大小姐', '古風', '坦率', '天真', '樂觀', '勇敢', '急躁', '熱情', '性感', '陰沉', '文靜', '冷靜', '自卑', '親切', '刻薄', '糊塗', '清挑', '病嬌', '中二病', '天然呆', '腹黑'],
-    clothing: ['亞麻布衣', '精緻長裙', '皮甲', '絲綢禮服', '女僕裝', '收腰連衣裙', '寬袖長裙', '斗篷', '性感內衣']
+    clothing: ['亞麻布衣', '精緻長裙', '皮甲', '絲綢禮服', '女僕裝', '收腰連衣裙', '寬袖長裙', '斗篷'],
+    elfEars: ['(平行)短尖耳', '(上翹)短尖耳', '(下垂)短尖耳', '(平行)長尖耳', '(上翹)長尖耳', '(下垂)長尖耳'],
+    beastkinSubspecies: ['犬', '貓', '鳥', '馬', '熊', '牛', '鼠', '浣熊', '鹿', '獅', '虎', '豹'],
 };
 
 // --- 裝備系統常數 ---
@@ -561,6 +586,14 @@ const WEAPON_STATS = {
     '長槍':   { 1: 12, 2: 18, 3: 27, 4: 41, 5: 62, 6: 93, 7: 140 },
     '弓':     { 1: 12, 2: 18, 3: 27, 4: 41, 5: 62, 6: 93, 7: 140 },
     '法杖':   { 1: 12, 2: 18, 3: 27, 4: 41, 5: 62, 6: 93, 7: 140 },
+    // DLC 武器 (我已根據您提供的基礎傷害，參考現有武器的成長曲線，推算出各階級的傷害)
+    '短刀':   { 1: 8,  2: 12, 3: 18, 4: 27, 5: 41, 6: 62, 7: 93 },
+    '爪':     { 1: 7,  2: 11, 3: 17, 4: 26, 5: 39, 6: 59, 7: 88 },
+    '拐棍':   { 1: 7,  2: 11, 3: 17, 4: 26, 5: 39, 6: 59, 7: 88 },
+    '斧頭':   { 1: 11, 2: 17, 3: 26, 4: 39, 5: 58, 6: 87, 7: 130 },
+    '彎刀':   { 1: 10, 2: 15, 3: 23, 4: 35, 5: 53, 6: 80, 7: 120 },
+    '長鞭':   { 1: 9,  2: 14, 3: 21, 4: 32, 5: 48, 6: 72, 7: 108 },
+    '拳套':   { 1: 6,  2: 9,  3: 14, 4: 21, 5: 32, 6: 48, 7: 72 },
 };
 
 // 鎧甲
@@ -610,22 +643,22 @@ const SHIELD_STATS = {
 // --- 詞綴系統 ---
 const STANDARD_AFFIXES = {
     // --- T1 Stat Affixes ---
-    strength: { name: '力量的', type: 'stat', effects: [{ stat: 'strength', value: 10 }, { stat: 'hp', value: -60 }] },
-    agility: { name: '敏捷的', type: 'stat', effects: [{ stat: 'agility', value: 10 }, { stat: 'hp', value: -60 }] },
-    intelligence: { name: '智力的', type: 'stat', effects: [{ stat: 'intelligence', value: 10 }, { stat: 'hp', value: -60 }] },
-    luck: { name: '幸運的', type: 'stat', effects: [{ stat: 'luck', value: 10 }, { stat: 'hp', value: -60 }] },
+    strength: { name: '力量的', type: 'stat', effects: [{ stat: 'strength', value: 10 }] },
+    agility: { name: '敏捷的', type: 'stat', effects: [{ stat: 'agility', value: 10 }] },
+    intelligence: { name: '智力的', type: 'stat', effects: [{ stat: 'intelligence', value: 10 }] },
+    luck: { name: '幸運的', type: 'stat', effects: [{ stat: 'luck', value: 10 }] },
     health: { name: '健康的', type: 'stat', effects: [{ stat: 'hp', value: 240 }] },
 
     // --- T2 Stat Affixes ---
-    savage: { name: '蠻力的', type: 'stat', effects: [{ stat: 'strength', value: 20 }, { stat: 'hp', value: -120 }] },
-    swift: { name: '迅捷的', type: 'stat', effects: [{ stat: 'agility', value: 20 }, { stat: 'hp', value: -120 }] },
-    wise: { name: '睿智的', type: 'stat', effects: [{ stat: 'intelligence', value: 20 }, { stat: 'hp', value: -120 }] },
-    fortunate: { name: '強運的', type: 'stat', effects: [{ stat: 'luck', value: 20 }, { stat: 'hp', value: -120 }] },
+    savage: { name: '蠻力的', type: 'stat', effects: [{ stat: 'strength', value: 20 }] },
+    swift: { name: '迅捷的', type: 'stat', effects: [{ stat: 'agility', value: 20 }] },
+    wise: { name: '睿智的', type: 'stat', effects: [{ stat: 'intelligence', value: 20 }] },
+    fortunate: { name: '強運的', type: 'stat', effects: [{ stat: 'luck', value: 20 }] },
     sturdy: { name: '健壯的', type: 'stat', effects: [{ stat: 'hp', value: 480 }] },
 
     // --- T3 Stat Affixes ---
-    goblin: { name: '哥布林的', type: 'stat', effects: [{ stat: 'all', value: 5 }, { stat: 'hp', value: -120 }] },
-    goblin_king: { name: '哥布林王的', type: 'stat', effects: [{ stat: 'all', value: 10 }, { stat: 'hp', value: -240 }] },
+    goblin: { name: '哥布林的', type: 'stat', effects: [{ stat: 'all', value: 5 }] },
+    goblin_king: { name: '哥布林王的', type: 'stat', effects: [{ stat: 'all', value: 10 }] },
 
     // --- Weapon Damage Affixes ---
     sword_mastery: { name: '單手劍的', type: 'weapon_damage', effects: [{ stat: 'strength', multiplier: 0.1 }] },
