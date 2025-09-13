@@ -218,9 +218,14 @@ const itemModule = {
         const mainHandWeapon = targetUnit.equipment.mainHand;
         const offHandItem = targetUnit.equipment.offHand;
         
-        if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName === '劍' && !offHandItem) {
-            if (!this.dlc.hells_knights) {
-                this.showCustomAlert('需要「王國騎士團」DLC 才能雙持單手劍！');
+        const dualWieldableWeapons = [...ONE_HANDED_DUAL_WIELD_WEAPONS, ...LIGHT_DUAL_WIELD_WEAPONS];
+        if (dualWieldableWeapons.includes(itemToEquip.baseName) && 
+            mainHandWeapon && 
+            dualWieldableWeapons.includes(mainHandWeapon.baseName) && 
+            !offHandItem) {
+                
+            if (!this.dlc.hells_knights) { // 假設雙持能力都由這個DLC解鎖
+                this.showCustomAlert('需要「王國騎士團」DLC 才能雙持武器！');
                 return;
             }
         }
@@ -245,8 +250,8 @@ const itemModule = {
                 this.showCustomAlert(`裝備 ${mainHandWeapon.name} 時無法使用副手裝備！`);
                 return;
             }
-            if (itemToEquip.baseName === '劍' && mainHandWeapon?.baseName !== '劍') {
-                this.showCustomAlert('只有在主手裝備單手劍時，才能在副手裝備另一把劍！');
+            if (!mainHandWeapon) {
+                this.showCustomAlert('必須先裝備主手武器，才能裝備副手武器！');
                 return;
             }
         }

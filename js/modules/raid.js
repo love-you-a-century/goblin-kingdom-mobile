@@ -1,6 +1,46 @@
 // js/modules/raid.js
 
 const raidModule = {
+    // 生成伏擊隊伍的輔助函式
+    generateAmbushParty(difficulty, x, y) {
+        const ambushers = [];
+        const numAmbusher = randomInt(2, 3); // 生成 2-3 名伏擊者
+        const guardTypes = Object.keys(BEASTKIN_CHAMPIONS);
+        const guardStatRange = ENEMY_STAT_RANGES['normal'].guard;
+
+        for (let i = 0; i < numAmbusher; i++) {
+            const guardType = guardTypes[randomInt(0, guardTypes.length - 1)];
+            const totalStatPoints = randomInt(guardStatRange[0], guardStatRange[1]);
+            const unit = new MaleHuman(guardType, distributeStats(totalStatPoints), guardType, difficulty, 'beastkin');
+            this.equipEnemy(unit, difficulty);
+            
+            // 讓伏擊者出現在假人附近
+            unit.x = x + randomInt(-10, 10);
+            unit.y = y + randomInt(-10, 10);
+            
+            ambushers.push(unit);
+        }
+        return ambushers;
+    },
+    updateRaidTimeCycle() {
+        if (!this.currentRaid || this.currentRaid.timeCycleFlipped) {
+            return;
+        }
+
+        // 當時間剩下 50% 或更少時
+        if (this.currentRaid.timeRemaining <= this.currentRaid.totalTime / 2) {
+            const difficulty = this.currentRaid.difficulty;
+            if (difficulty === 'dlc_elf_normal' && this.currentRaid.timeCycle === 'night') {
+                this.currentRaid.timeCycle = 'day';
+                this.currentRaid.timeCycleFlipped = true;
+                this.logMessage('raid', '太陽升起，森林沐浴在陽光下！精靈們的力量增強了！', 'system');
+            } else if (difficulty === 'dlc_beastkin_normal' && this.currentRaid.timeCycle === 'day') {
+                this.currentRaid.timeCycle = 'night';
+                this.currentRaid.timeCycleFlipped = true;
+                this.logMessage('raid', '夜幕降臨，野性的咆哮在平原上迴盪！亞獸人們的力量增強了！', 'system');
+            }
+        }
+    },
     startRaid(difficulty) {
         this.logs.raid = [];
         if (this.buildings.dungeon.level === 0) {
@@ -18,30 +58,35 @@ const raidModule = {
 
     generateCity(difficulty) {
         const config = {
-            easy:    { time: 300, zones: ['外城', '內城'], pop: [10, 15], guards: [5, 10], knightStats: [65, 120] },
+            easy: { time: 300, zones: ['外城', '內城'], pop: [10, 15], guards: [5, 10], knightStats: [65, 120] },
             normal: { time: 240, zones: ['外城', '內城A', '內城B'], pop: [15, 25], guards: [10, 15], knightStats: [120, 190] },
-            hard:    { time: 180, zones: ['外城', '內城A', '內城B', '內城C'], pop: [25, 30], guards: [15, 20], knightStats: [190, 280] },
-            hell:    { time: 120, zones: ['外城', '內城A', '內城B', '內城C', '王城'], pop: [35, 40], guards: [20, 25], knightStats: [280, 360] }
+            hard: { time: 180, zones: ['外城', '內城A', '內城B', '內城C'], pop: [25, 30], guards: [15, 20], knightStats: [190, 280] },
+            hell: { time: 120, zones: ['外城', '內城A', '內城B', '內城C', '王城'], pop: [35, 40], guards: [20, 25], knightStats: [280, 360] },
+            dlc_elf_normal: { time: 240, zones: ['森林外圍', '林中空地', '古樹聖殿'], pop: [20, 25], guards: [10, 15], knightStats: [120, 190] },
+            dlc_beastkin_normal: { time: 240, zones: ['平原邊境', '狩獵營地', '酋長帳篷'], pop: [20, 25], guards: [10, 15], knightStats: [120, 190] },
         };
         const cityConfig = config[difficulty];
-        const nameConfig = CITY_NAMES[difficulty];
-        const locationName = nameConfig.prefixes[randomInt(0, nameConfig.prefixes.length - 1)] + nameConfig.suffix;
+        const nameConfig = { 
+            ...CITY_NAMES,
+            dlc_elf_normal: { prefixes: ['銀月', '翠葉', '微光', '迷霧'], suffix: '森林' },
+            dlc_beastkin_normal: { prefixes: ['咆哮', '血蹄', '風剪', '巨岩'], suffix: '平原' }
+        };
+        const locationName = nameConfig[difficulty].prefixes[randomInt(0, nameConfig[difficulty].prefixes.length - 1)] + nameConfig[difficulty].suffix;
 
         let city = {
-            difficulty, locationName, timeRemaining: cityConfig.time, zones: [],
-            currentZoneIndex: 0,
+            difficulty, locationName, timeRemaining: cityConfig.time, totalTime: cityConfig.time,
+            zones: [], currentZoneIndex: 0,
             get currentZone() { return this.zones[this.currentZoneIndex]; },
-            carriedCaptives: [],
-            failedSneakTargets: new Set()
+            carriedCaptives: [], failedSneakTargets: new Set(),
+            timeCycle: 'neutral', timeCycleFlipped: false 
         };
+        if (difficulty === 'dlc_elf_normal') city.timeCycle = 'night';
+        else if (difficulty === 'dlc_beastkin_normal') city.timeCycle = 'day';
 
         city.zones = cityConfig.zones.map(name => ({
-            name: name,
-            buildings: [], 
-            enemies: [],
-            resources: { food: 0, wood: 0, stone: 0 }
+            name: name, buildings: [], enemies: [], resources: { food: 0, wood: 0, stone: 0 }
         }));
-        
+
         const gridCols = Math.floor(MAP_WIDTH / GRID_SIZE);
         const gridRows = Math.floor(MAP_HEIGHT / GRID_SIZE);
         city.zones.forEach(zone => {
@@ -61,59 +106,88 @@ const raidModule = {
                 }
                 if (!zone.placementGrid[r][c]) {
                     zone.placementGrid[r][c] = isBuilding ? 'building' : 'unit'; 
-                    return { 
-                        x: c * GRID_SIZE + (GRID_SIZE / 4), 
-                        y: potentialY
-                    };
+                    return { x: c * GRID_SIZE + (GRID_SIZE / 4), y: potentialY };
                 }
                 attempts++;
             }
             const safeMapHeight = MAP_HEIGHT - paddingTop - paddingBottom;
-            return { 
-                x: randomInt(20, MAP_WIDTH - 20), 
-                y: randomInt(paddingTop, paddingTop + safeMapHeight)
-            };
+            return { x: randomInt(20, MAP_WIDTH - 20), y: randomInt(paddingTop, paddingTop + safeMapHeight) };
         };
+
+        let allGuards = [];
+        let allResidents = [];
         const totalResidents = randomInt(cityConfig.pop[0], cityConfig.pop[1]);
         const totalGuards = randomInt(cityConfig.guards[0], cityConfig.guards[1]);
-        let allGuards = Array.from({ length: totalGuards }, () => {
-            const statRange = ENEMY_STAT_RANGES[difficulty].guard;
-            const totalStatPoints = randomInt(statRange[0], statRange[1]);
-            const isFemale = rollPercentage(50);
-            let guard;
-            if (isFemale) {
-                guard = new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length-1)], distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), '城市守軍', generateVisuals(), difficulty);
-            } else {
-                guard = new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length-1)], distributeStats(totalStatPoints), '城市守軍');
-            }
-            this.equipEnemy(guard, difficulty);
-            return guard;
-        });
-        let allResidents = Array.from({ length: totalResidents }, () => {
-            const statRange = ENEMY_STAT_RANGES[difficulty].resident;
-            const isFemale = rollPercentage(50);
-            if (isFemale) {
-                const profession = PROFESSIONS[randomInt(0, PROFESSIONS.length - 1)];
-                return new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)], distributeStats(randomInt(statRange[0], statRange[1]), ['strength', 'agility', 'intelligence', 'luck', 'charisma']), profession, generateVisuals(), difficulty);
-            } else {
-                return new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length - 1)], distributeStats(randomInt(statRange[0], statRange[1])), '男性居民');
-            }
-        });
-        const outerGuardsCount = Math.floor(totalGuards * 0.25);
-        const outerGuards = allGuards.slice(0, outerGuardsCount);
-        const innerGuards = allGuards.slice(outerGuardsCount);
 
-        if (outerGuards.length > 0) {
-            const pos = getFreePosition(city.zones[0], true);
-            city.zones[0].buildings.push({ 
-                id: crypto.randomUUID(), type: '衛兵所', occupants: outerGuards, looted: false, resources: { food: 0, wood: 0, stone: 0 },
-                scoutState: 'hidden',
-                postScoutText: '',
-                x: pos.x, y: pos.y, width: GRID_SIZE / 2, height: GRID_SIZE / 2
+        if (difficulty.startsWith('dlc_')) {
+            const isElf = difficulty.includes('elf');
+            const race = isElf ? 'elf' : 'beastkin';
+            const guardTypes = isElf ? Object.keys(HIGH_ELF_GUARDS) : Object.keys(BEASTKIN_CHAMPIONS);
+            const dlcDifficultyKey = `dlc_${difficulty.split('_').pop()}`; 
+            const guardStatRange = ENEMY_STAT_RANGES[dlcDifficultyKey].guard;
+            const residentStatRange = ENEMY_STAT_RANGES[dlcDifficultyKey].resident;
+            allGuards = Array.from({ length: totalGuards }, () => {
+                const guardType = guardTypes[randomInt(0, guardTypes.length - 1)];
+                const totalStatPoints = randomInt(guardStatRange[0], guardStatRange[1]);
+                const unit = new MaleHuman(guardType, distributeStats(totalStatPoints), guardType, difficulty, race);
+                this.equipEnemy(unit, difficulty);
+                return unit;
+            });
+            allResidents = Array.from({ length: totalResidents }, () => {
+                const profession = isElf ? '精靈居民' : '亞獸人居民';
+                const totalStatPoints = randomInt(residentStatRange[0], residentStatRange[1]);
+                const visual = generateVisuals();
+                if (isElf) {
+                    visual.elfEars = VISUAL_OPTIONS.elfEars[randomInt(0, VISUAL_OPTIONS.elfEars.length - 1)];
+                }
+                if (rollPercentage(70)) {
+                    const stats = distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']);
+                    return new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)], stats, profession, visual, difficulty, race);
+                } else {
+                    return new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length - 1)], distributeStats(totalStatPoints), `男性${profession}`, difficulty, race);
+                }
+            });
+        } else {
+            allGuards = Array.from({ length: totalGuards }, () => {
+                const statRange = ENEMY_STAT_RANGES[difficulty].guard;
+                const totalStatPoints = randomInt(statRange[0], statRange[1]);
+                const isFemale = rollPercentage(50);
+                let guard;
+                if (isFemale) {
+                    guard = new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)], distributeStats(totalStatPoints, ['strength', 'agility', 'intelligence', 'luck', 'charisma']), '城市守軍', generateVisuals(), difficulty);
+                } else {
+                    guard = new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length - 1)], distributeStats(totalStatPoints), '城市守軍');
+                }
+                this.equipEnemy(guard, difficulty);
+                return guard;
+            });
+            allResidents = Array.from({ length: totalResidents }, () => {
+                const statRange = ENEMY_STAT_RANGES[difficulty].resident;
+                const isFemale = rollPercentage(50);
+                if (isFemale) {
+                    const profession = PROFESSIONS[randomInt(0, PROFESSIONS.length - 1)];
+                    return new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)], distributeStats(randomInt(statRange[0], statRange[1]), ['strength', 'agility', 'intelligence', 'luck', 'charisma']), profession, generateVisuals(), difficulty);
+                } else {
+                    return new MaleHuman(MALE_NAMES[randomInt(0, MALE_NAMES.length - 1)], distributeStats(randomInt(statRange[0], statRange[1])), '男性居民');
+                }
             });
         }
         
-        const innerZones = city.zones.filter(z => z.name !== '外城' && z.name !== '王城');
+        // 【全新且修正的單位分配邏輯】
+        const outerGuardsCount = Math.floor(totalGuards * 0.25);
+        const outerGuards = allGuards.slice(0, outerGuardsCount);
+        const innerGuards = allGuards.slice(outerGuardsCount);
+        const innerZones = city.zones.slice(1).filter(z => z.name !== '王城');
+
+        if (outerGuards.length > 0) {
+            const pos = getFreePosition(city.zones[0], true);
+            const guardPostType = difficulty.startsWith('dlc_') ? '前線哨站' : '衛兵所';
+            city.zones[0].buildings.push({ 
+                id: crypto.randomUUID(), type: guardPostType, occupants: outerGuards, looted: false, resources: { food: 0, wood: 0, stone: 0 },
+                scoutState: 'hidden', postScoutText: '',
+                x: pos.x, y: pos.y, width: GRID_SIZE / 2, height: GRID_SIZE / 2
+            });
+        }
         
         if (innerZones.length > 0) {
             let currentGuardIndex = 0;
@@ -124,119 +198,101 @@ const raidModule = {
                     const targetZone = innerZones[randomInt(0, innerZones.length - 1)];
                     const pos = getFreePosition(targetZone);
                     patrolTeam.forEach(unit => { 
-                        unit.x = pos.x; 
-                        unit.y = pos.y;
-                        unit.scoutState = 'hidden';
+                        unit.x = pos.x; unit.y = pos.y; unit.scoutState = 'hidden';
                     });
                     targetZone.enemies.push(patrolTeam);
                 }
                 currentGuardIndex += groupSize;
             }
-        }
-        
-        const buildingCount = Math.ceil(totalResidents / 1.5);
-        if (innerZones.length > 0) {
+
+            const buildingCount = Math.ceil(totalResidents / 1.5);
             for (let i = 0; i < buildingCount; i++) {
                 const targetZone = innerZones[randomInt(0, innerZones.length - 1)];
                 const pos = getFreePosition(targetZone, true);
                 targetZone.buildings.push({
                     id: crypto.randomUUID(), type: BUILDING_TYPES[randomInt(0, BUILDING_TYPES.length - 2)],
                     occupants: [], looted: false, resources: { food: 0, wood: 0, stone: 0 },
-                    scoutState: 'hidden',
-                    postScoutText: '',
+                    scoutState: 'hidden', postScoutText: '',
                     x: pos.x, y: pos.y, width: GRID_SIZE / 2, height: GRID_SIZE / 2
                 });
             }
-        }
-        
-        innerZones.forEach(zone => {
-            while (zone.buildings.length > 0 && zone.buildings.length < 3) {
-                const pos = getFreePosition(zone, true);
-                zone.buildings.push({
-                    id: crypto.randomUUID(), type: BUILDING_TYPES[randomInt(0, BUILDING_TYPES.length - 2)],
-                    occupants: [], looted: false, resources: { food: 0, wood: 0, stone: 0 },
-                    scoutState: 'hidden',
-                    postScoutText: '',
-                    x: pos.x, y: pos.y, width: GRID_SIZE / 2, height: GRID_SIZE / 2
-                });
-            }
-        });
-
-        const allInnerBuildings = innerZones.flatMap(z => z.buildings);
-        allResidents.forEach(resident => {
-            let finalUnit = resident;
-            if(rollPercentage(5)) {
-                const knightStatRange = cityConfig.knightStats;
-                const knightTypes = Object.keys(KNIGHT_ORDER_UNITS);
-                const randomKnightType = knightTypes[randomInt(0, knightTypes.length - 1)];
-                const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
-                finalUnit = rollPercentage(50) ? new FemaleKnightOrderUnit(randomKnightType, totalStatPoints, difficulty) : new KnightOrderUnit(randomKnightType, totalStatPoints);
-            }
-
-            this.equipEnemy(finalUnit, difficulty);
-
-            if (rollPercentage(80) && allInnerBuildings.length > 0) {
-                const randomBuilding = allInnerBuildings[randomInt(0, allInnerBuildings.length - 1)];
-                randomBuilding.occupants.push(finalUnit);
-            } else if (innerZones.length > 0) {
-                const targetZone = innerZones[randomInt(0, innerZones.length - 1)];
-                const pos = getFreePosition(targetZone);
-                finalUnit.x = pos.x;
-                finalUnit.y = pos.y;
-                finalUnit.scoutState = 'hidden';
-                targetZone.enemies.push([finalUnit]);
-            }
-        });
-        
-        const royalCityZone = city.zones.find(z => z.name === '王城');
-        if (difficulty === 'hell' && royalCityZone) {
-            royalCityZone.enemies = [];
-            royalCityZone.buildings = [];
-            let castleOccupants = [];
-            const knightStatRange = cityConfig.knightStats;
-            const knightTypes = Object.keys(KNIGHT_ORDER_UNITS);
-            knightTypes.forEach(unitType => {
-                if (!KNIGHT_ORDER_UNITS[unitType]) return;
-                const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
-                const knight = rollPercentage(50) 
-                    ? new FemaleKnightOrderUnit(unitType, totalStatPoints) 
-                    : new KnightOrderUnit(unitType, totalStatPoints);
-                castleOccupants.push(knight);
+            
+            innerZones.forEach(zone => {
+                while (zone.buildings.length > 0 && zone.buildings.length < 3) {
+                    const pos = getFreePosition(zone, true);
+                    zone.buildings.push({
+                        id: crypto.randomUUID(), type: BUILDING_TYPES[randomInt(0, BUILDING_TYPES.length - 2)],
+                        occupants: [], looted: false, resources: { food: 0, wood: 0, stone: 0 },
+                        scoutState: 'hidden', postScoutText: '',
+                        x: pos.x, y: pos.y, width: GRID_SIZE / 2, height: GRID_SIZE / 2
+                    });
+                }
             });
-            const numPrincesses = randomInt(1, 3);
-            const availableNames = [...FEMALE_NAMES].sort(() => 0.5 - Math.random());
-            for (let i = 0; i < numPrincesses; i++) {
-                const princessName = availableNames.pop() || `公主 #${i + 1}`;
-                const princessStats = {
-                    strength: 20, agility: 20, intelligence: 20, luck: 20, charisma: randomInt(150, 200)
-                };
-                const princess = new FemaleHuman(princessName, princessStats, '公主', generateVisuals());
-                castleOccupants.push(princess);
-            }
-            const pos = { x: (MAP_WIDTH / 2) - (GRID_SIZE / 2), y: 100 };
-            royalCityZone.buildings.push({
-                id: crypto.randomUUID(), type: '城堡', occupants: castleOccupants, looted: false,
-                resources: { food: 500, wood: 500, stone: 500 }, 
-                scoutState: 'hidden',
-                postScoutText: '', isFinalChallenge: true,
-                x: pos.x, y: pos.y, width: GRID_SIZE, height: GRID_SIZE 
+
+            const allInnerBuildings = innerZones.flatMap(z => z.buildings);
+            let dummyPlaced = false; 
+            allResidents.forEach(resident => {
+                let finalUnit = resident;
+                if (difficulty === 'dlc_beastkin_normal' && !dummyPlaced && !resident.profession.includes('男性')) {
+                    if (rollPercentage(15)) {
+                        finalUnit = new MaleHuman('偽裝的俘虜', { strength: 1, agility: 1, intelligence: 1, luck: 1 }, '氣味標記假人', difficulty, 'beastkin');
+                        dummyPlaced = true;
+                    }
+                }
+                if(rollPercentage(5) && !difficulty.startsWith('dlc_') && finalUnit.profession !== '氣味標記假人') { 
+                    const knightStatRange = cityConfig.knightStats;
+                    const knightTypes = Object.keys(KNIGHT_ORDER_UNITS);
+                    const randomKnightType = knightTypes[randomInt(0, knightTypes.length - 1)];
+                    const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
+                    finalUnit = rollPercentage(50) ? new FemaleKnightOrderUnit(randomKnightType, totalStatPoints, difficulty) : new KnightOrderUnit(randomKnightType, totalStatPoints);
+                }
+                if (finalUnit.profession !== '氣味標記假人') {
+                    this.equipEnemy(finalUnit, difficulty);
+                }
+                if (rollPercentage(80) && allInnerBuildings.length > 0) {
+                    const randomBuilding = allInnerBuildings[randomInt(0, allInnerBuildings.length - 1)];
+                    randomBuilding.occupants.push(finalUnit);
+                } else {
+                    const targetZone = innerZones[randomInt(0, innerZones.length - 1)];
+                    const pos = getFreePosition(targetZone);
+                    finalUnit.x = pos.x; finalUnit.y = pos.y; finalUnit.scoutState = 'hidden';
+                    targetZone.enemies.push([finalUnit]);
+                }
             });
+
+            if (difficulty === 'dlc_elf_normal' && allInnerBuildings.length > 0) {
+                if (rollPercentage(25)) {
+                    const targetBuilding = allInnerBuildings[randomInt(0, allInnerBuildings.length - 1)];
+                    targetBuilding.isDisguisedEnemy = true;
+                    targetBuilding.disguisedAs = '精靈樹屋';
+                    targetBuilding.type = '奇異的樹屋';
+                    const treantStatPoints = randomInt(ENEMY_STAT_RANGES['normal'].guard[0], ENEMY_STAT_RANGES['normal'].guard[1]);
+                    const treant = new MaleHuman('樹人守衛', distributeStats(treantStatPoints), '樹人守衛', difficulty, 'elf');
+                    this.equipEnemy(treant, 'hard'); 
+                    targetBuilding.occupants = [treant];
+                }
+            }
         }
         const resConfig = {
             easy: { food: [100, 200], wood: [50, 100], stone: [50, 100] },
             normal: { food: [200, 400], wood: [100, 200], stone: [100, 200] },
             hard: { food: [400, 800], wood: [200, 400], stone: [200, 400] },
-            hell: { food: [800, 1600], wood: [400, 800], stone: [400, 800] }
+            hell: { food: [800, 1600], wood: [400, 800], stone: [400, 800] },
+            dlc_elf_normal: { food: [200, 400], wood: [100, 200], stone: [100, 200] },
+            dlc_beastkin_normal: { food: [200, 400], wood: [100, 200], stone: [100, 200] },
         };
-        const totalFood = randomInt(resConfig[difficulty].food[0], resConfig[difficulty].food[1]);
-        const totalWood = randomInt(resConfig[difficulty].wood[0], resConfig[difficulty].wood[1]);
-        const totalStone = randomInt(resConfig[difficulty].stone[0], resConfig[difficulty].stone[1]);
-        const allCityBuildings = city.zones.flatMap(z => z.buildings);
-        if(allCityBuildings.length > 0) {
-            for(let i = 0; i < totalFood; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.food++;
-            for(let i = 0; i < totalWood; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.wood++;
-            for(let i = 0; i < totalStone; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.stone++;
+        if (resConfig[difficulty]) {
+            const totalFood = randomInt(resConfig[difficulty].food[0], resConfig[difficulty].food[1]);
+            const totalWood = randomInt(resConfig[difficulty].wood[0], resConfig[difficulty].wood[1]);
+            const totalStone = randomInt(resConfig[difficulty].stone[0], resConfig[difficulty].stone[1]);
+            const allCityBuildings = city.zones.flatMap(z => z.buildings);
+            if(allCityBuildings.length > 0) {
+                for(let i = 0; i < totalFood; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.food++;
+                for(let i = 0; i < totalWood; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.wood++;
+                for(let i = 0; i < totalStone; i++) allCityBuildings[randomInt(0, allCityBuildings.length - 1)].resources.stone++;
+            }
         }
+        
         city.zones.forEach(zone => {
             zone.resources.food = zone.buildings.reduce((sum, b) => sum + b.resources.food, 0);
             zone.resources.wood = zone.buildings.reduce((sum, b) => sum + b.resources.wood, 0);
@@ -326,6 +382,36 @@ const raidModule = {
         }
         const isGroup = Array.isArray(targetOrGroup);
         const representativeTarget = isGroup ? targetOrGroup[0] : targetOrGroup;
+
+        // 處理樹人守衛 (偽裝建築) 的邏輯
+        if (!isGroup && representativeTarget.isDisguisedEnemy) {
+            this.logMessage('raid', `你靠近的 ${representativeTarget.type} 突然動了起來！這不是建築，是樹人守衛！`, 'enemy');
+            this.selectedTarget = null; // 清除選中目標，避免介面殘留
+            
+            // 設定勝利後的回呼：將建築變回普通狀態
+            this.combat.onVictoryCallback = () => {
+                representativeTarget.isDisguisedEnemy = false;
+                representativeTarget.type = representativeTarget.disguisedAs;
+                this.updateBuildingScoutText();
+                this.logMessage('raid', '樹人守衛倒下了，露出了它守護的居所。', 'success');
+                this.combat.onVictoryCallback = null;
+            };
+            
+            this.startCombat(representativeTarget.occupants, true);
+            return; // 中斷後續的偵查邏輯
+        }
+
+        // 處理氣味標記假人 (誘餌) 的邏輯 (下一步會用到)
+        if (isGroup && representativeTarget.profession === '氣味標記假人') {
+            this.logMessage('raid', `你仔細一看，發現 ${representativeTarget.name} 只是個稻草假人！身上的氣味引來了埋伏！`, 'enemy');
+            this.selectedTarget = null;
+
+            const ambushers = this.generateAmbushParty(this.currentRaid.difficulty, representativeTarget.x, representativeTarget.y);
+            this.removeUnitFromRaidZone(representativeTarget.id);
+            this.startCombat(ambushers, true);
+            return;
+        }
+
         const targetNameForLog = isGroup ? '一個隊伍' : (representativeTarget.type || representativeTarget.name);
         
         if (representativeTarget.scoutState === 'scouted') {
@@ -447,11 +533,28 @@ const raidModule = {
     },
 
     canAdvance() {
-        if (this.currentRaid && this.currentRaid.currentZone.name === '王城') {
+        if (!this.currentRaid) return false;
+
+        // 王城有自己的特殊推進邏輯
+        if (this.currentRaid.currentZone.name === '王城') {
             const castle = this.currentRaid.currentZone.buildings.find(b => b.isFinalChallenge);
             return castle && castle.scouted;
         }
-        return this.currentRaid && this.currentRaid.currentZoneIndex < this.currentRaid.zones.length - 1 && this.currentRaid.currentZone.enemies.flat().filter(e => e.profession === '城市守軍').length === 0 && this.currentRaid.currentZone.buildings.every(b => b.occupants.filter(o => o.profession === '城市守軍').length === 0);
+
+        // 定義所有被視為「守軍」的職業
+        const guardProfessions = new Set([
+            '城市守軍',
+            ...Object.keys(HIGH_ELF_GUARDS),
+            ...Object.keys(BEASTKIN_CHAMPIONS)
+        ]);
+
+        // 檢查是否還有守軍存活
+        const hasLivingGuards = 
+            this.currentRaid.currentZone.enemies.flat().some(e => guardProfessions.has(e.profession)) ||
+            this.currentRaid.currentZone.buildings.some(b => b.occupants.some(o => guardProfessions.has(o.profession)));
+
+        // 條件：尚未到最後一區，且區域內沒有任何守軍存活
+        return this.currentRaid.currentZoneIndex < this.currentRaid.zones.length - 1 && !hasLivingGuards;
     },
 
     advanceToNextZone(force = false) {
@@ -471,7 +574,7 @@ const raidModule = {
 
     sneakPastGuards() {
         if (!this.currentRaid || this.currentRaid.currentZoneIndex !== 0) return;
-        const guardPost = this.currentRaid.currentZone.buildings.find(b => b.type === '衛兵所');
+        const guardPost = this.currentRaid.currentZone.buildings.find(b => (b.type === '衛兵所' || b.type === '前線哨站'));
         if (!guardPost || guardPost.occupants.length === 0) {
             this.showCustomAlert('外城沒有守軍可以繞過。');
             return;
@@ -593,23 +696,13 @@ const raidModule = {
         this.currentRaid = null;
         this.screen = 'tribe';
         
+        // 恢復所有夥伴的生命值
         this.player.currentHp = this.player.maxHp;
         this.partners.forEach(p => p.currentHp = p.maxHp);
         this.logMessage('tribe', '所有夥伴的生命值都已完全恢復。', 'success');
 
-        const newborns = this.postBattleBirths.map(b => b.newborn);
-        if (this.postBattleBirths.length > 0 && (this.partners.length + newborns.length) > this.partnerCapacity) {
-            this.logMessage('tribe', `有 ${newborns.length} 個新生命誕生了，但寢室已滿！您需要做出選擇...`, 'warning');
-            this.pendingDecisions.push({
-                type: 'partner',
-                list: [...this.partners, ...newborns],
-                limit: this.partnerCapacity,
-                context: { newborns: this.postBattleBirths, fromRaidReturn: true } 
-            });
-            this.checkAndProcessDecisions();
-        } else {
-            this.nextDay();
-        }
+        // nextDay() 內部已經包含了所有事件計算、排程和新生兒處理的邏輯
+        this.nextDay();
     },
 
     checkRaidTime() {

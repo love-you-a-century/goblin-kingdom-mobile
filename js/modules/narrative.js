@@ -12,11 +12,6 @@ const narrativeModule = {
             this.showCustomAlert(`繁衍次數不足！你只能選擇最多 ${this.breedingChargesLeft} 位。`);
             return;
         }
-        if (this.captives.length + selectedCount > this.captiveCapacity) {
-            this.showCustomAlert(`地牢空間不足！剩餘空間：${this.captiveCapacity - this.captives.length}`);
-            return;
-        }
-
         if (this.userApiKey && this.userApiKey.trim() !== '') {
             this.startBreedingNarrative();
         } else {

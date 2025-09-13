@@ -69,7 +69,7 @@ const tribeModule = {
 
     upgradeBuilding(type) {
         const building = this.buildings[type];
-        const maxLevels = { dungeon: 6, warehouse: 6, barracks: 5, armory: 4, maternity: 6, merchantCamp: 4 };
+        const maxLevels = { dungeon: 6, warehouse: 6, barracks: 5, armory: 4, merchantCamp: 4 };
         if (building.level >= maxLevels[type]) { this.showCustomAlert(`${building.name}已達到最大等級！`); return; }
         if (!this.canAffordBuildingUpgrade(type)) { this.showCustomAlert("資源不足！"); return; }
         
@@ -79,10 +79,6 @@ const tribeModule = {
         this.resources.stone -= cost.stone;
         building.level++;
         this.logMessage('tribe', `${building.name}${building.level === 1 ? '建造完成' : `升級至 ${building.level} 級`}！`, 'success');
-
-        if (this.tutorial.active && type === 'armory' && building.level === 1 && !this.tutorial.finishedDecomposing) {
-            this.triggerTutorial('armoryBuilt');
-        }
 
         if (this.tutorial.active) {
             setTimeout(() => {
@@ -200,6 +196,7 @@ const tribeModule = {
             this.resources.stone = Math.min(this.stoneCapacity, this.resources.stone + stoneGained);
             this.logMessage('tribe', `採礦隊帶回了 ${stoneGained} 單位礦石。`, 'success');
         }
+        this.checkForDlcEncounters();
     },
 
     executeForcedLabor() {
@@ -230,5 +227,61 @@ const tribeModule = {
         this.logMessage('tribe', `[強制勞動] 進入冷卻，需等待 ${cooldown} 天。`, 'system');
 
         this.showCustomAlert('強制勞動完成！資源已立即入庫，夥伴們將繼續執行派遣任務。');
+    },
+    checkForDlcEncounters() {
+        if (this.screen === 'combat') return; // 如果正在戰鬥中，則不觸發
+
+        const dispatchTasks = [
+            { task: 'logging', chance: this.dispatch.logging.length, race: 'elf', unlockedFlag: 'elf_tribe_unlocked' },
+            { task: 'hunting', chance: this.dispatch.hunting.length, race: 'beastkin', unlockedFlag: 'beastkin_tribe_unlocked' }
+        ];
+
+        for (const encounter of dispatchTasks) {
+            if (events.length > 0) break; 
+            if (encounter.chance > 0 && !this.dlc[encounter.unlockedFlag] && rollPercentage(encounter.chance)) {
+                
+                let enemyUnit;
+                let tribeName = '';
+                let alertMessage = '';
+
+                if (encounter.race === 'elf') {
+                    const totalStatPoints = randomInt(120, 190);
+                    enemyUnit = new MaleHuman('精靈遊俠', distributeStatsWithRatio(totalStatPoints, HIGH_ELF_GUARDS['精靈遊俠'].ratio), '精靈遊俠', 'easy', 'elf');
+                    this.equipEnemy(enemyUnit, 'normal'); 
+                    tribeName = '銀月森林';
+                    alertMessage = `你的伐木隊在森林深處遭遇了一名警惕的精靈遊俠！`;
+                } else if (encounter.race === 'beastkin') {
+                    const totalStatPoints = randomInt(120, 190);
+                    enemyUnit = new MaleHuman('亞獸人武鬥家', distributeStatsWithRatio(totalStatPoints, BEASTKIN_CHAMPIONS['亞獸人戰士'].ratio), '亞獸人武鬥家', 'easy', 'beastkin');
+                    this.equipEnemy(enemyUnit, 'normal');
+                    tribeName = '咆哮平原';
+                    alertMessage = `你的狩獵隊在平原上驚動了一位正在磨練技藝的亞獸人武鬥家！`;
+                }
+
+                if (enemyUnit) {
+                    this.showCustomAlert(alertMessage, () => {
+                        this.combat.isUnescapable = true;
+                        
+                        // 設定一個旗標，標記這是一場DLC遭遇戰
+                        this.combat.isDlcEncounterBattle = true; 
+
+                        this.combat.onVictoryCallback = () => {
+                        // 無論玩家是否有DLC，都在勝利後將一個待辦事項加入佇列
+                        this.pendingDecisions.push({
+                            type: 'dlc_prompt', // 新增一個待辦事項類型
+                            context: {
+                                hasDlc: this.dlc.races_of_aetheria,
+                                unlockedFlag: encounter.unlockedFlag,
+                                tribeName: tribeName
+                            }
+                        });
+                        this.combat.onVictoryCallback = null; // 清理回呼
+                    };
+                    this.startCombat([enemyUnit], true);
+                    });
+                    return;
+                }
+            }
+        }
     },
 };

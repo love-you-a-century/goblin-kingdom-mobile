@@ -49,6 +49,7 @@ const combatModule = {
 
     // 結束戰鬥
     endCombat(victory) {
+        this.clearAllCombatStatusEffects();
         const wasApostleBattle = this.combat.currentEnemyGroup.some(e => e instanceof ApostleMaiden);
         if (wasApostleBattle) {
             if (victory) {
@@ -100,6 +101,11 @@ const combatModule = {
             return;
         }
 
+        // 執行勝利後的回呼函式 (例如：觸發 DLC 提示)
+        if (victory && typeof this.combat.onVictoryCallback === 'function') {
+            this.combat.onVictoryCallback();
+        }
+
         if (this.currentRaid && this.raidTimeExpired) {
             this.raidTimeExpired = false;
             if (victory) {
@@ -127,12 +133,12 @@ const combatModule = {
                 this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
                 const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
                 if (defeatedFemales.length > 0) {
-                    if ((this.dungeonCaptives.length + defeatedFemales.length) > this.captiveCapacity) {
+                    if ((this.dungeonCaptives.length + defeatedFemales.length) > this.dungeonCapacity) { 
                         this.logMessage('tribe', '地牢空間不足...', 'warning');
                         this.pendingDecisions.push({
                             type: 'dungeon',
                             list: [...this.dungeonCaptives, ...defeatedFemales],
-                            limit: this.captiveCapacity,
+                            limit: this.dungeonCapacity, 
                             context: { postBattleBirths: this.postBattleBirths }
                         });
                     } else {
@@ -141,11 +147,12 @@ const combatModule = {
                     }
                 }
                 this.finishCombatCleanup(true);
-                this.processDailyUpkeep();
+
             } else {
                 this.logMessage('tribe', '你在部落保衛戰中失敗了！', 'enemy');
                 this.removeAllCaptives('rescued');
             }
+            this.combat.isDlcEncounterBattle = false;
             return;
         }
 
@@ -237,6 +244,9 @@ const combatModule = {
             this.endCombat(false);
         } else if (livingEnemiesCount === 0) {
             this.logMessage('combat', `戰鬥勝利！`, 'success');
+            if (typeof this.combat.onVictoryCallback === 'function') {
+                this.combat.onVictoryCallback();
+            }
             this.endCombat(true);
         } else {
             this.combat.turn++;
@@ -426,13 +436,13 @@ const combatModule = {
         const weaponJudgementMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence', '徒手': 'strength' };
         const judgementStat = weaponJudgementMap[weaponType] || 'strength';
 
-        const attackerStatValue = attacker.getTotalStat(judgementStat, this.isStarving);
+        const attackerStatValue = attacker.getTotalStat(judgementStat, this.isStarving, this);
         const attackerDiceCount = Math.max(1, Math.floor(attackerStatValue / 20));
         const attackerQualityBonus = attacker.equipment.mainHand?.qualityBonus || 0;
         const attackerRoll = rollDice(`${attackerDiceCount}d20`);
         const attackerTotal = attackerRoll.total + attackerQualityBonus;
 
-        const defenderStatValue = currentTarget.getTotalStat(judgementStat, this.isStarving);
+        const defenderStatValue = currentTarget.getTotalStat(judgementStat, this.isStarving, this);
         const defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 20));
         const defenderArmorBonus = currentTarget.equipment.chest?.qualityBonus || 0;
         const defenderShieldBonus = currentTarget.equipment.offHand?.qualityBonus || 0;
@@ -958,7 +968,7 @@ const combatModule = {
             case 'aoe_str':
             case 'aoe_agi':
                 const damageStat = skill.type === 'aoe_str' ? 'strength' : 'agility';
-                const damage = Math.floor(caster.getTotalStat(damageStat) * skill.multiplier);
+                const damage = Math.floor(caster.getTotalStat(damageStat, this.isStarving, this) * skill.multiplier);
                 for (const target of enemies) {
                     if (target.isAlive()) {
                         target.currentHp = Math.max(0, target.currentHp - damage);
@@ -997,7 +1007,7 @@ const combatModule = {
                 this.logMessage('combat', `${caster.name} 開始詠唱咒文，空氣變得凝重起來...`, 'info');
                 break;
             case 'team_heal':
-                const healAmount = caster.getTotalStat('intelligence') * allies.length;
+                const healAmount = caster.getTotalStat('intelligence', this.isStarving, this) * allies.length;
                 allies.forEach(ally => {
                     if(ally.isAlive()) {
                         ally.currentHp = Math.min(ally.maxHp, ally.currentHp + healAmount);

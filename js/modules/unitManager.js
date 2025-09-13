@@ -266,9 +266,6 @@ const unitManagerModule = {
                 this.player.skillPoints++;
                 this.logMessage('tribe', `你為 ${ctx.newborn.name} 在寢室中騰出了空間！你獲得了 1 點技能點。`, 'success');
             });
-            if (this.tutorial.active && !this.tutorial.finishedPartyMgmt) {
-                this.triggerTutorial('firstBirth');
-            }
         }
         
         const discardedNewborns = allNewbornsContext.filter(ctx => !selectedSet.has(ctx.newborn.id));
@@ -291,5 +288,26 @@ const unitManagerModule = {
         this.dispatch.logging = this.dispatch.logging.filter(id => allCurrentPartnerIds.has(id));
         this.dispatch.mining = this.dispatch.mining.filter(id => allCurrentPartnerIds.has(id));
         this.dispatch.watchtower = this.dispatch.watchtower.filter(id => allCurrentPartnerIds.has(id));
+    },
+    clearAllCombatStatusEffects() {
+        if (!this.player) return;
+
+        const allUnits = [this.player, ...this.partners];
+        let effectsCleared = false;
+
+        allUnits.forEach(unit => {
+            if (unit.statusEffects && unit.statusEffects.length > 0) {
+                unit.statusEffects = []; // 直接清空狀態效果陣列
+                effectsCleared = true;
+                // 清除後立即更新一次血量，以應用正確的計算公式
+                if (unit.updateHp) {
+                    unit.updateHp(this.isStarving);
+                }
+            }
+        });
+
+        if (effectsCleared) {
+            this.logMessage('tribe', '所有戰鬥中的暫時狀態效果都已消散。', 'info');
+        }
     },
 };
