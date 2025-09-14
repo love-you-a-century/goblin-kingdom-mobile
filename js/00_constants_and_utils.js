@@ -10,7 +10,7 @@ const SKILL_TREES = {
             dependencies: [],
             type: 'active',
             combatActive: true,
-            baseCooldown: 12,
+            baseCooldown: 20,
             minCooldown: 5,
             levels: [
                 { cost: 2, effect: { multiplier: 1.4 } },
@@ -28,7 +28,7 @@ const SKILL_TREES = {
             dependencies: [],
             type: 'active',
             combatActive: true,
-            baseCooldown: 12,
+            baseCooldown: 20,
             minCooldown: 5,
             levels: [
                 { cost: 2, effect: { multiplier: 1.4, stat: 'agility' } },
@@ -46,7 +46,7 @@ const SKILL_TREES = {
             dependencies: [],
             type: 'active',
             combatActive: true,
-            baseCooldown: 12,
+            baseCooldown: 20,
             minCooldown: 5,
             levels: [
                 { cost: 2, effect: { multiplier: 1.4, stat: 'intelligence' } },
@@ -64,7 +64,7 @@ const SKILL_TREES = {
             dependencies: [],
             type: 'active',
             combatActive: true,
-            baseCooldown: 12,
+            baseCooldown: 20,
             minCooldown: 5,
             levels: [
                 { cost: 2, effect: { multiplier: 1.4, stat: 'luck' } },
@@ -83,8 +83,8 @@ const SKILL_TREES = {
             type: 'active',
             combatActive: true,
             baseDuration: 3,
-            baseCooldown: 18,
-            minCooldown: 1,
+            baseCooldown: 25,
+            minCooldown: 10,
             levels: [
                 { cost: 5, effect: { damageReduction: 0.05 } },
                 { cost: 10, effect: { damageReduction: 0.10 } },
@@ -102,8 +102,8 @@ const SKILL_TREES = {
             type: 'active',
             combatActive: true,
             baseDuration: 3,
-            baseCooldown: 18,
-            minCooldown: 1,
+            baseCooldown: 25,
+            minCooldown: 10,
             levels: [
                 { cost: 5, effect: { debuff_per_partner: 0.005 } },
                 { cost: 10, effect: { debuff_per_partner: 0.010 } },

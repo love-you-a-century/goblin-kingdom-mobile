@@ -157,6 +157,7 @@ const gameLogic = {
         selectedItemIds: [], // 改為陣列以支援複選
         selectedCaptiveIds: [],
     },
+    throneRoomUnits: [],
 
     // --- 浮動輔助視窗狀態 ---
     helpWidget: {
@@ -561,7 +562,7 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.73 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.75 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時

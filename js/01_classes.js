@@ -122,6 +122,14 @@ class Unit {
         });
         let total = Math.floor((baseValue + flatBonus) * multiplier);
         total = Math.max(0, total);
+
+        // 計算所有屬性減益效果
+        if (this.statusEffects && this.statusEffects.length > 0) {
+            const debuffEffect = this.statusEffects.find(e => e.type === 'stat_debuff');
+            if (debuffEffect) {
+                total = Math.floor(total * (1 - debuffEffect.multiplier));
+            }
+        }
         
         // 日夜被動技能的邏輯
         if (gameState && gameState.currentRaid && gameState.currentRaid.timeCycle) {
@@ -163,7 +171,7 @@ class Unit {
         // --- 1. 計算主手傷害 ---
         let mainHandDamage = 0;
         if (mainHand) {
-            // 【核心修改】現在傷害只看武器的基礎傷害值
+            // 現在傷害只看武器的基礎傷害值
             mainHandDamage = mainHand.stats.damage || 0;
         } else {
             // 徒手傷害計算 (維持不變)
@@ -176,7 +184,7 @@ class Unit {
         if (offHand && offHand.type === 'weapon' && offHand.baseName !== '盾') {
             let baseDamage = offHand.stats.damage || 0;
 
-            // 【核心修改】副手傷害現在只看武器基礎傷害，並套用懲罰係數
+            // 副手傷害現在只看武器基礎傷害，並套用懲罰係數
             let offHandMultiplier = 0.75; // 標準懲罰
             if (mainHand && LIGHT_DUAL_WIELD_WEAPONS.includes(mainHand.baseName) && LIGHT_DUAL_WIELD_WEAPONS.includes(offHand.baseName)) {
                 offHandMultiplier = 1.0; // 輕型武器無懲罰
@@ -428,6 +436,7 @@ class Player extends Goblin {
         return baseInt + equipInt;
     }
 
+    //技能冷卻時間
     getFinalCooldown(skill) {
         if (!skill) return 0;
         const effectiveInt = this.getEffectiveIntelligence();
@@ -438,19 +447,26 @@ class Player extends Goblin {
             const currentLevel = this.learnedSkills[quickCooldownSkillId];
             quickCooldownLevel = quickCooldownData.levels[currentLevel - 1].effect.value;
         }
-        const intReduction = Math.floor(effectiveInt / 120);
+
+        // 技能是戰鬥技能時，才計算智力減免
+        let intReduction = 0; // 預設智力減免為 0
+        if (skill.combatActive) {
+            intReduction = Math.floor(effectiveInt / 20);
+        }
+
         const finalCd = skill.baseCooldown - intReduction - quickCooldownLevel;
         return Math.max(skill.minCooldown || 1, finalCd);
     }
 
+    //技能持續時間
     getFinalDuration(skill) {
         if (!skill || !skill.baseDuration) return 0;
         const effectiveInt = this.getEffectiveIntelligence();
-        const intBonus = Math.floor(effectiveInt / 80);
+        const intBonus = Math.floor(effectiveInt / 20);
         return skill.baseDuration + intBonus;
     }
     /**
-     * 【新增】專門計算由「集團策略」技能帶來的生命值加成。
+     * 專門計算由「集團策略」技能帶來的生命值加成。
      * @param {boolean} isStarving - 是否處於飢餓狀態。
      * @returns {number} - 技能提供的額外生命值。
      */
