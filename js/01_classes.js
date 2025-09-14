@@ -135,6 +135,16 @@ class Unit {
         return isStarving ? Math.floor(total * 0.75) : total;
     }
 
+    getAverageStat(statsToAverage, isStarving = false, gameState = null) {
+        if (!statsToAverage || statsToAverage.length === 0) {
+            return 0;
+        }
+        const total = statsToAverage.reduce((sum, stat) => {
+            return sum + this.getTotalStat(stat, isStarving, gameState);
+        }, 0);
+        return Math.floor(total / statsToAverage.length);
+    }
+
     tickCooldowns() {
         if (this.skills && this.skills.length > 0) {
             this.skills.forEach(skill => {
@@ -153,38 +163,10 @@ class Unit {
         // --- 1. 計算主手傷害 ---
         let mainHandDamage = 0;
         if (mainHand) {
-            const baseDamage = mainHand.stats.damage || 0;
-            const weaponType = mainHand.baseName;
-            let mainStatValue = 0;
-
-            // 根據武器類型決定主要加成屬性
-            switch (weaponType) {
-                case '劍':
-                case '雙手劍':
-                case '斧頭':
-                case '彎刀':
-                    mainStatValue = this.getTotalStat('strength', isStarving, gameState);
-                    break;
-                case '長槍':
-                    mainStatValue = this.getTotalStat('luck', isStarving, gameState);
-                    break;
-                case '弓':
-                case '短刀':
-                case '爪':
-                case '拐棍':
-                case '長鞭':
-                case '拳套':
-                    mainStatValue = this.getTotalStat('agility', isStarving, gameState);
-                    break;
-                case '法杖':
-                    mainStatValue = this.getTotalStat('intelligence', isStarving, gameState);
-                    break;
-                default:
-                    mainStatValue = this.getTotalStat('strength', isStarving, gameState);
-            }
-            mainHandDamage = mainStatValue + baseDamage;
+            // 【核心修改】現在傷害只看武器的基礎傷害值
+            mainHandDamage = mainHand.stats.damage || 0;
         } else {
-            // 徒手傷害計算
+            // 徒手傷害計算 (維持不變)
             const totalStats = this.getTotalStat('strength', isStarving, gameState) + this.getTotalStat('agility', isStarving, gameState) + this.getTotalStat('intelligence', isStarving, gameState) + this.getTotalStat('luck', isStarving, gameState);
             mainHandDamage = Math.floor(totalStats / 10);
         }
@@ -192,29 +174,14 @@ class Unit {
         // --- 2. 計算副手傷害 (雙持) ---
         let offHandDamage = 0;
         if (offHand && offHand.type === 'weapon' && offHand.baseName !== '盾') {
-            const baseDamage = offHand.stats.damage || 0;
-            const mainHandWeaponType = mainHand ? mainHand.baseName : '';
-            let mainStatValue = 0;
-            
-            // 雙持時，副手的加成屬性跟隨主手
-            switch (mainHandWeaponType) {
-                case '劍': case '斧頭': case '彎刀':
-                    mainStatValue = this.getTotalStat('strength', isStarving, gameState);
-                    break;
-                case '短刀': case '爪': case '拐棍': case '長鞭': case '拳套':
-                    mainStatValue = this.getTotalStat('agility', isStarving, gameState);
-                    break;
-                default:
-                    mainStatValue = this.getTotalStat('strength', isStarving, gameState);
-            }
+            let baseDamage = offHand.stats.damage || 0;
 
-            // 根據武器類型決定副手傷害係數
-            let offHandMultiplier = 0.75; // 標準單手武器雙持時，副手只有 75% 的屬性加成
+            // 【核心修改】副手傷害現在只看武器基礎傷害，並套用懲罰係數
+            let offHandMultiplier = 0.75; // 標準懲罰
             if (mainHand && LIGHT_DUAL_WIELD_WEAPONS.includes(mainHand.baseName) && LIGHT_DUAL_WIELD_WEAPONS.includes(offHand.baseName)) {
-                // 如果主副手都是輕型武器，則副手獲得 100% 屬性加成
-                offHandMultiplier = 1.0; 
+                offHandMultiplier = 1.0; // 輕型武器無懲罰
             }
-            offHandDamage = baseDamage + Math.floor(mainStatValue * offHandMultiplier);
+            offHandDamage = Math.floor(baseDamage * offHandMultiplier);
         }
         
         // --- 3. 處理特殊加成與懲罰 ---
