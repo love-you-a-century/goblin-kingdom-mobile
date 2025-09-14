@@ -222,7 +222,7 @@ const gameLogic = {
         { baseName: '斧頭', type: 'weapon', slot: 'mainHand', materialCategory: 'metal', requires: 'races_of_aetheria' },
         { baseName: '彎刀', type: 'weapon', slot: 'mainHand', materialCategory: 'metal', requires: 'races_of_aetheria' },
         { baseName: '長鞭', type: 'weapon', slot: 'mainHand', materialCategory: 'leather', requires: 'races_of_aetheria' },
-        { baseName: '拳套', type: 'weapon', slot: 'mainHand', materialCategory: 'leather', requires: 'races_of_aetheria' },
+        { baseName: '投石索', type: 'weapon', slot: 'mainHand', materialCategory: 'leather', requires: 'races_of_aetheria' },
         // 防具
         { baseName: '鎧甲', type: 'armor', slot: 'chest', armorType: 'plate', materialCategory: 'metal' },
         { baseName: '皮甲', type: 'armor', slot: 'chest', armorType: 'leather', materialCategory: 'leather' },
@@ -561,7 +561,7 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.71 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.72 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -970,6 +970,11 @@ const gameLogic = {
                 this.tempStatIncreases = parsedData.tempStatIncreases;
             } else {
                 this.cancelAttributePoints();
+            }
+
+            if (!this.flags.hasOwnProperty('merchantIntroduced') && this.day >= 9) {
+                // 如果存檔中沒有此旗標，且天數已超過9天，則視為已見過
+                this.flags.merchantIntroduced = true;
             }
 
             this.screen = 'tribe';
