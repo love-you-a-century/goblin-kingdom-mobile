@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.72</title>
+    <title>哥布林王國v5.73</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -925,6 +925,8 @@
                                                                 <span>胸圍: <span x-text="captive.visual.bust"></span></span>
                                                                 <span>髮色: <span x-text="captive.visual.hairColor"></span></span>
                                                                 <span>髮型: <span x-text="captive.visual.hairStyle"></span></span>
+                                                                <span x-if="captive.race === 'elf'">耳朵: <span x-text="captive.visual.elfEars"></span></span>
+                                                                <span x-if="captive.race === 'beastkin'">亞種: <span x-text="captive.visual.beastkinSubspecies"></span></span>
                                                                 <span>個性: <span x-text="captive.visual.personality"></span></span>
                                                             </div>
                                                         </template>
@@ -1349,7 +1351,8 @@
                                                         <div><strong>髮型:</strong> <span x-text="unit.visual.hairStyle"></span></div>
                                                         <div><strong>服裝:</strong> <span x-text="unit.visual.clothing"></span></div>
                                                         <div><strong>胸圍:</strong> <span x-text="unit.visual.bust"></span></div>
-                                                        <div><strong>耳朵:</strong> <span x-text="unit.visual.elfEars"></span></div>
+                                                        <div x-if="unit.race === 'elf'"><strong>耳朵:</strong> <span x-text="unit.visual.elfEars"></span></div>
+                                                        <div x-if="unit.race === 'beastkin'"><strong>亞種:</strong> <span x-text="unit.visual.beastkinSubspecies"></span></div>
                                                         <div><strong>個性:</strong> <span x-text="unit.visual.personality"></span></div>
                                                     </div>
                                                 </template>
@@ -1423,7 +1426,8 @@
                                                 <div><strong>髮型:</strong> <span x-text="captive.visual.hairStyle"></span></div>
                                                 <div><strong>服裝:</strong> <span x-text="captive.visual.clothing"></span></div>
                                                 <div><strong>胸圍:</strong> <span x-text="captive.visual.bust"></span></div>
-                                                <div><strong>耳朵:</strong> <span x-text="captive.visual.elfEars"></span></div>
+                                                <div x-if="captive.race === 'elf'"><strong>耳朵:</strong> <span x-text="captive.visual.elfEars"></span></div>
+                                                <div x-if="captive.race === 'beastkin'"><strong>亞種:</strong> <span x-text="captive.visual.beastkinSubspecies"></span></div>
                                                 <div><strong>個性:</strong> <span x-text="captive.visual.personality"></span></div>
                                             </div>
                                         </template>
@@ -1485,7 +1489,8 @@
                                                 <div><strong>髮型:</strong> <span x-text="captive.visual.hairStyle"></span></div>
                                                 <div><strong>服裝:</strong> <span x-text="captive.visual.clothing"></span></div>
                                                 <div><strong>胸圍:</strong> <span x-text="captive.visual.bust"></span></div>
-                                                <div><strong>耳朵:</strong> <span x-text="captive.visual.elfEars"></span></div>
+                                                <div x-if="captive.race === 'elf'"><strong>耳朵:</strong> <span x-text="captive.visual.elfEars"></span></div>
+                                                <div x-if="captive.race === 'beastkin'"><strong>亞種:</strong> <span x-text="captive.visual.beastkinSubspecies"></span></div>
                                                 <div><strong>個性:</strong> <span x-text="captive.visual.personality"></span></div>
                                             </div>
                                         </template>
