@@ -665,16 +665,6 @@ const raidModule = {
     },
 
     endRaid(wasDefeated = false) {
-        if (this.tutorial.active) {
-            if(this.currentRaid.carriedCaptives.length > 0) {
-                this.advanceTutorial(6);
-            } else {
-                this.tutorial.active = false;
-                this.tutorial.step = 0;
-                this.showCustomAlert('王，您平安歸來了。雖然這次沒有戰利品，但您已熟悉了流程。接下來，請自由探索這個世界吧！');
-            }
-        }
-
         if (!wasDefeated) {
             this.captives.push(...this.currentRaid.carriedCaptives);
             this.logMessage('tribe', `你帶回了 ${this.currentRaid.carriedCaptives.length} 名俘虜。`, 'player');
