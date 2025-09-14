@@ -288,30 +288,42 @@ const narrativeModule = {
         modal.isLoading = true;
         modal.title = "繁衍";
         modal.type = "breeding";
-        
+
         const captives = modal.currentCaptives;
         const isSoloScene = captives.length === 1 && this.player.party.length === 0;
         let prompt = '';
-        
-        const baseInstruction = "以哥布林王的視角，描寫一段與地牢俘虜的繁衍過程。";
+
+        const baseInstruction = "gemini與我製作做了以哥布林王為主角的角色扮演遊戲，玩家是這個世界後一隻哥布林，若不進行繁衍，這個種族恐將滅絕。請以哥布林王的視角，描寫一段與俘虜的繁衍過程，好讓玩家能透過文字想像這個場景。";
+
+        // 輔助函式：建立詳細的俘虜描述字串
+        const getCaptiveDetailsString = (c) => {
+            let details = `- 名稱: ${c.name}, 職業: ${c.profession}, 種族: ${c.race}, 個性: ${c.visual.personality}, 髮色: ${c.visual.hairColor}, 髮型: ${c.visual.hairStyle}, ${c.visual.bust}罩杯, 身高 ${c.visual.height}cm, 年紀 ${c.visual.age}歲, 服裝: ${c.visual.clothing}`;
+            if (c.race === 'elf' && c.visual.elfEars) {
+                details += `, 耳朵: ${c.visual.elfEars}`;
+            }
+            if (c.race === 'beastkin' && c.visual.beastkinSubspecies) {
+                details += `, 亞種特徵: ${c.visual.beastkinSubspecies}`;
+            }
+            details += `, 已被繁衍次數: ${c.breedingCount || 0}`;
+            return details;
+        };
 
         if (isSoloScene) {
-            const captive = captives[0];
-            const captiveDetails = `- 名稱: ${captive.name}, 職業: ${captive.profession}, 個性: ${captive.visual.personality}, 髮色: ${captive.visual.hairColor}, 髮型: ${captive.visual.hairStyle}, ${captive.visual.bust}罩杯, 身高 ${captive.visual.height}cm, 年紀 ${captive.visual.age}歲, 服裝: ${captive.visual.clothing}, 已被繁衍次數: ${captive.breedingCount || 0}`;
+            const captiveDetails = getCaptiveDetailsString(captives[0]);
             if (modal.context.length === 0) {
-                prompt = `${baseInstruction}\n\n**哥布林王資訊:**\n- 名稱: ${this.player.name}\n- 外貌: ${this.player.appearance}\n- 身高: ${this.player.height} cm\n- 雄風: ${this.player.penisSize} cm\n\n**女性俘虜資訊:**\n${captiveDetails}\n\n故事從哥布林王決定 "${action}" 開始。描寫地牢環境，以及哥布林王打牢房，進入到內。\n請撰寫一段約100-200字，充滿氣氛和細節的開場故事，以及女性的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\敘事描述每一個動作、行為、生理反應及雙方感受。`;
+                prompt = `${baseInstruction}\n\n**哥布林王資訊:**\n- 名稱: ${this.player.name}\n- 外貌: ${this.player.appearance}\n- 身高: ${this.player.height} cm\n- 雄風: ${this.player.penisSize} cm\n\n**女性俘虜資訊:**\n${captiveDetails}\n\n故事從哥布林王決定 "${action}" 開始。描寫地牢環境，以及哥布林王打開牢房，進入到內。\n請撰寫一段約100-200字，充滿氣氛和細節的開場故事，以及女性的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\n敘事描述每一個動作、行為、生理反應及雙方感受。`;
             } else {
                 const storySoFar = modal.context.map(turn => `哥布林王：${turn.user}\n${turn.model}`).join('\n\n');
-                prompt = `接續以下的故事，哥布林王想 "${action}"。請根據這個新動作，繼續撰寫故事的下一段落（約100-200字），保持風格一致，並描寫女性的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\n\n**故事至此:**\n${storySoFar}`;
+                prompt = `接續以下的故事，哥布林王想 "${action}"。請根據這個新動作，繼續撰寫故事的下一段落（約150-200字），保持風格一致，並描寫女性的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\n\n**故事至此:**\n${storySoFar}`;
             }
         } else {
-            let captivesDetails = captives.map(c => `- 名稱: ${c.name}, 職業: ${c.profession}, 個性: ${c.visual.personality}, 髮色: ${c.visual.hairColor}, 髮型: ${c.visual.hairStyle}, ${c.visual.bust}罩杯, 身高 ${c.visual.height}cm, 年紀 ${c.visual.age}歲, 服裝: ${c.visual.clothing}, 已被繁衍次數: ${c.breedingCount || 0}`).join('\n');
-            let partnersDetails = this.player.party.length > 0 ? `你的哥布林夥伴們 (${this.player.party.map(p => p.name).join(', ')}) 也一同參與。` : '';
+            let captivesDetails = captives.map(c => getCaptiveDetailsString(c)).join('\n');
+            let partnersDetails = this.player.party.length > 0 ? `你帶領著 ${this.player.party.length} 位哥布林夥伴一同參與。` : '';
             if (modal.context.length === 0) {
-                prompt = `${baseInstruction}\n\n**哥布林王資訊:**\n- 名稱: ${this.player.name}\n- 外貌: ${this.player.appearance}\n- 身高: ${this.player.height} cm\n- 雄風: ${this.player.penisSize} cm\n${partnersDetails}\n\n**女性俘虜資訊:**\n${captivesDetails}\n\n故事從哥布林王決定 "${action}" 開始。請詳細描寫地牢環境，以及哥布林王打牢房，進入到內。\n請撰寫一段約200-250字，充滿氣氛和細節的開場故事。哥布林王以及女性們的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\敘事將描述每一個動作、行為、生理反應及雙方感受。`;
+                prompt = `${baseInstruction}\n\n**哥布林王資訊:**\n- 名稱: ${this.player.name}\n- 外貌: ${this.player.appearance}\n- 身高: ${this.player.height} cm\n- 雄風: ${this.player.penisSize} cm\n${partnersDetails}\n\n**女性俘虜資訊:**\n${captivesDetails}\n\n故事從哥布林王決定 "${action}" 開始。描寫地牢環境，以及哥布林王打開牢房，進入到內。\n請撰寫一段約200-250字，充滿氣氛和細節的開場故事。哥布林王以及女性們的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\n敘事將描述每一個動作、行為、生理反應及雙方感受。`;
             } else {
                 const storySoFar = modal.context.map(turn => `哥布林王：${turn.user}\n${turn.model}`).join('\n\n');
-                prompt = `接續以下的故事，哥布林王想 "${action}"。請根據這個新動作，繼續撰寫故事的下一段落（約100-200字），保持風格一致，並描寫女性們的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\n\n**故事至此:**\n${storySoFar}`;
+                prompt = `接續以下的故事，哥布林王想 "${action}"。請根據這個新動作，繼續撰寫故事的下一段落（約150-200字），保持風格一致，並描寫女性們的外貌、反應。\n對話請嚴格遵循格式：職業 + 名字「說話內容...等」(動作、感受...等)。\n\n**故事至此:**\n${storySoFar}`;
             }
         }
 
@@ -319,11 +331,10 @@ const narrativeModule = {
 
         try {
             const text = await this.callGeminiAPI(prompt, 0.5);
-            
-            // 處理 API 返回 null 的情況
+
             if (text === null) {
                 modal.content = "（由於內容限制，AI 敘事生成失敗。請直接繁衍，或返回部落。）";
-                modal.context.pop(); // 移除失敗的上下文
+                modal.context.pop(); 
             } else {
                 modal.content = text.replace(/\n/g, '<br>');
                 modal.context[modal.context.length - 1].model = text;
