@@ -1671,7 +1671,6 @@ const gameLogic = {
                     break;
                 case '祭司':
                     createAndEquip('mainHand', '法杖');
-                    // 【修正】移除材質類型的強制指定
                     createAndEquip('offHand', '盾');
                     break;
                 case '騎士':
@@ -1710,7 +1709,6 @@ const gameLogic = {
                 normal: { metal: [2, 4], wood: [2, 4], leather: [2, 4], cloth: [2, 4] },
                 hard:   { metal: [3, 5], wood: [3, 5], leather: [3, 5], cloth: [3, 5] },
                 hell:   { metal: [4, 6], wood: [4, 6], leather: [4, 6], cloth: [4, 6] },
-                // 【新增】為 DLC 難度添加對應的設定，暫時參照 normal
                 dlc_elf_normal: { metal: [2, 4], wood: [2, 4], leather: [2, 4], cloth: [2, 4] },
                 dlc_beastkin_normal: { metal: [2, 4], wood: [2, 4], leather: [2, 4], cloth: [2, 4] },
             };
