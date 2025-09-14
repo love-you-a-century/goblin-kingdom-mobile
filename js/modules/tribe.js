@@ -79,14 +79,6 @@ const tribeModule = {
         this.resources.stone -= cost.stone;
         building.level++;
         this.logMessage('tribe', `${building.name}${building.level === 1 ? '建造完成' : `升級至 ${building.level} 級`}！`, 'success');
-
-        if (this.tutorial.active) {
-            setTimeout(() => {
-                if (type === 'dungeon' && this.tutorial.step === 3 && building.level === 1) {
-                    this.advanceTutorial(5);
-                } 
-            }, 50);
-        }
     },
 
     executeTraining(partnerId) {
