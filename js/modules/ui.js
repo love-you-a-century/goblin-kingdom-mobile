@@ -64,9 +64,12 @@ const uiModule = {
         this.merchant.selectedCaptiveIds = [];
 
         if (this.merchant.goods.length === 0) {
-            this.merchant.dialogue = "「真是大手筆，歡迎下次再來」";
+            // 當商品被買完時，觸發新的對話和提早離開的邏輯
+            this.merchant.dialogue = "「哎呀...這麼快就掃光了？明天我就先走一步補貨了，期待下次見面...」";
+            this.merchant.stayDuration = 1; // 將停留時間設為1，讓她隔天離開
+            this.logMessage('tribe', '你買光了世紀的所有商品，她決定明天提早離開。', 'system');
         } else {
-            this.merchant.dialogue = "「眼光不錯，這裝備肯定能成為助力」";
+            this.merchant.dialogue = "「眼光不錯，這裝備肯定能成為助力！」";
             clearTimeout(this.merchantDialogueTimeout);
             this.merchantDialogueTimeout = setTimeout(() => {
                 this.updateMerchantDialogue();

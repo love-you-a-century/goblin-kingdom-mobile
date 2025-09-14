@@ -299,6 +299,51 @@ const raidModule = {
             zone.resources.stone = zone.buildings.reduce((sum, b) => sum + b.resources.stone, 0);
         });
 
+        // --- 生成王城與最終 BOSS ---
+        const throneRoomZone = city.zones.find(z => z.name === '王城');
+        if (throneRoomZone) {
+            const knightStatRange = cityConfig.knightStats;
+
+            // 產生公主
+            const princessStats = { strength: 40, agility: 40, intelligence: 40, luck: 40, charisma: randomInt(250, 300) };
+            const princess = new FemaleHuman(
+                FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)],
+                princessStats, '公主', generateVisuals(), difficulty
+            );
+
+            // 產生所有騎士
+            const knightProfessions = ['騎士', '槍兵', '士兵', '盾兵', '祭司', '弓兵', '法師'];
+            const finalGuardians = knightProfessions.map(prof => {
+                const totalStatPoints = randomInt(knightStatRange[0], knightStatRange[1]);
+                // 在最終戰中，一半的騎士設定為女性
+                const unit = rollPercentage(50)
+                    ? new FemaleKnightOrderUnit(prof, totalStatPoints, difficulty)
+                    : new KnightOrderUnit(prof, totalStatPoints, difficulty);
+                this.equipEnemy(unit, difficulty);
+                return unit;
+            });
+
+            const finalEnemies = [princess, ...finalGuardians];
+
+            // 建立城堡建築
+            const castleBuilding = {
+                id: crypto.randomUUID(),
+                type: '王城城堡',
+                occupants: finalEnemies,
+                looted: false,
+                resources: { food: 500, wood: 500, stone: 500 }, // 城堡內可搜刮的資源
+                scoutState: 'hidden', // 初始狀態為隱藏
+                postScoutText: '',
+                x: (MAP_WIDTH / 2) - (GRID_SIZE / 2), // 放置在地圖中央
+                y: 80,
+                width: GRID_SIZE,
+                height: GRID_SIZE,
+                isFinalChallenge: true // 特殊標記，用於推進邏輯
+            };
+
+            throneRoomZone.buildings.push(castleBuilding);
+        }
+
         return city;
     },
 
@@ -538,7 +583,8 @@ const raidModule = {
         // 王城有自己的特殊推進邏輯
         if (this.currentRaid.currentZone.name === '王城') {
             const castle = this.currentRaid.currentZone.buildings.find(b => b.isFinalChallenge);
-            return castle && castle.scouted;
+            // 只有當城堡存在且已被偵查後，才能"前進" (進入城堡)
+            return castle && castle.scoutState === 'scouted';
         }
 
         // 定義所有被視為「守軍」的職業
@@ -558,11 +604,15 @@ const raidModule = {
     },
 
     advanceToNextZone(force = false) {
-        const castle = this.currentRaid.currentZone.buildings.find(b => b.isFinalChallenge);
-        if (this.currentRaid.currentZone.name === '王城' && castle && castle.scouted) {
-            this.enterThroneRoom(castle.occupants);
-            return;
+        // 如果是王城，則觸發進入王座之間的事件
+        if (this.currentRaid.currentZone.name === '王城') {
+            const castle = this.currentRaid.currentZone.buildings.find(b => b.isFinalChallenge);
+            if (castle && castle.scoutState === 'scouted') {
+                this.enterThroneRoom(castle.occupants);
+                return; // 中斷後續的區域切換
+            }
         }
+
         if (!this.canAdvance() && !force) {
             this.showCustomAlert('必須先清除此區域的守軍才能前進！');
             return;
@@ -674,10 +724,12 @@ const raidModule = {
         this.selectedTarget = null; 
         
         this.screen = 'tribe';
-        
+
+        // 先過濾掉已陣亡的夥伴，再恢復存活者的生命值
+        this.partners = this.partners.filter(p => p.isAlive());
         this.player.currentHp = this.player.maxHp;
         this.partners.forEach(p => p.currentHp = p.maxHp);
-        this.logMessage('tribe', '所有夥伴的生命值都已完全恢復。', 'success');
+        this.logMessage('tribe', '所有倖存夥伴的生命值都已完全恢復。', 'success');
 
         this.finalizeRaidReturn();
     },
@@ -686,10 +738,11 @@ const raidModule = {
         this.currentRaid = null;
         this.screen = 'tribe';
         
-        // 恢復所有夥伴的生命值
+        // 再次進行過濾和恢復，確保萬無一失
+        this.partners = this.partners.filter(p => p.isAlive());
         this.player.currentHp = this.player.maxHp;
         this.partners.forEach(p => p.currentHp = p.maxHp);
-        this.logMessage('tribe', '所有夥伴的生命值都已完全恢復。', 'success');
+        this.logMessage('tribe', '所有倖存夥伴的生命值都已完全恢復。', 'success');
 
         // nextDay() 內部已經包含了所有事件計算、排程和新生兒處理的邏輯
         this.nextDay();

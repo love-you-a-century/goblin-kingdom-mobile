@@ -96,6 +96,26 @@ const combatModule = {
             }
         }
 
+        // 將通用俘虜邏輯與 BOSS 戰邏輯互斥
+        else {
+            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+            if (defeatedFemales.length > 0) {
+                const newCaptives = defeatedFemales.map(enemy => {
+                    const newCaptive = new FemaleHuman(
+                        enemy.name,
+                        enemy.stats,
+                        enemy.profession,
+                        enemy.visual,
+                        enemy.originDifficulty
+                    );
+                    newCaptive.maxHp = newCaptive.calculateMaxHp();
+                    newCaptive.currentHp = newCaptive.maxHp;
+                    return newCaptive;
+                });
+                this.currentRaid.carriedCaptives.push(...newCaptives);
+            }
+        }
+
         if (this.player && !this.player.isAlive()) {
             this.initiateRebirth();
             return;
@@ -512,9 +532,10 @@ const combatModule = {
 
         let damage;
         if (overrideDamage !== null) {
+            // 當使用技能傷害時，直接賦值即可
             damage = overrideDamage;
-            this.logMessage('combat', `一股神聖的力量形成了懲罰！`, 'system');
         } else {
+            // 如果是普通攻擊，則正常計算武器傷害
             damage = attacker.calculateDamage(this.isStarving);
             damage += (attacker.equipment.chest?.stats.attackBonus || 0) + (attacker.equipment.offHand?.stats.attackBonus || 0);
         }
@@ -610,18 +631,48 @@ const combatModule = {
             }
         }
 
+        // 處理共生關係的傷害分攤邏輯
+        const isTargetAlly = this.combat.allies.some(a => a.id === currentTarget.id);
+        const symbiosisEffect = currentTarget.statusEffects.find(e => e.type === 'symbiosis');
+
+        if (isTargetAlly && symbiosisEffect) {
+            const livingAllies = this.combat.allies.filter(a => a.isAlive());
+            if (livingAllies.length > 0) {
+                // 1. 套用技能的傷害減免
+                const reducedDamage = Math.floor(finalDamage * (1 - symbiosisEffect.damageReduction));
+                // 2. 計算每個單位需要分攤的傷害
+                const sharedDamage = Math.max(1, Math.floor(reducedDamage / livingAllies.length));
+
+                this.logMessage('combat', `[共生關係] 觸發！原傷害 ${finalDamage} 點，減免後為 ${reducedDamage} 點，由 ${livingAllies.length} 名成員共同分攤！`, 'skill');
+
+                // 3. 對所有存活的我方單位造成分攤後的傷害
+                livingAllies.forEach(ally => {
+                    ally.currentHp = Math.max(0, ally.currentHp - sharedDamage);
+                    this.logMessage('combat', `${ally.name} 分攤了 ${sharedDamage} 點傷害。`, 'player');
+                    showFloatingText(ally.id, sharedDamage, 'damage');
+                    if (!ally.isAlive()) {
+                        this.logMessage('combat', `${ally.name} 被擊敗了！`, 'system');
+                        if (ally.id !== this.player.id) this.handlePartnerDeath(ally.id);
+                    }
+                });
+
+                // 4. 結束函式，避免執行後續的單體傷害邏輯
+                return; 
+            }
+        }
+
         currentTarget.currentHp = Math.max(0, currentTarget.currentHp - finalDamage);
         this.logMessage('combat', `${attacker.name} 對 ${currentTarget.name} 造成了 ${finalDamage} 點傷害。`, isAllyAttacking ? 'player' : 'enemy');
 
         const hpPercent = currentTarget.currentHp / currentTarget.maxHp;
         if (currentTarget instanceof ApostleMaiden && currentTarget.isAlive()) {
-            if (hpPercent <= 0.25 && !currentTarget.triggeredDialogues.has('hp_25')) this.showInBattleDialogue(currentTarget, 'hp_25');
-            else if (hpPercent <= 0.50 && !currentTarget.triggeredDialogues.has('hp_50')) this.showInBattleDialogue(currentTarget, 'hp_50');
-            else if (hpPercent <= 0.75 && !currentTarget.triggeredDialogues.has('hp_75')) this.showInBattleDialogue(currentTarget, 'hp_75');
+            if (hpPercent <= 0.25 && currentTarget.triggeredDialogues && !currentTarget.triggeredDialogues.has('hp_25')) this.showInBattleDialogue(currentTarget, 'hp_25');
+            else if (hpPercent <= 0.50 && currentTarget.triggeredDialogues && !currentTarget.triggeredDialogues.has('hp_50')) this.showInBattleDialogue(currentTarget, 'hp_50');
+            else if (hpPercent <= 0.75 && currentTarget.triggeredDialogues && !currentTarget.triggeredDialogues.has('hp_75')) this.showInBattleDialogue(currentTarget, 'hp_75');
         }
-        
+
         if (currentTarget.id === this.player.id && attacker instanceof ApostleMaiden) {
-            if (hpPercent <= 0.50 && !attacker.triggeredDialogues.has('player_hp_50')) this.showInBattleDialogue(attacker, 'player_hp_50');
+            if (hpPercent <= 0.50 && attacker.triggeredDialogues && !attacker.triggeredDialogues.has('player_hp_50')) this.showInBattleDialogue(attacker, 'player_hp_50');
         }
 
         if (currentTarget instanceof SpiralGoddess) {
@@ -815,6 +866,41 @@ const combatModule = {
                 const target = livingEnemies[randomInt(0, livingEnemies.length - 1)];
                 await this.processAttack(this.player, target);
             }
+        }
+        // 處理 王之威壓 的邏輯
+        else if (skillId === 'combat_kings_pressure') {
+            const skillLevel = this.player.learnedSkills[skillId];
+            const effect = skillData.levels[skillLevel - 1].effect;
+            const partnerCount = this.combat.allies.length - 1; // 減去玩家自己
+            const totalDebuff = partnerCount * effect.debuff_per_partner;
+            const finalDuration = this.player.getFinalDuration(skillData);
+
+            this.logMessage('combat', `基於 ${partnerCount} 名夥伴，對敵方全體施加了 ${Math.round(totalDebuff * 100)}% 的全屬性削弱，持續 ${finalDuration} 回合！`, 'skill');
+
+            this.combat.enemies.filter(e => e.isAlive()).forEach(enemy => {
+                enemy.statusEffects.push({
+                    type: 'stat_debuff',
+                    duration: finalDuration + 1, // +1 因為回合結束會立刻減1
+                    multiplier: totalDebuff
+                });
+            });
+        }
+        // 處理 共生關係 的邏輯
+        else if (skillId === 'combat_symbiosis') {
+            const skillLevel = this.player.learnedSkills[skillId];
+            const effect = skillData.levels[skillLevel - 1].effect;
+            const finalDuration = this.player.getFinalDuration(skillData);
+
+            this.logMessage('combat', `你與所有夥伴建立了 [共生關係]，受到的所有傷害將被分攤，並減免 ${Math.round(effect.damageReduction * 100)}%！持續 ${finalDuration} 回合。`, 'skill');
+
+            this.combat.allies.filter(a => a.isAlive()).forEach(ally => {
+                // 為所有存活的我方單位附加共生狀態
+                ally.statusEffects.push({
+                    type: 'symbiosis',
+                    duration: finalDuration + 1, // +1 因為回合結束會立刻減1
+                    damageReduction: effect.damageReduction
+                });
+            });
         } 
 
         if (this.combat.enemies.filter(e => e.isAlive()).length > 0) {
@@ -1007,12 +1093,18 @@ const combatModule = {
             case 'aoe_str':
             case 'aoe_agi':
                 const damageStat = skill.type === 'aoe_str' ? 'strength' : 'agility';
-                const damage = Math.floor(caster.getTotalStat(damageStat, this.isStarving, this) * skill.multiplier);
+                // 先計算出這個技能的基礎傷害值
+                const baseSkillDamage = Math.floor(caster.getTotalStat(damageStat, this.isStarving, this) * skill.multiplier);
+
+                this.logMessage('combat', `${caster.name} 的 [${skill.name}] 襲向我方全體！`, 'skill');
+
+                // 對每一個目標，都呼叫一次完整的攻擊判定流程
                 for (const target of enemies) {
                     if (target.isAlive()) {
-                        target.currentHp = Math.max(0, target.currentHp - damage);
-                        this.logMessage('combat', `[${skill.name}] 對 ${target.name} 造成了 ${damage} 點傷害。`, 'enemy');
-                        if (!target.isAlive()) this.logMessage('combat', `${target.name} 被擊敗了！`, 'system');
+                        // 使用 await 確保每個攻擊動畫和日誌都依序出現
+                        await this.processAttack(caster, target, false, baseSkillDamage);
+                        // 加入一個短暫的延遲，讓戰鬥日誌更容易閱讀
+                        await new Promise(res => setTimeout(res, 200)); 
                     }
                 }
                 break;

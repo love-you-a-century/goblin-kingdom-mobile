@@ -167,7 +167,7 @@ const tribeModule = {
         return yieldAmount;
     },
 
-    calculateDispatchYields() {
+    calculateDispatchYields(triggerEncounters = true) {
         const huntingGoblins = this.getDispatchedPartners('hunting');
         const loggingGoblins = this.getDispatchedPartners('logging');
         const miningGoblins = this.getDispatchedPartners('mining');
@@ -188,7 +188,9 @@ const tribeModule = {
             this.resources.stone = Math.min(this.stoneCapacity, this.resources.stone + stoneGained);
             this.logMessage('tribe', `採礦隊帶回了 ${stoneGained} 單位礦石。`, 'success');
         }
-        this.checkForDlcEncounters();
+        if (triggerEncounters) {
+            this.checkForDlcEncounters();
+        }
     },
 
     executeForcedLabor() {
@@ -210,7 +212,7 @@ const tribeModule = {
         }
 
         this.logMessage('tribe', `你發動了 [強制勞動]，壓榨夥伴們的潛力！`, 'skill');
-        this.calculateDispatchYields();
+        this.calculateDispatchYields(false);
 
         const skillData = SKILL_TREES.tribe.find(s => s.id === skillId);
         const skillLevel = this.player.learnedSkills[skillId];
