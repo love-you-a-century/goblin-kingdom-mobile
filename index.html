@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.71</title>
+    <title>哥布林王國v5.72</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -555,7 +555,7 @@
                             <div class="game-container relative p-4 rounded-lg pt-10">
                                 <h2 class="game-title font-medieval">掠奪指令</h2>
                                 <div class="grid grid-cols-2 gap-4">
-                                    <button @click="scoutEnvironment()" class="btn btn-primary" :disabled="!canScoutEnvironment" :class="{'glow-pulse': tutorial.active && tutorial.step === 4.5}">偵查環境</button>
+                                    <button @click="scoutEnvironment()" class="btn btn-primary" :disabled="!canScoutEnvironment" >偵查環境</button>
                                     <button @click="modals.raidStatus.isOpen = true" class="btn btn-secondary">查看狀態</button>
 
                                     <button @click="modals.raidCaptives.isOpen = true" class="btn btn-secondary">查看俘虜</button>
@@ -2141,8 +2141,132 @@
                         </div>
                         <div class="help-content">
                             <div x-show="helpWidget.activeTab === 'basic'">
-                                <h4 class="font-bold text-lg mb-2">基礎操作</h4>
-                                <p>這裡是基礎操作的說明文字...</p>
+                                <h4 class="font-bold text-lg mb-2">裝備系統核心</h4>
+                                <p class="mb-4">裝備是提升戰力的主要來源，其強度由「品質」、「材質（階級）」和「詞綴」共同決定。</p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">1. 裝備品質</h5>
+                                <table class="w-full text-left border-collapse table-auto mb-6">
+                                    <thead>
+                                        <tr class="bg-gray-700">
+                                            <th class="border border-gray-600 p-2">品質</th>
+                                            <th class="border border-gray-600 p-2">顏色</th>
+                                            <th class="border border-gray-600 p-2">品質加成</th>
+                                            <th class="border border-gray-600 p-2">詞綴數量</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">破舊</td>
+                                            <td class="border border-gray-600 p-2" style="color: #9ca3af;">灰色</td>
+                                            <td class="border border-gray-600 p-2">-1</td>
+                                            <td class="border border-gray-600 p-2">0</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">普通</td>
+                                            <td class="border border-gray-600 p-2" style="color: #ffffff;">白色</td>
+                                            <td class="border border-gray-600 p-2">0</td>
+                                            <td class="border border-gray-600 p-2">0-1</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">精良</td>
+                                            <td class="border border-gray-600 p-2" style="color: #4ade80;">綠色</td>
+                                            <td class="border border-gray-600 p-2">+1</td>
+                                            <td class="border border-gray-600 p-2">1</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">稀有</td>
+                                            <td class="border border-gray-600 p-2" style="color: #60a5fa;">藍色</td>
+                                            <td class="border border-gray-600 p-2">+2</td>
+                                            <td class="border border-gray-600 p-2">2</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">史詩</td>
+                                            <td class="border border-gray-600 p-2" style="color: #a78bfa;">紫色</td>
+                                            <td class="border border-gray-600 p-2">+3</td>
+                                            <td class="border border-gray-600 p-2">3</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">傳說</td>
+                                            <td class="border border-gray-600 p-2" style="color: #f97316;">橘色</td>
+                                            <td class="border border-gray-600 p-2">+5</td>
+                                            <td class="border border-gray-600 p-2">3-4</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">2. 武器基礎傷害 (依材質階級 T1-T7)</h5>
+                                <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-700">
+                                            <th class="border border-gray-600 p-2">武器類型</th>
+                                            <th class="border border-gray-600 p-2 text-center">T1</th>
+                                            <th class="border border-gray-600 p-2 text-center">T2</th>
+                                            <th class="border border-gray-600 p-2 text-center">T3</th>
+                                            <th class="border border-gray-600 p-2 text-center">T4</th>
+                                            <th class="border border-gray-600 p-2 text-center">T5</th>
+                                            <th class="border border-gray-600 p-2 text-center">T6</th>
+                                            <th class="border border-gray-600 p-2 text-center">T7</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="border border-gray-600 p-2">劍/彎刀 (力)</td><td class="border border-gray-600 p-2 text-center">10</td><td class="border border-gray-600 p-2 text-center">15</td><td class="border border-gray-600 p-2 text-center">23</td><td class="border border-gray-600 p-2 text-center">35</td><td class="border border-gray-600 p-2 text-center">53</td><td class="border border-gray-600 p-2 text-center">80</td><td class="border border-gray-600 p-2 text-center">120</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">斧頭 (力)</td><td class="border border-gray-600 p-2 text-center">11</td><td class="border border-gray-600 p-2 text-center">17</td><td class="border border-gray-600 p-2 text-center">26</td><td class="border border-gray-600 p-2 text-center">39</td><td class="border border-gray-600 p-2 text-center">58</td><td class="border border-gray-600 p-2 text-center">87</td><td class="border border-gray-600 p-2 text-center">130</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">雙手劍 (力)</td><td class="border border-gray-600 p-2 text-center">16</td><td class="border border-gray-600 p-2 text-center">24</td><td class="border border-gray-600 p-2 text-center">36</td><td class="border border-gray-600 p-2 text-center">54</td><td class="border border-gray-600 p-2 text-center">81</td><td class="border border-gray-600 p-2 text-center">122</td><td class="border border-gray-600 p-2 text-center">183</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">長槍/弓/法杖 (運/敏/智)</td><td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td><td class="border border-gray-600 p-2 text-center">41</td><td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td><td class="border border-gray-600 p-2 text-center">140</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">短刀 (敏)</td><td class="border border-gray-600 p-2 text-center">8</td><td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td><td class="border border-gray-600 p-2 text-center">41</td><td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">長鞭 (敏)</td><td class="border border-gray-600 p-2 text-center">9</td><td class="border border-gray-600 p-2 text-center">14</td><td class="border border-gray-600 p-2 text-center">21</td><td class="border border-gray-600 p-2 text-center">32</td><td class="border border-gray-600 p-2 text-center">48</td><td class="border border-gray-600 p-2 text-center">72</td><td class="border border-gray-600 p-2 text-center">108</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">爪/拐棍 (敏)</td><td class="border border-gray-600 p-2 text-center">7</td><td class="border border-gray-600 p-2 text-center">11</td><td class="border border-gray-600 p-2 text-center">17</td><td class="border border-gray-600 p-2 text-center">26</td><td class="border border-gray-600 p-2 text-center">39</td><td class="border border-gray-600 p-2 text-center">59</td><td class="border border-gray-600 p-2 text-center">88</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">投石索 (敏)</td><td class="border border-gray-600 p-2 text-center">6</td><td class="border border-gray-600 p-2 text-center">9</td><td class="border border-gray-600 p-2 text-center">14</td><td class="border border-gray-600 p-2 text-center">21</td><td class="border border-gray-600 p-2 text-center">32</td><td class="border border-gray-600 p-2 text-center">48</td><td class="border border-gray-600 p-2 text-center">72</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">3. 防具與盾牌基礎數值</h5>
+                                <p class="text-sm text-gray-400 mb-2">鎧甲提供少量全屬性與高傷害減免；皮甲提供中量全屬性與中傷害減免；布服提供大量全屬性與低傷害減免。</p>
+                                <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-700">
+                                            <th class="border border-gray-600 p-2">類型</th>
+                                            <th class="border border-gray-600 p-2">T1</th>
+                                            <th class="border border-gray-600 p-2">T2</th>
+                                            <th class="border border-gray-600 p-2">T3</th>
+                                            <th class="border border-gray-600 p-2">T4</th>
+                                            <th class="border border-gray-600 p-2">T5</th>
+                                            <th class="border border-gray-600 p-2">T6</th>
+                                            <th class="border border-gray-600 p-2">T7</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="border border-gray-600 p-2">鎧甲 (傷害減免%)</td><td class="border border-gray-600 p-2">6</td><td class="border border-gray-600 p-2">12</td><td class="border border-gray-600 p-2">18</td><td class="border border-gray-600 p-2">24</td><td class="border border-gray-600 p-2">30</td><td class="border border-gray-600 p-2">36</td><td class="border border-gray-600 p-2">42</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">皮甲 (傷害減免%)</td><td class="border border-gray-600 p-2">4</td><td class="border border-gray-600 p-2">8</td><td class="border border-gray-600 p-2">12</td><td class="border border-gray-600 p-2">16</td><td class="border border-gray-600 p-2">20</td><td class="border border-gray-600 p-2">24</td><td class="border border-gray-600 p-2">28</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">布服 (傷害減免%)</td><td class="border border-gray-600 p-2">2</td><td class="border border-gray-600 p-2">4</td><td class="border border-gray-600 p-2">6</td><td class="border border-gray-600 p-2">8</td><td class="border border-gray-600 p-2">10</td><td class="border border-gray-600 p-2">12</td><td class="border border-gray-600 p-2">14</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">盾牌 (格擋目標值)</td><td class="border border-gray-600 p-2">19</td><td class="border border-gray-600 p-2">18</td><td class="border border-gray-600 p-2">17</td><td class="border border-gray-600 p-2">16</td><td class="border border-gray-600 p-2">15</td><td class="border border-gray-600 p-2">14</td><td class="border border-gray-600 p-2">13</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">4. 裝備詞綴</h5>
+                                <table class="w-full text-left border-collapse table-auto text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-700">
+                                            <th class="border border-gray-600 p-2">詞綴名稱</th>
+                                            <th class="border border-gray-600 p-2">效果</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="border border-gray-600 p-2">力量的/蠻力的</td><td class="border border-gray-600 p-2">力量 +10 / +20</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">敏捷的/迅捷的</td><td class="border border-gray-600 p-2">敏捷 +10 / +20</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">智力的/睿智的</td><td class="border border-gray-600 p-2">智力 +10 / +20</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">幸運的/強運的</td><td class="border border-gray-600 p-2">運氣 +10 / +20</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">健康的/健壯的</td><td class="border border-gray-600 p-2">生命 +240 / +480</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">哥布林的/哥布林王的</td><td class="border border-gray-600 p-2">全能力 +5 / +10</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">單手劍/巨劍的</td><td class="border border-gray-600 p-2">力量系武器傷害 +10% / +30%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">弓箭/法杖/長槍的</td><td class="border border-gray-600 p-2">對應武器類型傷害 +20%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">吸血的/尖刺的/連擊的</td><td class="border border-gray-600 p-2">10%/10%/5%機率 觸發 吸血/反傷/連擊</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">毀滅的</td><td class="border border-gray-600 p-2">爆擊基礎倍率 +0.5</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">再生的/格擋的/穿透的</td><td class="border border-gray-600 p-2">每回合恢復5%HP / 5%機率格擋 / 10%機率穿甲</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">爆擊的</td><td class="border border-gray-600 p-2">爆擊率 +10%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">賭徒的</td><td class="border border-gray-600 p-2">所有機率性詞綴發動率 +5%</td></tr>
+                                    </tbody>
+                                </table>
                             </div>
                             <div x-show="helpWidget.activeTab === 'tribe'">
                                 <h4 class="font-bold text-lg mb-2">部落經營</h4>
