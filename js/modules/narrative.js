@@ -45,9 +45,20 @@ const narrativeModule = {
 
         this.breedingChargesLeft -= selectedCount;
         this.logMessage('tribe', `你與 ${selectedCount} 名女性快速進行了繁衍，獲得了 ${selectedCount} 點能力點。`, 'success');
-        
         this.modals.dungeon.selectedBreedIds = [];
-        this.modals.construction.isOpen = false;
+
+        // 檢查是否剛觸發了重大事件
+        const hasMajorEvent = this.pendingDecisions.some(d => d.type === 'apostle_battle' || d.type === 'goddess_battle');
+
+        // 先關閉建設視窗
+        this.modals.construction.isOpen = false; 
+
+        // 如果有重大事件，則立即處理；否則，顯示常規提示
+        if (hasMajorEvent) {
+            this.processNextDecision();
+        } else {
+            this.showCustomAlert('繁衍已完成！');
+        }
     },
     
     giveBirth(mother) {

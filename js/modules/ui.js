@@ -186,10 +186,22 @@ const uiModule = {
 
     returnToBreedingModal(message) {
         this.screen = 'tribe';
-        this.modals.construction.isOpen = true;
-        this.modals.construction.activeTab = 'dungeon';
-        this.modals.dungeon.subTab = 'breed';
-        this.showCustomAlert(message);
+
+        // 檢查是否有重大事件在佇列中
+        const hasMajorEvent = this.pendingDecisions.some(d => d.type === 'apostle_battle' || d.type === 'goddess_battle');
+
+        if (hasMajorEvent) {
+            // 如果有，確保所有視窗都關閉，並直接處理事件
+            this.modals.narrative.isOpen = false;
+            this.modals.construction.isOpen = false;
+            this.processNextDecision();
+        } else {
+            // 如果沒有，才執行返回建設視窗的原始邏輯
+            this.modals.construction.isOpen = true;
+            this.modals.construction.activeTab = 'dungeon';
+            this.modals.dungeon.subTab = 'breed';
+            this.showCustomAlert(message);
+        }
     },
 
     openPlayerEquipment() {
@@ -260,6 +272,12 @@ const uiModule = {
     
     showDiceRollAnimation(title, playerRolls = [], opponentRolls = []) {
         return new Promise(resolve => {
+            // 如果開啟加速，則完全跳過動畫，直接結束
+            if (this.combat.fastCombat) {
+                resolve();
+                return;
+            }
+
             this.modals.dice.sides.player = playerRolls.map(r => ({ ...r, isRolling: true }));
             this.modals.dice.sides.opponent = opponentRolls.map(r => ({ ...r, isRolling: true }));
             this.modals.dice.title = title;
@@ -282,5 +300,12 @@ const uiModule = {
         }
         this.modals.dice.isOpen = false;
         this.modals.dice.onComplete = null;
+    },
+
+    async combatDelay(duration) {
+        // 只有在「戰鬥加速」關閉時，才執行延遲
+        if (!this.combat.fastCombat) {
+            await new Promise(res => setTimeout(res, duration));
+        }
     },
 };

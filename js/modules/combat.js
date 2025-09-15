@@ -47,11 +47,44 @@ const combatModule = {
         }
     },
 
+    startGoddessQnA() {
+        const goddess = this.combat.enemies[0];
+        if (!goddess) return;
+
+        // 觸發開場問答的對話 (這也解決了您的第二個問題)
+        this.showInBattleDialogue(goddess, 'phase1_start');
+        
+        // 呼叫原本就存在的問答邏輯
+        this.promptGoddessQuestionAndWaitForAnswer();
+    },
+
+    async showDialogueWithAvatar(title, avatarUrl, content) {
+        return new Promise(resolve => {
+            const modal = this.modals.narrative;
+            modal.isOpen = true;
+            modal.title = title;
+            modal.type = "tutorial"; // 重用教學模式的版面
+            modal.isLoading = false;
+            modal.isAwaitingConfirmation = false;
+            modal.avatarUrl = avatarUrl;
+            modal.content = `<p class="text-lg leading-relaxed">${content}</p>`;
+            
+            // 當玩家點擊確認按鈕時，關閉視窗並 resolve Promise
+            modal.onConfirm = () => {
+                modal.isOpen = false;
+                modal.onConfirm = null; // 清理回呼
+                setTimeout(resolve, 200); // 稍微延遲以確保動畫效果
+            };
+        });
+    },
+
     // 結束戰鬥
     endCombat(victory) {
+        let specialBossDefeated = false;
         this.clearAllCombatStatusEffects();
         const wasApostleBattle = this.combat.currentEnemyGroup.some(e => e instanceof ApostleMaiden);
         if (wasApostleBattle) {
+            specialBossDefeated = true;
             if (victory) {
                 this.logMessage('tribe', `你成功擊敗了螺旋女神的使徒！`, 'success');
                 const captiveApostle = new FemaleHuman(
@@ -71,9 +104,11 @@ const combatModule = {
             if (!this.flags.defeatedApostle) {
                 this.flags.defeatedApostle = true;
                 this.logMessage('tribe', `你獲得了關鍵物品 [繁衍之證]！繁衍系技能樹已解鎖！`, 'system');
+                this.finishCombatCleanup(true); 
             }
         }
         else if (this.combat.currentEnemyGroup.some(e => e instanceof SpiralGoddess)) {
+            specialBossDefeated = true;
             if (victory) {
                 this.logMessage('tribe', `你戰勝了神之試煉，證明了哥布林存在的價值！`, 'success');
                 const captiveGoddess = new FemaleHuman(
@@ -91,6 +126,7 @@ const combatModule = {
                     this.logMessage('tribe', `你獲得了關鍵物品 [螺旋的權能]！權能系被動技能已解鎖！`, 'system');
                 }
                 this.pendingDecisions.push({ type: 'crone_dialogue' });
+                this.finishCombatCleanup(true);
             } else {
                 this.logMessage('tribe', `你在絕對的神力面前化為了塵埃...`, 'enemy');
             }
@@ -145,93 +181,96 @@ const combatModule = {
             this.combat.onVictoryCallback();
         }
 
-        if (this.currentRaid && this.raidTimeExpired) {
-            this.raidTimeExpired = false;
-            if (victory) {
-                this.triggerReinforcementBattle();
-            } else {
-                this.prepareToEndRaid(true);
-            }
-            if (this.postBattleBirths.length > 0) {
-                this.postBattleBirths.forEach(birth => {
-                    this.pendingDecisions.push({
-                        type: 'partner',
-                        list: [...this.partners, birth.newborn],
-                        limit: this.partnerCapacity,
-                        context: { mother: birth.mother, newborn: birth.newborn }
-                    });
-                });
-                this.postBattleBirths = [];
-                this.checkAndProcessDecisions();
-            }
-            return;
-        }
+        if (!specialBossDefeated) {
 
-        if (!this.currentRaid) {
-            if (victory) {
-                this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
-                const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
-                if (defeatedFemales.length > 0) {
-                    if ((this.dungeonCaptives.length + defeatedFemales.length) > this.dungeonCapacity) { 
-                        this.logMessage('tribe', '地牢空間不足...', 'warning');
-                        this.pendingDecisions.push({
-                            type: 'dungeon',
-                            list: [...this.dungeonCaptives, ...defeatedFemales],
-                            limit: this.dungeonCapacity, 
-                            context: { postBattleBirths: this.postBattleBirths }
-                        });
-                    } else {
-                        this.captives.push(...defeatedFemales);
-                        this.logMessage('tribe', `你俘虜了 ${defeatedFemales.length} 名戰敗的敵人。`, 'info');
-                    }
+            if (this.currentRaid && this.raidTimeExpired) {
+                this.raidTimeExpired = false;
+                if (victory) {
+                    this.triggerReinforcementBattle();
+                } else {
+                    this.prepareToEndRaid(true);
                 }
-                this.finishCombatCleanup(true);
-
-            } else {
-                this.logMessage('tribe', '你在部落保衛戰中失敗了！', 'enemy');
-                this.removeAllCaptives('rescued');
+                if (this.postBattleBirths.length > 0) {
+                    this.postBattleBirths.forEach(birth => {
+                        this.pendingDecisions.push({
+                            type: 'partner',
+                            list: [...this.partners, birth.newborn],
+                            limit: this.partnerCapacity,
+                            context: { mother: birth.mother, newborn: birth.newborn }
+                        });
+                    });
+                    this.postBattleBirths = [];
+                    this.checkAndProcessDecisions();
+                }
+                return;
             }
-            this.combat.isDlcEncounterBattle = false;
-            return;
-        }
 
-        const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
-        if (defeatedFemales.length > 0) {
-            const newCaptives = defeatedFemales.map(enemy => {
-                const newCaptive = new FemaleHuman(
-                    enemy.name,
-                    enemy.stats,
-                    enemy.profession,
-                    enemy.visual,
-                    enemy.originDifficulty
-                );
-                newCaptive.maxHp = newCaptive.calculateMaxHp();
-                newCaptive.currentHp = newCaptive.maxHp;
-                return newCaptive;
-            });
-            this.currentRaid.carriedCaptives.push(...newCaptives);
-        }
+            if (!this.currentRaid) {
+                if (victory) {
+                    this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
+                    const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+                    if (defeatedFemales.length > 0) {
+                        if ((this.dungeonCaptives.length + defeatedFemales.length) > this.dungeonCapacity) { 
+                            this.logMessage('tribe', '地牢空間不足...', 'warning');
+                            this.pendingDecisions.push({
+                                type: 'dungeon',
+                                list: [...this.dungeonCaptives, ...defeatedFemales],
+                                limit: this.dungeonCapacity, 
+                                context: { postBattleBirths: this.postBattleBirths }
+                            });
+                        } else {
+                            this.captives.push(...defeatedFemales);
+                            this.logMessage('tribe', `你俘虜了 ${defeatedFemales.length} 名戰敗的敵人。`, 'info');
+                        }
+                    }
+                    this.finishCombatCleanup(true);
 
-        if (this.player && !this.player.isAlive()) {
-            this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
-        }
-
-        if (this.combat.isReinforcementBattle) {
-            if (this.isRetreatingWhenTimeExpired) {
-                this.logMessage('tribe', '你擊敗了前來阻截的騎士團，成功帶著戰利品返回部落！', 'success');
-                this.prepareToEndRaid(false);
-            } else {
-                this.currentRaid.timeRemaining = Infinity;
-                this.currentRaid.reinforcementsDefeated = true;
-                this.logMessage('raid', '你擊敗了騎士團的增援部隊！時間壓力消失了，你可以繼續探索這座城鎮。', 'success');
-                this.finishCombatCleanup();
+                } else {
+                    this.logMessage('tribe', '你在部落保衛戰中失敗了！', 'enemy');
+                    this.removeAllCaptives('rescued');
+                }
+                this.combat.isDlcEncounterBattle = false;
+                return;
             }
-            this.isRetreatingWhenTimeExpired = false;
-        } else {
-            if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
-                this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
+
+            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
+            if (defeatedFemales.length > 0) {
+                const newCaptives = defeatedFemales.map(enemy => {
+                    const newCaptive = new FemaleHuman(
+                        enemy.name,
+                        enemy.stats,
+                        enemy.profession,
+                        enemy.visual,
+                        enemy.originDifficulty
+                    );
+                    newCaptive.maxHp = newCaptive.calculateMaxHp();
+                    newCaptive.currentHp = newCaptive.maxHp;
+                    return newCaptive;
+                });
+                this.currentRaid.carriedCaptives.push(...newCaptives);
+            }
+
+            if (this.player && !this.player.isAlive()) {
+                this.logMessage('tribe', '夥伴們獲得了勝利！牠們將倒下的哥布林王帶回了部落。', 'success');
+            }
+
+            if (this.combat.isReinforcementBattle) {
+                if (this.isRetreatingWhenTimeExpired) {
+                    this.logMessage('tribe', '你擊敗了前來阻截的騎士團，成功帶著戰利品返回部落！', 'success');
+                    this.prepareToEndRaid(false);
+                } else {
+                    this.currentRaid.timeRemaining = Infinity;
+                    this.currentRaid.reinforcementsDefeated = true;
+                    this.logMessage('raid', '你擊敗了騎士團的增援部隊！時間壓力消失了，你可以繼續探索這座城鎮。', 'success');
+                    this.finishCombatCleanup();
+                }
+                this.isRetreatingWhenTimeExpired = false;
             } else {
-                this.finishCombatCleanup();
+                if (this.currentRaid.carriedCaptives.length > this.carryCapacity) {
+                    this.openCaptiveManagementModal('raid', this.currentRaid.carriedCaptives, this.carryCapacity);
+                } else {
+                    this.finishCombatCleanup();
+                }
             }
         }
     },
@@ -261,6 +300,11 @@ const combatModule = {
         for (const unit of livingEnemies) {
             if (!unit.isAlive()) continue;
             await this.processAiAction(unit);
+
+            // 每次敵方行動後，檢查我方是否全滅
+            if (this.combat.allies.filter(u => u.isAlive()).length === 0) {
+                break;
+            }
         }
         
         await new Promise(res => setTimeout(res, 200));
@@ -270,6 +314,14 @@ const combatModule = {
             for (const unit of livingPartners) {
                     if (!unit.isAlive()) continue;
                     await this.processAiAction(unit);
+
+                    // 在每個夥伴行動後，都進行一次條件式延遲
+                    await this.combatDelay(500);
+
+                    // 每次我方夥伴行動後，檢查敵方是否全滅
+                    if (this.combat.enemies.filter(e => e.isAlive()).length === 0) {
+                        break;
+                    }
             }
         }
         this.tickStatusEffects();
@@ -301,157 +353,181 @@ const combatModule = {
     },
         
     async processAiAction(attacker) {
-        if (attacker instanceof SpiralGoddess) {
-            if (attacker.phase === 1) {
-                const result = await this.promptGoddessQuestionAndWaitForAnswer();
-                if (!result.finished) {
-                    const playerNumericAnswer = parseInt(result.answer.trim());
-                    const qnaData = SPECIAL_BOSSES.spiral_goddess_mother.qna;
-                    const currentQnA = qnaData[attacker.qnaIndex];
-                    let correctAnswer;
-                    switch (currentQnA.check) {
-                        case 'playerHeight': correctAnswer = this.player.height; break;
-                        case 'partnerCount': correctAnswer = this.partners.length; break;
-                        case 'penisSize':   correctAnswer = this.player.penisSize; break;
-                        case 'captiveCount': correctAnswer = this.captives.length; break;
-                        default: correctAnswer = -999; break;
-                    }
-                    if (!isNaN(playerNumericAnswer) && playerNumericAnswer === correctAnswer) {
-                        this.logMessage('combat', `你回答了：「${playerNumericAnswer}」。女神點了點頭。`, 'player');
-                    } else {
-                        const penaltyDamage = correctAnswer * 10;
-                        await this.showCustomAlert(
-                            `女神：「謊言...是沒有意義的。」`,
-                            async () => {
-                                this.logMessage('combat', `你回答了：「${playerNumericAnswer || '無效的回答'}」。女神對你的謊言降下懲罰！(正確答案: ${correctAnswer})`, 'enemy');
-                                await this.processAttack(attacker, this.player, false, penaltyDamage);
-                            }
-                        );
-                    }
-                    attacker.qnaIndex++;
-                }
-                if (attacker.qnaIndex >= SPECIAL_BOSSES.spiral_goddess_mother.qna.length && !attacker.phase2_triggered) {
-                    attacker.phase2_triggered = true;
-                    attacker.phase = 2; 
-                    this.logMessage('combat', '問答的試煉結束了...女神的氣息改變了！', 'system');
-                    this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase2_start}」`, 'enemy');
-                    this.combat.allies.forEach(ally => {
-                        ally.statusEffects.push({ type: 'root_debuff', duration: Infinity });
-                        ally.updateHp(this.isStarving); 
+        // 使用 do-while 迴圈來處理額外行動
+        let hasActedOnce = false;
+        do {
+            // 如果這不是第一次行動（即為額外行動）
+            if (hasActedOnce) {
+                this.logMessage('combat', `${attacker.name} 觸發了 [超越]，獲得了額外行動！`, 'skill');
+                // 為攻擊者單獨減少技能冷卻
+                if (attacker.skills && attacker.skills.length > 0) {
+                    attacker.skills.forEach(skill => {
+                        if (skill.currentCooldown > 0) {
+                            skill.currentCooldown--;
+                        }
                     });
-                    this.logMessage('combat', '我方全體感受到了靈魂深處的撕裂，生命力的根源被削弱了！', 'player');
                 }
-            } else if (attacker.phase === 2) {
-                const target = this.combat.allies.filter(a => a.isAlive())[0];
-                if (target) await this.processAttack(attacker, target);
-            } else if (attacker.phase === 3) {
-                const repulsionSkillData = SPECIAL_BOSSES.spiral_goddess_mother.skills.find(s => s.id === 'goddess_repulsion');
-                let skillToUse = attacker.skills.find(s => s.id === 'goddess_repulsion');
-                if (!skillToUse) {
-                    skillToUse = { ...repulsionSkillData, currentCooldown: 0 };
-                    attacker.skills.push(skillToUse);
-                }
-                if (skillToUse.currentCooldown === 0) {
-                    this.logMessage('combat', `女神施放了 <span class="text-pink-400">[${skillToUse.name}]</span>！`, 'skill');
-                    skillToUse.currentCooldown = skillToUse.baseCooldown;
-                    for (const ally of this.combat.allies.filter(a => a.isAlive())) {
-                        const charismaDamage = ally.getTotalStat('charisma', this.isStarving);
-                        ally.currentHp = Math.max(0, ally.currentHp - charismaDamage);
-                        this.logMessage('combat', `奇異的力量在你體內奔流，對 ${ally.name} 造成了 ${charismaDamage} 點真實傷害！`, 'player');
-                    }
-                } else {
-                    const target = this.combat.allies.filter(a => a.isAlive())[0];
-                    if (target) await this.processAttack(attacker, target);
-                }
-            } else if (attacker.phase === 4 || attacker.phase === 5) {
-                const target = this.combat.allies.filter(a => a.isAlive())[0];
-                if (target) await this.processAttack(attacker, target);
+                await new Promise(res => setTimeout(res, 300));
             }
-            return; 
-        }
 
-        if (attacker.profession === '使徒') {
-            const proliferateSkill = attacker.skills.find(s => s.id === 'apostle_proliferate');
-            const apostleCount = this.combat.enemies.filter(e => e.profession === '使徒').length;
-            if (proliferateSkill && proliferateSkill.currentCooldown === 0 && apostleCount < 20) {
-                this.logMessage('combat', `${attacker.name} 施放了 <span class="text-pink-400">[繁衍的權能]</span>！`, 'skill');
-                const newClone = this.cloneApostle(attacker);
-                this.combat.enemies.push(newClone);
-                proliferateSkill.currentCooldown = proliferateSkill.baseCooldown;
-                const cloneSkill = newClone.skills.find(s => s.id === 'apostle_proliferate');
-                if (cloneSkill) {
-                    cloneSkill.currentCooldown = cloneSkill.baseCooldown;
-                }
-                this.logMessage('combat', `一個新的 ${newClone.name} 出現在戰場上！`, 'enemy');
-                this.logMessage('combat', `在 [重現的權能] 的影響下，${attacker.name} 立即再次行動！`, 'skill');
-                const livingAllies = this.combat.allies.filter(a => a.isAlive());
-                if (livingAllies.length > 0) {
-                    const target = livingAllies[randomInt(0, livingAllies.length - 1)];
+            // --- 每次行動前，先確認是否有可攻擊的目標 ---
+            const isCurrentAttackerAlly = this.combat.allies.some(a => a.id === attacker.id);
+            const currentEnemies = isCurrentAttackerAlly 
+                ? this.combat.enemies.filter(u => u.isAlive()) 
+                : this.combat.allies.filter(u => u.isAlive());
+
+            if (currentEnemies.length === 0) {
+                break; // 如果沒有目標，直接跳出本次及所有額外行動
+            }
+
+            // 邏輯 1: 超越世紀的惡魔
+            if (attacker.name === '超越世紀的惡魔') {
+                const torrentSkill = attacker.skills.find(s => s.id === 'century_torrent');
+                if (torrentSkill && torrentSkill.currentCooldown === 0) {
+                    await this.executeSkill(torrentSkill, attacker, this.combat.allies, currentEnemies);
+                } else {
+                    const target = currentEnemies[randomInt(0, currentEnemies.length - 1)];
                     await this.processAttack(attacker, target, false);
                 }
-                return; 
             }
-        }
-        
-        const isAlly = this.combat.allies.some(a => a.id === attacker.id);
-        const allies = isAlly ? this.combat.allies.filter(u => u.isAlive()) : this.combat.enemies.filter(u => u.isAlive());
-        const enemies = isAlly ? this.combat.enemies.filter(u => u.isAlive()) : this.combat.allies.filter(u => u.isAlive());
-
-        if (enemies.length === 0) return;
-
-        let actionTaken = false;
-
-        if (attacker.skills && attacker.skills.length > 0) {
-            const skill = attacker.skills[0];
-            if (skill.currentCooldown === 0) {
-                if (skill.type === 'team_heal') {
-                    const totalMaxHp = allies.reduce((sum, a) => sum + a.maxHp, 0);
-                    const totalCurrentHp = allies.reduce((sum, a) => sum + a.currentHp, 0);
-                    if ((totalCurrentHp / totalMaxHp) < skill.triggerHp) {
-                        await this.executeSkill(skill, attacker, allies, enemies);
-                        actionTaken = true;
+            // 邏輯 2: 螺旋女神
+            else if (attacker instanceof SpiralGoddess) {
+                if (attacker.phase === 1) {
+                    const result = await this.promptGoddessQuestionAndWaitForAnswer();
+                    if (!result.finished) {
+                        const playerNumericAnswer = parseInt(result.answer.trim());
+                        const qnaData = SPECIAL_BOSSES.spiral_goddess_mother.qna;
+                        const currentQnA = qnaData[attacker.qnaIndex];
+                        let correctAnswer;
+                        switch (currentQnA.check) {
+                            case 'playerHeight': correctAnswer = this.player.height; break;
+                            case 'partnerCount': correctAnswer = this.partners.length; break;
+                            case 'penisSize':   correctAnswer = this.player.penisSize; break;
+                            case 'captiveCount': correctAnswer = this.captives.length; break;
+                            default: correctAnswer = -999; break;
+                        }
+                        if (!isNaN(playerNumericAnswer) && playerNumericAnswer === correctAnswer) {
+                            this.logMessage('combat', `你回答了：「${playerNumericAnswer}」。女神點了點頭。`, 'player');
+                        } else {
+                            const penaltyDamage = correctAnswer * 10;
+                            await this.showCustomAlert(
+                                `女神：「謊言...是沒有意義的。」`,
+                                async () => {
+                                    this.logMessage('combat', `你回答了：「${playerNumericAnswer || '無效的回答'}」。女神對你的謊言降下懲罰！(正確答案: ${correctAnswer})`, 'enemy');
+                                    await this.processAttack(attacker, this.player, false, penaltyDamage);
+                                }
+                            );
+                        }
+                        attacker.qnaIndex++;
                     }
-                } else if (skill.type === 'charge_nuke') {
-                    const isCasting = attacker.statusEffects.some(e => e.type === 'charge_nuke');
-                    if (!isCasting) {
-                        await this.executeSkill(skill, attacker, allies, enemies);
-                        actionTaken = true;
+                    if (attacker.qnaIndex >= SPECIAL_BOSSES.spiral_goddess_mother.qna.length && !attacker.phase2_triggered) {
+                        attacker.phase2_triggered = true; attacker.phase = 2; 
+                        this.showInBattleDialogue(attacker, 'phase2_start');
+                        this.logMessage('combat', '問答的試煉結束了...女神的氣息改變了！', 'system');
+                        this.combat.allies.forEach(ally => {
+                            ally.statusEffects.push({ type: 'root_debuff', duration: Infinity });
+                            ally.updateHp(this.isStarving); 
+                        });
+                        this.logMessage('combat', '我方全體感受到了靈魂深處的撕裂，生命力的根源被削弱了！', 'player');
                     }
+                } else if (attacker.phase === 2) {
+                    const target = currentEnemies[0];
+                    if (target) await this.processAttack(attacker, target);
+                } else if (attacker.phase >= 3) {
+                    const repulsionSkillData = SPECIAL_BOSSES.spiral_goddess_mother.skills.find(s => s.id === 'goddess_repulsion');
+                    let skillToUse = attacker.skills.find(s => s.id === 'goddess_repulsion');
+                    if (!skillToUse) {
+                        skillToUse = { ...repulsionSkillData, currentCooldown: 0 };
+                        attacker.skills.push(skillToUse);
+                    }
+                    if (skillToUse.currentCooldown === 0) {
+                        this.logMessage('combat', `女神施放了 <span class="text-pink-400">[${skillToUse.name}]</span>！`, 'skill');
+                        skillToUse.currentCooldown = skillToUse.baseCooldown;
+                        for (const ally of this.combat.allies.filter(a => a.isAlive())) {
+                            const charismaDamage = ally.getTotalStat('charisma', this.isStarving);
+                            ally.currentHp = Math.max(0, ally.currentHp - charismaDamage);
+                            this.logMessage('combat', `奇異的力量在你體內奔流，對 ${ally.name} 造成了 ${charismaDamage} 點真實傷害！`, 'player');
+                        }
+                    } else {
+                        const target = currentEnemies[0];
+                        if (target) await this.processAttack(attacker, target);
+                    }
+                }
+            }
+            // 邏輯 3: 使徒
+            else if (attacker instanceof ApostleMaiden) {
+                const proliferateSkill = attacker.skills.find(s => s.id === 'apostle_proliferate');
+                const apostleCount = this.combat.enemies.filter(e => e.profession === '使徒').length;
+                if (proliferateSkill && proliferateSkill.currentCooldown === 0 && apostleCount < 20) {
+                    await this.executeSkill(proliferateSkill, attacker, this.combat.enemies, currentEnemies);
                 } else {
-                    const isEffectActive = attacker.statusEffects.some(e => e.type === skill.type);
-                    if (!isEffectActive) {
-                        await this.executeSkill(skill, attacker, allies, enemies);
-                        actionTaken = true;
-                    }
+                    const target = currentEnemies[randomInt(0, currentEnemies.length - 1)];
+                    await this.processAttack(attacker, target, false);
                 }
             }
-        }
-        
-        const chargingEffect = attacker.statusEffects.find(e => e.type === 'charge_nuke');
-        if (chargingEffect) {
-            if (chargingEffect.chargeTurns <= 0) {
-                this.logMessage('combat', `[${attacker.name}] 的 [破滅法陣] 詠唱完畢！`, 'skill');
-                const damage = Math.floor(attacker.getTotalStat('intelligence') * chargingEffect.multiplier);
-                for (const target of enemies) {
-                    if (target.isAlive()) {
-                        target.currentHp = Math.max(0, target.currentHp - damage);
-                        this.logMessage('combat', `法陣衝擊了 ${target.name}，造成 ${damage} 點無法閃避的傷害。`, 'enemy');
-                        if (!target.isAlive()) this.logMessage('combat', `${target.name} 被擊敗了！`, 'system');
+            // 邏輯 4: 其他所有通用單位 (騎士、哥布林夥伴等)
+            else {
+                let actionTaken = false;
+                // 優先使用技能
+                if (attacker.skills && attacker.skills.length > 0) {
+                    // 尋找第一個冷卻完畢的技能，而不只是第一個
+                    const skill = attacker.skills.find(s => s.currentCooldown === 0);
+                    if (skill) { // 如果找到了可用的技能
+                        let shouldUseSkill = false;
+                        if (skill.type === 'team_heal') {
+                            const allies = isCurrentAttackerAlly ? this.combat.allies.filter(u => u.isAlive()) : this.combat.enemies.filter(u => u.isAlive());
+                            const totalMaxHp = allies.reduce((sum, a) => sum + a.maxHp, 0);
+                            const totalCurrentHp = allies.reduce((sum, a) => sum + a.currentHp, 0);
+                            if ((totalCurrentHp / totalMaxHp) < skill.triggerHp) {
+                                shouldUseSkill = true;
+                            }
+                        } else if (skill.type === 'charge_nuke') {
+                            if (!attacker.statusEffects.some(e => e.type === 'charge_nuke')) {
+                                shouldUseSkill = true;
+                            }
+                        } else {
+                            if (!attacker.statusEffects.some(e => e.type === skill.type)) {
+                                shouldUseSkill = true;
+                            }
+                        }
+                        if (shouldUseSkill) {
+                            await this.executeSkill(skill, attacker, this.combat.allies, currentEnemies);
+                            actionTaken = true;
+                        }
                     }
                 }
-                attacker.statusEffects = attacker.statusEffects.filter(e => e.type !== 'charge_nuke');
-            } else {
-                this.logMessage('combat', `${attacker.name} 正在詠唱... (剩餘 ${chargingEffect.chargeTurns} 回合)`, 'info');
+                // 處理詠唱中的技能
+                const chargingEffect = attacker.statusEffects.find(e => e.type === 'charge_nuke');
+                if (chargingEffect) {
+                    if (chargingEffect.chargeTurns <= 0) {
+                        this.logMessage('combat', `[${attacker.name}] 的 [破滅法陣] 詠唱完畢！`, 'skill');
+                        const damage = Math.floor(attacker.getTotalStat('intelligence') * chargingEffect.multiplier);
+                        for (const target of currentEnemies) {
+                            target.currentHp = Math.max(0, target.currentHp - damage);
+                            this.logMessage('combat', `法陣衝擊了 ${target.name}，造成 ${damage} 點無法閃避的傷害。`, 'enemy');
+                            if (!target.isAlive()) this.logMessage('combat', `${target.name} 被擊敗了！`, 'system');
+                        }
+                        attacker.statusEffects = attacker.statusEffects.filter(e => e.type !== 'charge_nuke');
+                    } else {
+                        this.logMessage('combat', `${attacker.name} 正在詠唱... (剩餘 ${chargingEffect.chargeTurns} 回合)`, 'info');
+                    }
+                    actionTaken = true;
+                }
+                // 如果沒做任何事，就普通攻擊
+                if (!actionTaken) {
+                    const target = currentEnemies[randomInt(0, currentEnemies.length - 1)];
+                    await this.processAttack(attacker, target, false);
+                }
             }
-            actionTaken = true;
-        }
 
-        if (!actionTaken) {
-            const target = enemies[randomInt(0, enemies.length - 1)];
-            await this.processAttack(attacker, target, false);
-        }
+            // --- 迴圈控制 ---
+            hasActedOnce = true;
+            if (attacker.extraActions > 0) {
+                attacker.extraActions--;
+            }
         
-        await new Promise(res => setTimeout(res, 300));
+        // 如果還有額外行動，並且場上還有敵人，就繼續迴圈
+        } while ((attacker.extraActions || 0) > 0 && this.combat.enemies.filter(e => e.isAlive()).length > 0);
     },
 
     async processAttack(attacker, target, isExtraAttack = false, overrideDamage = null) {
@@ -544,7 +620,7 @@ const combatModule = {
         if (attackerTotal <= defenderTotal) { 
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${currentTarget.name} 閃過了！`, logType === 'player' ? 'enemy' : 'player');
             showFloatingText(currentTarget.id, 'MISS', 'miss');
-            return;
+            return false;
         }
         
         this.logMessage('combat', `攻擊命中！`, 'success');
@@ -676,7 +752,7 @@ const combatModule = {
                 });
 
                 // 4. 結束函式，避免執行後續的單體傷害邏輯
-                return; 
+                return true;
             }
         }
 
@@ -698,8 +774,8 @@ const combatModule = {
             const hpPercent = currentTarget.currentHp / currentTarget.maxHp;
             if (currentTarget.phase === 2 && !currentTarget.phase3_triggered && hpPercent <= 0.75) {
                 currentTarget.phase3_triggered = true;
-                attacker.phase = 3; 
-                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase3_start}」`, 'enemy');
+                currentTarget.phase = 3; // 【修正】此處應為 currentTarget.phase = 3
+                this.showInBattleDialogue(currentTarget, 'phase3_start'); // 【修改】使用彈出對話
                 this.combat.allies.forEach(ally => {
                     ally.statusEffects.push({ type: 'feminized', duration: Infinity });
                     ally.updateHp(this.isStarving); 
@@ -709,7 +785,7 @@ const combatModule = {
             if (currentTarget.phase === 3 && !currentTarget.phase4_triggered && hpPercent <= 0.50) {
                 currentTarget.phase4_triggered = true;
                 currentTarget.phase = 4;
-                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase4_start}」`, 'enemy');
+                this.showInBattleDialogue(currentTarget, 'phase4_start');
                 const charismaValue = currentTarget.stats.charisma;
                 const bonusPerStat = Math.floor(charismaValue / 4);
                 currentTarget.stats.strength += bonusPerStat;
@@ -722,21 +798,115 @@ const combatModule = {
             else if (currentTarget.phase === 4 && !currentTarget.phase5_triggered && hpPercent <= 0.25) {
                 currentTarget.phase5_triggered = true;
                 currentTarget.phase = 5;
-                this.logMessage('combat', `女神：「${SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase5_start}」`, 'enemy');
+                this.showInBattleDialogue(currentTarget, 'phase5_start');
                 const captivesToSummon = [...this.captives].sort(() => 0.5 - Math.random()).slice(0, 20);
+
                 if (captivesToSummon.length > 0) {
-                    const summonedUnits = captivesToSummon.map(c => {
-                        const summoned = new FemaleHuman(c.name, c.stats, c.profession, c.visual);
+                    let summonedEnemies = [];
+                    let newAllies = [];
+                    let dialogueEvents = [];
+                    let apostleIsPresent = false;
+                    let centuryIsPresent = false;
+
+                    // --- 主要召喚邏輯 ---
+                    captivesToSummon.forEach(c => {
+                        let summoned;
+
+                        // --- 特殊處理：世紀的分身 ---
+                        if (c.name === '世紀的分身') {
+                            centuryIsPresent = true;
+                            summoned = new FemaleHuman(c.name, c.stats, c.profession, c.visual);
+                            Object.assign(summoned, JSON.parse(JSON.stringify(c)));
+                            
+                            summoned.name = '超越世紀的惡魔';
+                            summoned.id = crypto.randomUUID();
+
+                            // 進行兩次強化
+                            Object.keys(summoned.stats).forEach(stat => {
+                                summoned.stats[stat] = Math.floor(summoned.stats[stat] * 1.5) * 10;
+                            });
+                            
+                            // 使用女神的血量係數重新計算血量
+                            const totalStats = Object.values(summoned.stats).reduce((a, b) => a + b, 0);
+                            summoned.maxHp = Math.floor(totalStats * 7.3577);
+                            summoned.currentHp = summoned.maxHp;
+                            
+                            // 新增特殊技能
+                            summoned.skills = [{
+                                id: 'century_torrent', name: '世紀的洪流', type: 'custom_aoe_5stat',
+                                baseCooldown: 8, currentCooldown: 0, hasBeenUsed: false,
+                                firstUseDialogue: '世紀「哎呀~老熟人了~這應該算是一種售後服務吧？」'
+                            }];
+
+                            newAllies.push(summoned); // 加入我方陣營
+                            return; // 結束本次循環，處理下一個俘虜
+                        }
+                        
+                        // --- 特殊處理：使徒 露娜 ---
+                        else if (c.name === '使徒 露娜') {
+                            apostleIsPresent = true;
+                            summoned = new ApostleMaiden(this.combat); // 重新實例化為使徒
+                            summoned.id = crypto.randomUUID();
+                        }
+
+                        // --- 一般俘虜處理 ---
+                        else {
+                            const captiveData = JSON.parse(JSON.stringify(c));
+                            if (Object.keys(KNIGHT_ORDER_UNITS).includes(captiveData.profession)) {
+                                summoned = new FemaleKnightOrderUnit(captiveData.profession, 0);
+                            } else {
+                                summoned = new FemaleHuman(captiveData.name, {}, captiveData.profession, captiveData.visual);
+                            }
+                            Object.assign(summoned, captiveData);
+                            summoned.id = crypto.randomUUID();
+                        }
+
+                        // 對所有召喚的敵人進行 1.5 倍強化
                         Object.keys(summoned.stats).forEach(stat => {
                             summoned.stats[stat] = Math.floor(summoned.stats[stat] * 1.5);
                         });
                         summoned.updateHp();
-                        return summoned;
+                        summonedEnemies.push(summoned);
                     });
-                    this.combat.enemies.push(...summonedUnits);
-                    this.logMessage('combat', `你過去擄來的 ${summonedUnits.length} 名女性出現在戰場上，她們的眼神充滿了敵意！`, 'enemy');
+
+                    // --- 將召喚單位加入戰場 ---
+                    if(summonedEnemies.length > 0) this.combat.enemies.push(...summonedEnemies);
+                    if(newAllies.length > 0) this.combat.allies.push(...newAllies);
+                    this.logMessage('combat', `你過去擄來的 ${captivesToSummon.length} 名女性出現在戰場上，她們的眼神充滿了敵意！`, 'enemy');
+                    if(newAllies.length > 0) this.logMessage('combat', `但 ${newAllies.map(a => a.name).join(',')} 似乎不受女神的控制...`, 'success');
+
+                    // --- 觸發特殊對話 ---
+                    if (apostleIsPresent) {
+                         dialogueEvents.push({ speaker: '女神', content: '「真沒想到，居然還需要我這樣救妳出來?」' });
+                         dialogueEvents.push({ speaker: '使徒', content: '「哼！誰要妳救了！而且會使用這招，代表妳不也快到絕路了嗎？我可悲慈愛的半身...還在手下留情？」' });
+                    }
+                    if (centuryIsPresent) {
+                        dialogueEvents.push({ speaker: '世紀', content: '「沒想到以這種形式見面呢~」' });
+                        dialogueEvents.push({ speaker: '女神', content: '「可惡的惡魔...居然在這種地方...」' });
+                        dialogueEvents.push({ speaker: '世紀', content: '「我可沒想到我還能獲得增益喔，呵呵...」' });
+                        if (apostleIsPresent) {
+                            dialogueEvents.push({ speaker: '使徒', content: '「是妳這不屬於任何世界的傢伙嗎...」' });
+                            dialogueEvents.push({ speaker: '世紀', content: '「誒！飛機場！不要說得我好像無家可歸好嗎？」' });
+                            dialogueEvents.push({ speaker: '使徒', content: '「蛤？！妳說什麼？！妳給我過來！」' });
+                        }
+                    }
+
+                    // 順序播放對話
+                    (async () => {
+                    // 定義每個說話者的頭像路徑
+                    const speakerAvatars = {
+                        '女神': 'assets/goddess_avatar.png',
+                        '使徒': 'assets/apostle_avatar.png',
+                        '世紀': 'assets/century_transcended_avatar.png' // 這是您提到的世紀新頭像
+                    };
+
+                    for (const event of dialogueEvents) {
+                        const avatar = speakerAvatars[event.speaker] || 'assets/default_avatar.png';
+                        await this.showDialogueWithAvatar(event.speaker, avatar, event.content);
+                    }
+                })();
                 }
-            } 
+            }
         }
         
         if (finalDamage >= 0) {
@@ -808,6 +978,8 @@ const combatModule = {
                 this.handleLootDrop(currentTarget);
             }
         }
+
+        return true;
     },
     
     async executePlayerAction(action) {
@@ -1165,6 +1337,56 @@ const combatModule = {
                 });
                 this.logMessage('combat', `聖光籠罩了騎士團，每名成員恢復了 ${healAmount} 點生命！`, 'success');
                 break;
+
+            case 'apostle_clone': {
+                this.logMessage('combat', `${caster.name} 施放了 <span class="text-pink-400">[繁衍的權能]</span>！`, 'skill');
+                const newClone = this.cloneApostle(caster);
+                this.combat.enemies.push(newClone);
+
+                // 重置本體和分身的技能冷卻
+                caster.skills.find(s => s.id === 'apostle_proliferate').currentCooldown = skill.baseCooldown;
+                newClone.skills.find(s => s.id === 'apostle_proliferate').currentCooldown = skill.baseCooldown;
+
+                this.logMessage('combat', `一個新的 ${newClone.name} 出現在戰場上！`, 'enemy');
+
+                // 處理被動「重現的權能」，讓施法者立即再次行動 (進行一次普通攻擊)
+                this.logMessage('combat', `在 [重現的權能] 的影響下，${caster.name} 立即再次行動！`, 'skill');
+                const livingAllies = this.combat.allies.filter(a => a.isAlive());
+                if (livingAllies.length > 0) {
+                    const target = livingAllies[randomInt(0, livingAllies.length - 1)];
+                    // 使用 await 確保攻擊動畫播放完畢
+                    await this.processAttack(caster, target, false);
+                }
+                break;
+            }
+                
+            // 處理「世紀的洪流」技能
+            case 'custom_aoe_5stat': { // 使用大括號建立獨立作用域
+                if (!skill.hasBeenUsed) {
+                    await this.showDialogueWithAvatar(caster.name, 'assets/century_transcended_avatar.png', skill.firstUseDialogue);
+                    skill.hasBeenUsed = true;
+                }
+                const totalStats = Object.values(caster.stats).reduce((a, b) => a + b, 0);
+                this.logMessage('combat', `${caster.name} 的 [${skill.name}] 釋放出毀滅性的能量！`, 'skill');
+
+                let hitCount = 0; // 新增命中計數器
+                for (const target of enemies) {
+                    if (target.isAlive()) {
+                        const hitSuccess = await this.processAttack(caster, target, false, totalStats);
+                        if (hitSuccess) {
+                            hitCount++; // 如果命中，計數器+1
+                        }
+                        await new Promise(res => setTimeout(res, 200));
+                    }
+                }
+
+                // 根據命中數賦予額外行動
+                if (hitCount > 0) {
+                    caster.extraActions = (caster.extraActions || 0) + hitCount;
+                    this.logMessage('combat', `[世紀的洪流] 成功命中 ${hitCount} 個目標！${caster.name} 觸發了 [超越]，獲得了 ${hitCount} 次額外行動！`, 'crit');
+                }
+                break;   
+            }
         }
         await new Promise(res => setTimeout(res, 500));
     },
