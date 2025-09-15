@@ -1199,6 +1199,7 @@ const combatModule = {
         
         modal.onConfirm = () => {
             const apostle = new ApostleMaiden(this.combat);
+            this.combat.isUnescapable = true;
             this.startCombat([apostle], true);
         };
     },
@@ -1218,6 +1219,7 @@ const combatModule = {
         
         modal.onConfirm = () => {
             const goddess = new SpiralGoddess(this.combat);
+            this.combat.isUnescapable = true;
             this.startCombat([goddess], false);
         };
     },
