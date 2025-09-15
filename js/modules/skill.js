@@ -31,70 +31,146 @@ const skillModule = {
     getSkillDisplayInfo(skill) {
         if (!this.player) return '';
         const currentLevel = this.player.learnedSkills[skill.id] || 0;
-        let infoParts = [];
-        let effectString = '';
-        const displayLevel = Math.max(1, currentLevel);
-        const levelData = skill.levels[displayLevel - 1];
-        
-        if (levelData) {
+        let effectParts = [];
+
+        // --- Part 1: 產生「當前/基礎效果」的描述文字 ---
+        if (currentLevel > 0) {
+            const levelData = skill.levels[currentLevel - 1];
+            let effectString = '當前效果: ';
+            const effect = levelData.effect;
+
+            switch (skill.id) {
+                // --- 戰鬥技能 ---
+                case 'combat_powerful_strike':
+                case 'combat_agile_strike':
+                case 'combat_enchanted_strike':
+                case 'combat_lucky_strike':
+                    effectString += `+${Math.round(effect.multiplier * 100)}% ${STAT_NAMES[effect.stat || 'strength']}傷害`;
+                    break;
+                case 'combat_symbiosis':
+                    effectString += `傷害減免 ${effect.damageReduction * 100}%`;
+                    break;
+                case 'combat_kings_pressure':
+                    effectString += `每位夥伴降低敵人 ${effect.debuff_per_partner * 100}% 全能力`;
+                    break;
+                case 'combat_quick_cooldown':
+                    effectString += `技能冷卻 -${effect.value} 回合`;
+                    break;
+                case 'tribe_01': // 集團戰略
+                    effectString += `+${Math.round(levelData.passive * 100)}% 夥伴屬性加成`;
+                    break;
+                // --- 部落技能 ---
+                case 'tribe_forced_labor':
+                    effectString = `當前冷卻: ${effect.cooldown_override} 天`;
+                    break;
+                case 'tribe_efficient_gathering':
+                    effectString += `派遣資源量 +${Math.round((effect.multiplier - 1) * 100)}%`;
+                    break;
+                case 'tribe_architecture':
+                    effectString += `建築成本 -${Math.round(effect.cost_reduction * 100)}%`;
+                    break;
+                case 'tribe_negotiation':
+                    effectString += `商品價值 -${Math.round(effect.price_reduction * 100)}%`;
+                    break;
+                // --- 掠奪技能 ---
+                case 'raid_deep_scavenging':
+                    effectString += `搜刮資源量 +${Math.round((effect.multiplier - 1) * 100)}%`;
+                    break;
+                case 'raid_dispersed_escape':
+                    effectString += `潛行懲罰 -${Math.round(effect.penalty_reduction * 100)}%`;
+                    break;
+                // --- 繁衍技能 ---
+                case 'breed_vigorous':
+                    effectString = `可恢復 ${effect.charges} 次繁衍次數`;
+                    break;
+                case 'breed_eugenics':
+                    effectString += `${Math.round(effect.chance * 100)}% 機率獲得額外能力`;
+                    break;
+                case 'breed_polyspermy':
+                    effectString = `${effect.twins_chance * 100}%機率雙胞胎` + (effect.triplets_chance ? `, ${effect.triplets_chance * 100}%機率三胞胎` : '');
+                    break;
+                // --- 權能/單級技能 ---
+                default:
+                     // 對於沒有效果數值的單級技能，直接顯示描述
+                    effectString = skill.description;
+                    break;
+            }
+            effectParts.push(`<span class="text-cyan-400 font-semibold">${effectString}</span>`);
+        }
+
+        // --- Part 2: 產生「下一級效果」的描述文字 ---
+        if (currentLevel > 0 && currentLevel < skill.maxLevel) {
+            const nextLevelData = skill.levels[currentLevel];
+            const effect = nextLevelData.effect;
+            let nextLevelString = '';
+
             switch (skill.id) {
                 case 'combat_powerful_strike':
                 case 'combat_agile_strike':
                 case 'combat_enchanted_strike':
                 case 'combat_lucky_strike':
-                    if (levelData.effect) {
-                        effectString = (currentLevel > 0 ? `當前效果: ` : `效果: `) + `+${Math.round(levelData.effect.multiplier * 100)}% ${STAT_NAMES[levelData.effect.stat || 'strength']}傷害`;
-                    }
+                    nextLevelString = `+${Math.round(effect.multiplier * 100)}%`;
                     break;
                 case 'combat_symbiosis':
-                    if (levelData.effect) {
-                         effectString = (currentLevel > 0 ? `當前效果: ` : `效果: `) + `傷害減免 ${levelData.effect.damageReduction * 100}%`;
-                    }
+                    nextLevelString = `${effect.damageReduction * 100}% 減傷`;
                     break;
                 case 'combat_kings_pressure':
-                     if (levelData.effect) {
-                        effectString = (currentLevel > 0 ? `當前效果: ` : `效果: `) + `每位夥伴降低敵人 ${levelData.effect.debuff_per_partner * 100}% 全能力`;
-                    }
+                    nextLevelString = `${effect.debuff_per_partner * 100}%`;
                     break;
                 case 'combat_quick_cooldown':
-                    if (levelData.effect) {
-                        effectString = (currentLevel > 0 ? `當前效果: ` : `效果: `) + `-${levelData.effect.value} 回合冷卻`;
-                    }
+                    nextLevelString = `-${effect.value} 回合`;
                     break;
                 case 'tribe_01':
-                    if (levelData.passive !== undefined) {
-                        effectString = `被動: +${Math.round(levelData.passive * 100)}% 夥伴屬性加成`;
-                    }
+                    nextLevelString = `+${Math.round(nextLevelData.passive * 100)}%`;
                     break;
-                // ... 其他技能的顯示邏輯 ...
+                case 'tribe_forced_labor':
+                    nextLevelString = `${effect.cooldown_override} 天冷卻`;
+                    break;
+                case 'tribe_efficient_gathering':
+                    nextLevelString = `+${Math.round((effect.multiplier - 1) * 100)}%`;
+                    break;
+                case 'tribe_architecture':
+                    nextLevelString = `-${Math.round(effect.cost_reduction * 100)}%`;
+                    break;
+                case 'tribe_negotiation':
+                    nextLevelString = `-${Math.round(effect.price_reduction * 100)}%`;
+                    break;
+                case 'raid_deep_scavenging':
+                    nextLevelString = `+${Math.round((effect.multiplier - 1) * 100)}%`;
+                    break;
+                case 'raid_dispersed_escape':
+                    nextLevelString = `-${Math.round(effect.penalty_reduction * 100)}%`;
+                    break;
+                case 'breed_vigorous':
+                    nextLevelString = `恢復 ${effect.charges} 次`;
+                    break;
+                case 'breed_eugenics':
+                    nextLevelString = `${Math.round(effect.chance * 100)}% 機率`;
+                    break;
+                case 'breed_polyspermy':
+                    nextLevelString = `${effect.twins_chance * 100}%雙胞胎` + (effect.triplets_chance ? `, ${effect.triplets_chance * 100}%三胞胎` : '');
+                    break;
             }
-            if (effectString) infoParts.push(effectString);
-        }
-
-        if (skill.baseCooldown) {
-            infoParts.push(`冷卻: ${this.player.getFinalCooldown(skill)} 回合`);
-        }
-        if (skill.baseDuration) {
-            const finalDuration = this.player.getFinalDuration(skill);
-            infoParts.push(`持續: ${finalDuration} 回合`);
+            if (nextLevelString) {
+                effectParts.push(`<span class="text-gray-400 text-xs">(下一級: ${nextLevelString})</span>`);
+            }
         }
         
-        let mainInfo = infoParts.join(' | ');
+        // --- Part 3: 組合最終顯示文字 ---
+        let mainInfo = effectParts.join('<br>');
 
-        if (currentLevel > 0 && currentLevel < skill.maxLevel) {
-            const nextLevelData = skill.levels[currentLevel];
-            let nextLevelEffect = '';
-            // 簡化下一級效果的顯示
-            if(nextLevelData.effect) {
-                 if (nextLevelData.effect.multiplier) nextLevelEffect = `+${Math.round(nextLevelData.effect.multiplier * 100)}%`;
-                 else if (nextLevelData.effect.value) nextLevelEffect = `-${nextLevelData.effect.value} 回合`;
-                 else if (nextLevelData.effect.damageReduction) nextLevelEffect = `${nextLevelData.effect.damageReduction * 100}% 減傷`;
-            } else if (nextLevelData.passive) {
-                 nextLevelEffect = `+${Math.round(nextLevelData.passive * 100)}%`;
+        // 只為戰鬥技能顯示由智力計算後的冷卻/持續時間
+        if (skill.combatActive) {
+            let details = [];
+            if (skill.baseCooldown) {
+                details.push(`冷卻: ${this.player.getFinalCooldown(skill)} 回合`);
             }
-
-            if (nextLevelEffect) {
-                mainInfo += `<br><span class="text-gray-400 text-xs">(下一級: ${nextLevelEffect})</span>`;
+            if (skill.baseDuration) {
+                details.push(`持續: ${this.player.getFinalDuration(skill)} 回合`);
+            }
+            if(details.length > 0) {
+                 // 如果已經有效果文字，則換行顯示；否則直接顯示
+                mainInfo += (mainInfo ? '<br>' : '') + `<span class="text-sm">${details.join(' | ')}</span>`;
             }
         }
 

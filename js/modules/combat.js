@@ -112,7 +112,26 @@ const combatModule = {
                     newCaptive.currentHp = newCaptive.maxHp;
                     return newCaptive;
                 });
-                this.currentRaid.carriedCaptives.push(...newCaptives);
+
+                // 判斷當前是否在掠奪中
+                if (this.currentRaid) {
+                    // 如果在掠奪中，加入攜帶列表
+                    this.currentRaid.carriedCaptives.push(...newCaptives);
+                } else {
+                    // 如果是在部落戰鬥，直接加入總俘虜列表，並檢查容量
+                    if ((this.captives.length + newCaptives.length) > this.captiveCapacity) {
+                        this.logMessage('tribe', '地牢空間不足，需要決定俘虜的去留...', 'warning');
+                        // 將決策加入佇列，待戰鬥畫面關閉後執行
+                        this.pendingDecisions.push({
+                            type: 'dungeon',
+                            list: [...this.captives, ...newCaptives],
+                            limit: this.captiveCapacity,
+                        });
+                    } else {
+                        this.captives.push(...newCaptives);
+                        this.logMessage('tribe', `你成功俘虜了 ${newCaptives.length} 名來襲的敵人！`, 'success');
+                    }
+                }
             }
         }
 
