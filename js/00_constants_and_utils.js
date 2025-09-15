@@ -389,7 +389,7 @@ const SPECIAL_BOSSES = {
             {
                 id: 'apostle_proliferate',
                 name: '繁衍的權能', // [cite: 21]
-                type: 'active',
+                type: 'apostle_clone',
                 baseCooldown: 8, // [cite: 21]
                 description: '開場時立即施放一次。完整複製一個自己到戰場上，包含當前的所有正面與負面效果。' // [cite: 21]
             },

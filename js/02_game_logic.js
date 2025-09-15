@@ -562,7 +562,7 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.76 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.80 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1380,7 +1380,8 @@ const gameLogic = {
         isUnescapable: false ,
         isGoddessQnA: false, // 標記當前是否為女神問答階段
         goddessQuestion: '',  // 當前顯示的問題
-        playerAnswer: ''      // 玩家的輸入
+        playerAnswer: '',      // 玩家的輸入
+        fastCombat: false,
     },
     
     releaseCarriedCaptive(captiveId) {
