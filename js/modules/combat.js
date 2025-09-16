@@ -848,81 +848,94 @@ const combatModule = {
                 currentTarget.phase5_triggered = true;
                 currentTarget.phase = 5;
                 this.showInBattleDialogue(currentTarget, 'phase5_start');
-                const captivesToSummon = [...this.captives].sort(() => 0.5 - Math.random()).slice(0, 20);
+
+                // --- 1. 女神解除自身 Buff ---
+                this.logMessage('combat', '女神捨棄了力量，將其轉化為純粹的魅力以召喚她的僕從！', 'system');
+                currentTarget.stats = { ...SPECIAL_BOSSES.spiral_goddess_mother.stats }; // 恢復原始屬性
+
+                const goddessBuff = Math.floor(2902 / 10 / 5); // 計算 +58 的強化值
+
+                // --- 2. 決定召喚名單 (含優先序) ---
+                let captivesToSummon = [];
+                const remainingCaptives = [...this.captives];
+
+                // 優先尋找特殊單位
+                const centuryIndex = remainingCaptives.findIndex(c => c.name === '世紀的分身');
+                if (centuryIndex > -1) {
+                    captivesToSummon.push(remainingCaptives.splice(centuryIndex, 1)[0]);
+                }
+                const apostleIndex = remainingCaptives.findIndex(c => c.name === '使徒 露娜');
+                if (apostleIndex > -1) {
+                    captivesToSummon.push(remainingCaptives.splice(apostleIndex, 1)[0]);
+                }
+
+                // 隨機補齊剩餘空位
+                remainingCaptives.sort(() => 0.5 - Math.random());
+                const slotsToFill = 20 - captivesToSummon.length;
+                if (slotsToFill > 0) {
+                    captivesToSummon.push(...remainingCaptives.slice(0, slotsToFill));
+                }
 
                 if (captivesToSummon.length > 0) {
                     let summonedEnemies = [];
                     let newAllies = [];
                     let dialogueEvents = [];
-                    let apostleIsPresent = false;
-                    let centuryIsPresent = false;
 
-                    // --- 主要召喚邏輯 ---
+                    // --- 3. 執行召喚與強化 ---
                     captivesToSummon.forEach(c => {
                         let summoned;
-
-                        // --- 特殊處理：世紀的分身 ---
+                        // 特殊處理：世紀的分身
                         if (c.name === '世紀的分身') {
-                            centuryIsPresent = true;
                             summoned = new FemaleHuman(c.name, c.stats, c.profession, c.visual);
                             Object.assign(summoned, JSON.parse(JSON.stringify(c)));
-                            
                             summoned.name = '超越世紀的惡魔';
                             summoned.id = crypto.randomUUID();
-
-                            // 進行兩次強化
+                            // 先進行自身的 *10 強化
                             Object.keys(summoned.stats).forEach(stat => {
-                                summoned.stats[stat] = Math.floor(summoned.stats[stat] * 1.5) * 10;
+                                summoned.stats[stat] *= 10;
                             });
-                            
-                            // 使用女神的血量係數重新計算血量
+                            // 再加上女神的 +58 Buff
+                            Object.keys(summoned.stats).forEach(stat => {
+                                summoned.stats[stat] += goddessBuff;
+                            });
                             const totalStats = Object.values(summoned.stats).reduce((a, b) => a + b, 0);
                             summoned.maxHp = Math.floor(totalStats * 7.3577);
                             summoned.currentHp = summoned.maxHp;
-                            
-                            // 新增特殊技能
-                            summoned.skills = [{
-                                id: 'century_torrent', name: '世紀的洪流', type: 'custom_aoe_5stat',
-                                baseCooldown: 8, currentCooldown: 0, hasBeenUsed: false,
-                                firstUseDialogue: '世紀「哎呀~老熟人了~這應該算是一種售後服務吧？」'
-                            }];
-
-                            newAllies.push(summoned); // 加入我方陣營
-                            return; // 結束本次循環，處理下一個俘虜
+                            summoned.skills = [{ id: 'century_torrent', name: '世紀的洪流', type: 'custom_aoe_5stat', baseCooldown: 8, currentCooldown: 0, hasBeenUsed: false, firstUseDialogue: '世紀「哎呀~老熟人了~這應該算是一種售後服務吧？」' }];
+                            newAllies.push(summoned);
+                            return;
                         }
-                        
-                        // --- 特殊處理：使徒 露娜 ---
+                        // 特殊處理：使徒 露娜
                         else if (c.name === '使徒 露娜') {
                             apostleIsPresent = true;
-                            summoned = new ApostleMaiden(this.combat); // 重新實例化為使徒
+                            summoned = new ApostleMaiden(this.combat);
                             summoned.id = crypto.randomUUID();
                         }
-
-                        // --- 一般俘虜處理 ---
+                        // 一般俘虜
                         else {
                             const captiveData = JSON.parse(JSON.stringify(c));
                             if (Object.keys(KNIGHT_ORDER_UNITS).includes(captiveData.profession)) {
                                 summoned = new FemaleKnightOrderUnit(captiveData.profession, 0);
                             } else {
-                                summoned = new FemaleHuman(captiveData.name, {}, captiveData.profession, captiveData.visual);
+                                summoned = new FemaleHuman(captiveData.name, {}, captiveData.profession, captiveData.visual, captiveData.originDifficulty, captiveData.race);
                             }
                             Object.assign(summoned, captiveData);
                             summoned.id = crypto.randomUUID();
                         }
 
-                        // 對所有召喚的敵人進行 1.5 倍強化
+                        // 為所有召喚的敵人加上女神的 +58 Buff
                         Object.keys(summoned.stats).forEach(stat => {
-                            summoned.stats[stat] = Math.floor(summoned.stats[stat] * 1.5);
+                            summoned.stats[stat] += goddessBuff;
                         });
-                        summoned.updateHp();
+                        summoned.updateHp(this.isStarving); // 使用 updateHp 來觸發正確的血量計算
                         summonedEnemies.push(summoned);
                     });
 
-                    // --- 將召喚單位加入戰場 ---
-                    if(summonedEnemies.length > 0) this.combat.enemies.push(...summonedEnemies);
-                    if(newAllies.length > 0) this.combat.allies.push(...newAllies);
-                    this.logMessage('combat', `你過去擄來的 ${captivesToSummon.length} 名女性出現在戰場上，她們的眼神充滿了敵意！`, 'enemy');
-                    if(newAllies.length > 0) this.logMessage('combat', `但 ${newAllies.map(a => a.name).join(',')} 似乎不受女神的控制...`, 'success');
+                    // --- 4. 處理戰場與對話 ---
+                    if (summonedEnemies.length > 0) this.combat.enemies.push(...summonedEnemies);
+                    if (newAllies.length > 0) this.combat.allies.push(...newAllies);
+                    this.logMessage('combat', `你過去擄來的 ${captivesToSummon.length} 名女性出現在戰場上，她們的能力被大幅強化了！`, 'enemy');
+                    if (newAllies.length > 0) this.logMessage('combat', `但 ${newAllies.map(a => a.name).join(',')} 似乎不受女神的控制...`, 'success');
 
                     // --- 觸發特殊對話 ---
                     if (apostleIsPresent) {
