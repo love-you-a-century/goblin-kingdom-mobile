@@ -1084,50 +1084,73 @@ const gameLogic = {
             }
         }
     },
-    salvageSaveData() {// 存檔拯救函式，用於修復汙染的舊存檔，增加強制ID清洗功能
-        
-        const processedItems = new Set(); // 用於追蹤已處理過的物品，避免重複操作
-        let itemsSanitized = 0;
 
-        // 建立一個函式，遞迴地處理所有可能包含物品的地方
-        const sanitizeAndRegenerateIds = (data) => {
-            // 如果是物品物件 (有 id 和 baseName)
-            if (data && data.id && data.baseName) {
-                // 如果這個物品物件的參照我們已經處理過了，就跳過
-                if (processedItems.has(data)) {
-                    return data;
-                }
-                // 為該物品生成一個全新的 ID
-                data.id = crypto.randomUUID();
-                processedItems.add(data); // 標記為已處理
-                itemsSanitized++;
-                return data;
-            }
-            // 如果是陣列，就遞迴處理陣列中的每個元素
+    salvageSaveData() {
+        console.log("執行存檔資料健全性檢查...");
+        const allItems = [];
+        
+        // --- 1. 收集遊戲中所有的物品實例 ---
+        const collectItemsRecursively = (data) => {
+            if (!data) return;
             if (Array.isArray(data)) {
-                return data.map(item => sanitizeAndRegenerateIds(item));
+                data.forEach(collectItemsRecursively);
+            } else if (typeof data === 'object') {
+                // 判斷是否為一個物品 (有id和baseName)
+                if (data.id && data.baseName) {
+                    allItems.push(data);
+                }
+                // 繼續遞迴檢查物件的其他屬性
+                Object.values(data).forEach(collectItemsRecursively);
             }
-            // 如果是物件，就遞迴處理物件的每個屬性值
-            if (typeof data === 'object' && data !== null) {
-                Object.keys(data).forEach(key => {
-                    data[key] = sanitizeAndRegenerateIds(data[key]);
-                });
-                return data;
-            }
-            // 如果是基本類型，直接返回
-            return data;
         };
 
-        // 從遊戲資料的根層級開始，對所有物品進行 ID 清洗
-        this.warehouseInventory = sanitizeAndRegenerateIds(this.warehouseInventory);
-        this.player = sanitizeAndRegenerateIds(this.player);
-        this.partners = sanitizeAndRegenerateIds(this.partners);
+        // 從遊戲資料的根層級開始收集
+        collectItemsRecursively(this.warehouseInventory);
+        collectItemsRecursively(this.player); // 這會包含背包和裝備
+        collectItemsRecursively(this.partners); // 這會包含夥伴的裝備
 
-        console.log(`ID Sanitation complete: Regenerated IDs for ${itemsSanitized} item instances.`);
+        // --- 2. 找出所有重複的 ID ---
+        const seenIds = new Set();
+        const duplicateIds = new Set();
+        allItems.forEach(item => {
+            if (seenIds.has(item.id)) {
+                duplicateIds.add(item.id);
+            } else {
+                seenIds.add(item.id);
+            }
+        });
+
+        if (duplicateIds.size === 0) {
+            console.log("檢查完成：未發現ID衝突。");
+            return; // 如果沒有重複的ID，就什麼都不做
+        }
+
+        // --- 3. 只為ID重複的物品重新產生ID ---
+        console.warn(`發現 ${duplicateIds.size} 個重複的ID，正在進行修復...`);
+        let itemsSanitized = 0;
+        const regeneratedIds = new Set(); // 確保新產生的ID也不會重複
+
+        allItems.forEach(item => {
+            // 如果這個物品的ID是重複的
+            if (duplicateIds.has(item.id)) {
+                let newId;
+                // 產生一個全新的、不重複的ID
+                do {
+                    newId = crypto.randomUUID();
+                } while (seenIds.has(newId) || regeneratedIds.has(newId));
+                
+                item.id = newId; // 賦予新ID
+                regeneratedIds.add(newId);
+                itemsSanitized++;
+            }
+        });
+
         if (itemsSanitized > 0) {
             this.logMessage('tribe', `系統偵測到並修復了 ${itemsSanitized} 個存檔中的物品ID衝突。`, 'system');
+            console.log(`修復完成：為 ${itemsSanitized} 個物品實例重新產生了ID。`);
         }
     },
+    
     checkAndProcessDecisions() {
         // 檢查是否在部落畫面，且是否有待辦事項
         if (this.screen === 'tribe' && this.pendingDecisions.length > 0) {
