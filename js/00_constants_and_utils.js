@@ -1,4 +1,25 @@
 // --- 技能樹資料 ---
+const STATUS_EFFECT_ICONS = {
+    // --- 減益 ---
+    'stat_debuff':  { icon: '⬇', description: '能力值下降' },
+    'stun':         { icon: '💫', description: '暈眩' },
+    'taunt':        { icon: '💢', description: '嘲諷' },
+    'sleep':        { icon: '💤', description: '睡眠' },
+    'darkness':     { icon: '👁‍🗨', description: '暗黑' },
+    'silence':      { icon: '💬', description: '沉默' },
+    'masculinized': { icon: '♂', description: '男體化' },
+    'feminized':    { icon: '♀', description: '女體化' },
+    'poison':       { icon: '🦂', description: '中毒' },
+    'bleeding':     { icon: '🩸', description: '流血' },
+    'laceration':   { icon: '🩹', description: '裂傷' },
+
+    // --- 遊戲中已存在的其他狀態 ---
+    'stat_buff':    { icon: '⬆', description: '能力值上升' },
+    'symbiosis':    { icon: '🤝', description: '共生關係' },
+    'reflect_buff': { icon: '🛡️', description: '傷害反射' },
+    'charge_nuke':  { icon: '⏳', description: '詠唱中' },
+    'root_debuff':  { icon: '🌱', description: '根源削弱' }, // 女神戰用
+};
 const SKILL_TREES = {
     combat: [
         // --- 主動技能 ---
@@ -524,12 +545,12 @@ const VISUAL_OPTIONS = {
 
 // --- 裝備系統常數 ---
 const EQUIPMENT_QUALITIES = {
-    worn:      { name: '破舊', color: '#9ca3af', qualityBonus: -1, affixes: [0, 0] },
-    common:    { name: '普通', color: '#ffffff', qualityBonus: 0,  affixes: [0, 1] },
-    uncommon:  { name: '精良', color: '#4ade80', qualityBonus: 1,  affixes: [1, 1] },
-    rare:      { name: '稀有', color: '#60a5fa', qualityBonus: 2,  affixes: [2, 2] },
-    epic:      { name: '史詩', color: '#a78bfa', qualityBonus: 3,  affixes: [3, 3] },
-    legendary: { name: '傳說', color: '#f97316', qualityBonus: 5,  affixes: [3, 4] },
+    worn:      { name: '破舊', color: '#9ca3af', qualityBonus: 0, affixes: [0, 0] },
+    common:    { name: '普通', color: '#ffffff', qualityBonus: 1,  affixes: [0, 1] },
+    uncommon:  { name: '精良', color: '#4ade80', qualityBonus: 2,  affixes: [1, 1] },
+    rare:      { name: '稀有', color: '#60a5fa', qualityBonus: 3,  affixes: [2, 2] },
+    epic:      { name: '史詩', color: '#a78bfa', qualityBonus: 4,  affixes: [3, 3] },
+    legendary: { name: '傳說', color: '#f97316', qualityBonus: 6,  affixes: [3, 4] },
 };
 
 const EQUIPMENT_MATERIALS = {

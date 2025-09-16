@@ -105,7 +105,7 @@ const gameLogic = {
         armory: { subTab: 'craft', craftingType: '劍', craftingTier: 1 },
         maternity: { subTab: 'manage' },
         merchant: { isOpen: false },
-        scoutInfo: { isOpen: false, target: null, emptyBuildingMessage: '' },
+        scoutInfo: { isOpen: false, target: null, emptyBuildingMessage: '', isCombatView: false, },
         captiveManagement: { isOpen: false, title: '', list: [], limit: 0, selectedIds: [], type: '', context: null },
         narrative: { isOpen: false, title: '', content: '', isLoading: false, hasBred: false, context: [], currentCaptives: [], type: '', isAwaitingConfirmation: false },
         customAlert: { isOpen: false, message: '', onConfirm: null },
@@ -562,7 +562,7 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.80 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.82 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1363,6 +1363,7 @@ const gameLogic = {
     closeScoutModalAndClearTarget() {
         this.modals.scoutInfo.isOpen = false;
         this.selectedTarget = null;
+        this.modals.scoutInfo.isCombatView = false;
     },
 
     startCombatFromScout(enemyGroup) {
@@ -1661,7 +1662,8 @@ const gameLogic = {
             const createAndEquip = (slot, baseName, materialType = null) => {
                 const materialKey = getRandomMaterialKey(materialType);
                 if (!materialKey) return;
-                const item = this.createEquipment(materialKey, qualityKey, baseName, null, true);
+                // 將 true 改為 false，允許生成詞綴
+                const item = this.createEquipment(materialKey, qualityKey, baseName, null, false);
                 enemy.equipment[slot] = item;
             };
 
@@ -1679,7 +1681,6 @@ const gameLogic = {
                     }
                     break;
                 case '盾兵':
-                    // 【修正】移除材質類型的強制指定
                     createAndEquip('offHand', '盾');
                     break;
                 case '槍兵':
@@ -1711,9 +1712,9 @@ const gameLogic = {
                     createAndEquip('offHand', '盾');
                     break;
             }
-
+        } 
         // II. 守軍與居民 (Guard & Resident) 的裝備邏輯
-        } else {
+        else {
             let numPieces = 0;
             let qualityKey = 'worn';
             if (enemy.profession === '城市守軍') {
@@ -1760,7 +1761,8 @@ const gameLogic = {
                 );
                 if (!materialKey) continue;
 
-                const newItem = this.createEquipment(materialKey, qualityKey, baseItem.baseName, null, true);
+                // 將 true 改為 false，允許生成詞綴
+                const newItem = this.createEquipment(materialKey, qualityKey, baseItem.baseName, null, false);
                 enemy.equipment[slot] = newItem;
             }
         }
