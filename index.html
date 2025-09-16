@@ -2198,12 +2198,13 @@
                                 <p class="mb-4">裝備是提升戰力的主要來源，其強度由「品質」、「材質（階級）」和「詞綴」共同決定。</p>
 
                                 <h5 class="font-bold text-md mb-2 text-amber-200">1. 裝備品質</h5>
-                                <table class="w-full text-left border-collapse table-auto mb-6">
+                                <p class="text-sm text-gray-400 mb-2">品質決定了裝備的基礎強度（命中/迴避加成）和可擁有的詞綴數量。</p>
+                                <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
                                     <thead>
                                         <tr class="bg-gray-700">
                                             <th class="border border-gray-600 p-2">品質</th>
                                             <th class="border border-gray-600 p-2">顏色</th>
-                                            <th class="border border-gray-600 p-2">品質加成</th>
+                                            <th class="border border-gray-600 p-2">命中/迴避加成</th>
                                             <th class="border border-gray-600 p-2">詞綴數量</th>
                                         </tr>
                                     </thead>
@@ -2211,31 +2212,31 @@
                                         <tr>
                                             <td class="border border-gray-600 p-2">破舊</td>
                                             <td class="border border-gray-600 p-2" style="color: #9ca3af;">灰色</td>
-                                            <td class="border border-gray-600 p-2">-1</td>
+                                            <td class="border border-gray-600 p-2">0</td>
                                             <td class="border border-gray-600 p-2">0</td>
                                         </tr>
                                         <tr>
                                             <td class="border border-gray-600 p-2">普通</td>
                                             <td class="border border-gray-600 p-2" style="color: #ffffff;">白色</td>
-                                            <td class="border border-gray-600 p-2">0</td>
+                                            <td class="border border-gray-600 p-2">+1</td>
                                             <td class="border border-gray-600 p-2">0-1</td>
                                         </tr>
                                         <tr>
                                             <td class="border border-gray-600 p-2">精良</td>
                                             <td class="border border-gray-600 p-2" style="color: #4ade80;">綠色</td>
-                                            <td class="border border-gray-600 p-2">+1</td>
+                                            <td class="border border-gray-600 p-2">+2</td>
                                             <td class="border border-gray-600 p-2">1</td>
                                         </tr>
                                         <tr>
                                             <td class="border border-gray-600 p-2">稀有</td>
                                             <td class="border border-gray-600 p-2" style="color: #60a5fa;">藍色</td>
-                                            <td class="border border-gray-600 p-2">+2</td>
+                                            <td class="border border-gray-600 p-2">+3</td>
                                             <td class="border border-gray-600 p-2">2</td>
                                         </tr>
                                         <tr>
                                             <td class="border border-gray-600 p-2">史詩</td>
                                             <td class="border border-gray-600 p-2" style="color: #a78bfa;">紫色</td>
-                                            <td class="border border-gray-600 p-2">+3</td>
+                                            <td class="border border-gray-600 p-2">+4</td>
                                             <td class="border border-gray-600 p-2">3</td>
                                         </tr>
                                         <tr>
@@ -2248,28 +2249,46 @@
                                 </table>
 
                                 <h5 class="font-bold text-md mb-2 text-amber-200">2. 武器基礎傷害 (依材質階級 T1-T7)</h5>
+                                <p class="text-sm text-gray-400 mb-2">武器的基礎傷害只看材質階級，與品質無關。括號內為該武器進行命中/迴避判定的主要屬性。</p>
                                 <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
                                     <thead>
                                         <tr class="bg-gray-700">
-                                            <th class="border border-gray-600 p-2">武器類型</th>
-                                            <th class="border border-gray-600 p-2 text-center">T1</th>
-                                            <th class="border border-gray-600 p-2 text-center">T2</th>
-                                            <th class="border border-gray-600 p-2 text-center">T3</th>
-                                            <th class="border border-gray-600 p-2 text-center">T4</th>
-                                            <th class="border border-gray-600 p-2 text-center">T5</th>
-                                            <th class="border border-gray-600 p-2 text-center">T6</th>
-                                            <th class="border border-gray-600 p-2 text-center">T7</th>
+                                            <th class="border border-gray-600 p-2">武器類型 (屬性)</th>
+                                            <th class="border border-gray-600 p-2 text-center">T1</th><th class="border border-gray-600 p-2 text-center">T2</th><th class="border border-gray-600 p-2 text-center">T3</th><th class="border border-gray-600 p-2 text-center">T4</th>
+                                            <th class="border border-gray-600 p-2 text-center">T5</th><th class="border border-gray-600 p-2 text-center">T6</th><th class="border border-gray-600 p-2 text-center">T7</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td class="border border-gray-600 p-2">劍/彎刀 (力)</td><td class="border border-gray-600 p-2 text-center">10</td><td class="border border-gray-600 p-2 text-center">15</td><td class="border border-gray-600 p-2 text-center">23</td><td class="border border-gray-600 p-2 text-center">35</td><td class="border border-gray-600 p-2 text-center">53</td><td class="border border-gray-600 p-2 text-center">80</td><td class="border border-gray-600 p-2 text-center">120</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">斧頭 (力)</td><td class="border border-gray-600 p-2 text-center">11</td><td class="border border-gray-600 p-2 text-center">17</td><td class="border border-gray-600 p-2 text-center">26</td><td class="border border-gray-600 p-2 text-center">39</td><td class="border border-gray-600 p-2 text-center">58</td><td class="border border-gray-600 p-2 text-center">87</td><td class="border border-gray-600 p-2 text-center">130</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">雙手劍 (力)</td><td class="border border-gray-600 p-2 text-center">16</td><td class="border border-gray-600 p-2 text-center">24</td><td class="border border-gray-600 p-2 text-center">36</td><td class="border border-gray-600 p-2 text-center">54</td><td class="border border-gray-600 p-2 text-center">81</td><td class="border border-gray-600 p-2 text-center">122</td><td class="border border-gray-600 p-2 text-center">183</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">長槍/弓/法杖 (運/敏/智)</td><td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td><td class="border border-gray-600 p-2 text-center">41</td><td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td><td class="border border-gray-600 p-2 text-center">140</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">短刀 (敏)</td><td class="border border-gray-600 p-2 text-center">8</td><td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td><td class="border border-gray-600 p-2 text-center">41</td><td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">長鞭 (敏)</td><td class="border border-gray-600 p-2 text-center">9</td><td class="border border-gray-600 p-2 text-center">14</td><td class="border border-gray-600 p-2 text-center">21</td><td class="border border-gray-600 p-2 text-center">32</td><td class="border border-gray-600 p-2 text-center">48</td><td class="border border-gray-600 p-2 text-center">72</td><td class="border border-gray-600 p-2 text-center">108</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">爪/拐棍 (敏)</td><td class="border border-gray-600 p-2 text-center">7</td><td class="border border-gray-600 p-2 text-center">11</td><td class="border border-gray-600 p-2 text-center">17</td><td class="border border-gray-600 p-2 text-center">26</td><td class="border border-gray-600 p-2 text-center">39</td><td class="border border-gray-600 p-2 text-center">59</td><td class="border border-gray-600 p-2 text-center">88</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">投石索 (敏)</td><td class="border border-gray-600 p-2 text-center">6</td><td class="border border-gray-600 p-2 text-center">9</td><td class="border border-gray-600 p-2 text-center">14</td><td class="border border-gray-600 p-2 text-center">21</td><td class="border border-gray-600 p-2 text-center">32</td><td class="border border-gray-600 p-2 text-center">48</td><td class="border border-gray-600 p-2 text-center">72</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">劍 (力量)</td>
+                                            <td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td><td class="border border-gray-600 p-2 text-center">41</td>
+                                            <td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td><td class="border border-gray-600 p-2 text-center">140</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">斧頭 (力/運)</td>
+                                            <td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td><td class="border border-gray-600 p-2 text-center">41</td>
+                                            <td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td><td class="border border-gray-600 p-2 text-center">140</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">彎刀 (力/敏)</td>
+                                            <td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td><td class="border border-gray-600 p-2 text-center">41</td>
+                                            <td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td><td class="border border-gray-600 p-2 text-center">140</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">雙手劍 (力量)</td>
+                                            <td class="border border-gray-600 p-2 text-center">20</td><td class="border border-gray-600 p-2 text-center">30</td><td class="border border-gray-600 p-2 text-center">45</td><td class="border border-gray-600 p-2 text-center">68</td>
+                                            <td class="border border-gray-600 p-2 text-center">102</td><td class="border border-gray-600 p-2 text-center">153</td><td class="border border-gray-600 p-2 text-center">230</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">長槍 (運氣) / 弓 (敏捷) / 法杖 (智力)</td>
+                                            <td class="border border-gray-600 p-2 text-center">16</td><td class="border border-gray-600 p-2 text-center">24</td><td class="border border-gray-600 p-2 text-center">36</td><td class="border border-gray-600 p-2 text-center">54</td>
+                                            <td class="border border-gray-600 p-2 text-center">81</td><td class="border border-gray-600 p-2 text-center">122</td><td class="border border-gray-600 p-2 text-center">183</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">短刀 (敏/智)</td>
+                                            <td class="border border-gray-600 p-2 text-center">8</td><td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td>
+                                            <td class="border border-gray-600 p-2 text-center">41</td><td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">爪 (敏/運)</td>
+                                            <td class="border border-gray-600 p-2 text-center">8</td><td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td>
+                                            <td class="border border-gray-600 p-2 text-center">41</td><td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">拐棍 (力/智)</td>
+                                            <td class="border border-gray-600 p-2 text-center">8</td><td class="border border-gray-600 p-2 text-center">12</td><td class="border border-gray-600 p-2 text-center">18</td><td class="border border-gray-600 p-2 text-center">27</td>
+                                            <td class="border border-gray-600 p-2 text-center">41</td><td class="border border-gray-600 p-2 text-center">62</td><td class="border border-gray-600 p-2 text-center">93</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">長鞭 (智/運)</td>
+                                            <td class="border border-gray-600 p-2 text-center">6</td><td class="border border-gray-600 p-2 text-center">9</td><td class="border border-gray-600 p-2 text-center">14</td><td class="border border-gray-600 p-2 text-center">21</td>
+                                            <td class="border border-gray-600 p-2 text-center">32</td><td class="border border-gray-600 p-2 text-center">48</td><td class="border border-gray-600 p-2 text-center">72</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">投石索 (敏/智/運)</td>
+                                            <td class="border border-gray-600 p-2 text-center">4</td><td class="border border-gray-600 p-2 text-center">6</td><td class="border border-gray-600 p-2 text-center">9</td><td class="border border-gray-600 p-2 text-center">14</td>
+                                            <td class="border border-gray-600 p-2 text-center">21</td><td class="border border-gray-600 p-2 text-center">32</td><td class="border border-gray-600 p-2 text-center">48</td></tr>
                                     </tbody>
                                 </table>
 
@@ -2278,25 +2297,37 @@
                                 <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
                                     <thead>
                                         <tr class="bg-gray-700">
-                                            <th class="border border-gray-600 p-2">類型</th>
-                                            <th class="border border-gray-600 p-2">T1</th>
-                                            <th class="border border-gray-600 p-2">T2</th>
-                                            <th class="border border-gray-600 p-2">T3</th>
-                                            <th class="border border-gray-600 p-2">T4</th>
-                                            <th class="border border-gray-600 p-2">T5</th>
-                                            <th class="border border-gray-600 p-2">T6</th>
-                                            <th class="border border-gray-600 p-2">T7</th>
+                                            <th class="border border-gray-600 p-2">類型 (T1-T7)</th>
+                                            <th class="border border-gray-600 p-2">主要屬性</th>
+                                            <th class="border border-gray-600 p-2">次要屬性</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td class="border border-gray-600 p-2">鎧甲 (傷害減免%)</td><td class="border border-gray-600 p-2">6</td><td class="border border-gray-600 p-2">12</td><td class="border border-gray-600 p-2">18</td><td class="border border-gray-600 p-2">24</td><td class="border border-gray-600 p-2">30</td><td class="border border-gray-600 p-2">36</td><td class="border border-gray-600 p-2">42</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">皮甲 (傷害減免%)</td><td class="border border-gray-600 p-2">4</td><td class="border border-gray-600 p-2">8</td><td class="border border-gray-600 p-2">12</td><td class="border border-gray-600 p-2">16</td><td class="border border-gray-600 p-2">20</td><td class="border border-gray-600 p-2">24</td><td class="border border-gray-600 p-2">28</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">布服 (傷害減免%)</td><td class="border border-gray-600 p-2">2</td><td class="border border-gray-600 p-2">4</td><td class="border border-gray-600 p-2">6</td><td class="border border-gray-600 p-2">8</td><td class="border border-gray-600 p-2">10</td><td class="border border-gray-600 p-2">12</td><td class="border border-gray-600 p-2">14</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">盾牌 (格擋目標值)</td><td class="border border-gray-600 p-2">19</td><td class="border border-gray-600 p-2">18</td><td class="border border-gray-600 p-2">17</td><td class="border border-gray-600 p-2">16</td><td class="border border-gray-600 p-2">15</td><td class="border border-gray-600 p-2">14</td><td class="border border-gray-600 p-2">13</td></tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">鎧甲</td>
+                                            <td class="border border-gray-600 p-2">傷害減免: 6% ~ 42%</td>
+                                            <td class="border border-gray-600 p-2">全屬性: +2 ~ +14, 傷害: +2 ~ +34</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">皮甲</td>
+                                            <td class="border border-gray-600 p-2">傷害減免: 4% ~ 28%</td>
+                                            <td class="border border-gray-600 p-2">全屬性: +4 ~ +28</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">布服</td>
+                                            <td class="border border-gray-600 p-2">全屬性: +6 ~ +42</td>
+                                            <td class="border border-gray-600 p-2">傷害減免: 2% ~ 14%</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="border border-gray-600 p-2">盾牌</td>
+                                            <td class="border border-gray-600 p-2">格擋目標值: 19 ~ 13</td>
+                                            <td class="border border-gray-600 p-2">傷害: +1 ~ +21</td>
+                                        </tr>
                                     </tbody>
                                 </table>
 
                                 <h5 class="font-bold text-md mb-2 text-amber-200">4. 裝備詞綴</h5>
+                                <p class="text-sm text-gray-400 mb-2">詞綴是裝備的靈魂，提供各種強大的額外效果。</p>
                                 <table class="w-full text-left border-collapse table-auto text-sm">
                                     <thead>
                                         <tr class="bg-gray-700">
@@ -2305,33 +2336,171 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td class="border border-gray-600 p-2">力量的/蠻力的</td><td class="border border-gray-600 p-2">力量 +10 / +20</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">敏捷的/迅捷的</td><td class="border border-gray-600 p-2">敏捷 +10 / +20</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">智力的/睿智的</td><td class="border border-gray-600 p-2">智力 +10 / +20</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">幸運的/強運的</td><td class="border border-gray-600 p-2">運氣 +10 / +20</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">健康的/健壯的</td><td class="border border-gray-600 p-2">生命 +240 / +480</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">力量/敏捷/智力/幸運的</td><td class="border border-gray-600 p-2">對應單一屬性 +10</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">蠻力/迅捷/睿智/強運的</td><td class="border border-gray-600 p-2">對應單一屬性 +20</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">健康的/健壯的</td><td class="border border-gray-600 p-2">生命值 +240 / +480</td></tr>
                                         <tr><td class="border border-gray-600 p-2">哥布林的/哥布林王的</td><td class="border border-gray-600 p-2">全能力 +5 / +10</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">單手劍/巨劍的</td><td class="border border-gray-600 p-2">力量系武器傷害 +10% / +30%</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">弓箭/法杖/長槍的</td><td class="border border-gray-600 p-2">對應武器類型傷害 +20%</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">吸血的/尖刺的/連擊的</td><td class="border border-gray-600 p-2">10%/10%/5%機率 觸發 吸血/反傷/連擊</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">毀滅的</td><td class="border border-gray-600 p-2">爆擊基礎倍率 +0.5</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">再生的/格擋的/穿透的</td><td class="border border-gray-600 p-2">每回合恢復5%HP / 5%機率格擋 / 10%機率穿甲</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">爆擊的</td><td class="border border-gray-600 p-2">爆擊率 +10%</td></tr>
-                                        <tr><td class="border border-gray-600 p-2">賭徒的</td><td class="border border-gray-600 p-2">所有機率性詞綴發動率 +5%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">吸血的</td><td class="border border-gray-600 p-2">10% 機率恢復造成傷害50%的生命</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">尖刺的</td><td class="border border-gray-600 p-2">10% 機率反彈10%所受傷害</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">連擊的</td><td class="border border-gray-600 p-2">5% 機率進行一次額外普通攻擊</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">再生的</td><td class="border border-gray-600 p-2">每回合自動恢復 5% 最大生命值</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">格擋的</td><td class="border border-gray-600 p-2">5% 機率使受到的物理傷害無效</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">穿透的</td><td class="border border-gray-600 p-2">10% 機率使目標傷害減免效果降低10%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">爆擊的 / 毀滅的</td><td class="border border-gray-600 p-2">爆擊率 +10% / 爆擊基礎倍率 +0.5</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">賭徒的</td><td class="border border-gray-600 p-2">所有機率性詞綴的基礎發動率 +5%</td></tr>
                                     </tbody>
                                 </table>
                             </div>
+
                             <div x-show="helpWidget.activeTab === 'tribe'">
                                 <h4 class="font-bold text-lg mb-2">部落經營</h4>
-                                <p>這裡是部落經營的說明文字...</p>
+                                <p class="mb-4">一個強大的王國需要細心的經營。管理你的資源、人口和建築，是邁向巔峰的基石。</p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">1. 每日結算</h5>
+                                <p class="text-sm text-gray-400 mb-2"><strong>只有當你結束一次「掠奪」並成功返回部落時</strong>，遊戲才會進入下一天。每日結算會處理以下事件：</p>
+                                <ul class="list-disc list-inside text-sm text-gray-400 mb-4 ml-4">
+                                    <li>消耗所有成員（哥布林王、夥伴、俘虜）所需的食物。</li>
+                                    <li>計算所有懷孕俘虜的生產倒數，倒數歸零便會誕生新夥伴。</li>
+                                    <li>結算「部落派遣」的資源收益。</li>
+                                    <li>判定「旅行商人」是否來訪或離開。</li>
+                                    <li>判定是否有「復仇小隊」來襲或觸發其他特殊事件。</li>
+                                </ul>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">2. 部落派遣</h5>
+                                <p class="text-sm text-gray-400 mb-2">派遣夥伴外出工作是獲取基礎資源的主要方式。夥伴的<strong class="text-green-400">四圍總和、總傷害、裝備附加生命</strong>都會影響產量。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>DLC特殊遭遇：</strong>若尚未解鎖對應的DLC種族，派遣「伐木隊」有機率遭遇<strong class="text-green-400">精靈</strong>，派遣「打獵隊」有機率遭遇<strong class="text-yellow-500">亞獸人</strong>。這是解鎖新掠奪地點的關鍵！</p>
+                                
+                                <h5 class="font-bold text-md mb-2 text-amber-200">3. 繁衍後代</h5>
+                                <p class="text-sm text-gray-400 mb-2">繁衍是增加夥伴和提升哥布林王能力的關鍵。</p>
+                                <ul class="list-disc list-inside text-sm text-gray-400 mb-4 ml-4">
+                                    <li>每成功繁衍一位女性，哥布林王可獲得 <strong class="text-yellow-300">1 點</strong> 可自由分配的能力點。</li>
+                                    <li>新生哥布林夥伴的基礎能力，取決於哥布林王與母親雙方的能力。</li>
+                                    <li class="ml-4">公式約為：<code>Floor((王者屬性 + 母親屬性) / 4 + 母親魅力 / 2)</code></li>
+                                    <li>可透過「優生學」、「多精卵」等技能進一步提升後代的數量與質量。</li>
+                                </ul>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">4. 建築功能詳解</h5>
+                                <p class="text-sm text-gray-400 mb-2"><strong>訓練場：</strong>花費對應食物，訓練一名夥伴。夥伴可獲得的隨機屬性點數為：</p>
+                                <p class="text-sm text-gray-400 mb-4 ml-4"><code>Floor(哥布林王 <strong class="text-red-400">原始</strong> 四圍總和 / 4)</code></p>
+                                
+                                <p class="text-sm text-gray-400 mb-2"><strong>兵工廠：</strong>製作裝備時，產出的品質機率如下：</p>
+                                <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
+                                    <thead><tr class="bg-gray-700"><th class="border border-gray-600 p-2">品質</th><th class="border border-gray-600 p-2">機率</th></tr></thead>
+                                    <tbody>
+                                        <tr><td class="border border-gray-600 p-2" style="color: #f97316;">傳說</td><td class="border border-gray-600 p-2">5%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2" style="color: #a78bfa;">史詩</td><td class="border border-gray-600 p-2">10%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2" style="color: #60a5fa;">稀有</td><td class="border border-gray-600 p-2">17%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2" style="color: #4ade80;">精良</td><td class="border border-gray-600 p-2">26%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2" style="color: #ffffff;">普通</td><td class="border border-gray-600 p-2">35%</td></tr>
+                                        <tr><td class="border border-gray-600 p-2" style="color: #9ca3af;">破舊</td><td class="border border-gray-600 p-2">7%</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <p class="text-sm text-gray-400 mb-2"><strong>商人營地：</strong>升級可提升商人來訪機率與停留天數。每日判定一次（需 D9 後）。</p>
+                                <p class="text-sm text-gray-400 mb-4 ml-4">來訪機率: <code>10% ~ 30%</code> | 停留天數: <code>1 ~ 5</code> 天</p>
+                                
+                                <p class="text-sm text-gray-400 mb-2"><strong>哨塔：</strong>派駐夥伴可降低復仇小隊來襲的機率。等級越高，每位夥伴降低的機率越多。</p>
+                                <p class="text-sm text-gray-400 mb-4 ml-4">每位守衛降低機率: <code>2% ~ 10%</code> (依等級)</p>
                             </div>
+
                             <div x-show="helpWidget.activeTab === 'raid'">
                                 <h4 class="font-bold text-lg mb-2">出擊掠奪</h4>
-                                <p>這裡是出擊掠奪的說明文字...</p>
+                                <p class="mb-4">掠奪是獲取資源、裝備和新俘虜的主要方式。你的目標是在有限的時間內，盡可能深入城鎮，獲取最大的利益並安全撤離。</p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">1. 時間就是生命</h5>
+                                <p class="text-sm text-gray-400 mb-2">每次掠奪都有時間限制，你的任何行動都會消耗時間。當時間歸零時，<strong class="text-red-400">王國騎士團的增援部隊將會抵達</strong>，你必須擊敗他們才能脫離，此戰鬥無法逃跑！</p>
+                                <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-700">
+                                            <th class="border border-gray-600 p-2">行動</th>
+                                            <th class="border border-gray-600 p-2">消耗時間</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="border border-gray-600 p-2">戰鬥 (每回合)</td><td class="border border-gray-600 p-2">-1 分鐘</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">環境偵查</td><td class="border border-gray-600 p-2">-2 分鐘</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">目標偵查 (成功/失敗)</td><td class="border border-gray-600 p-2">-2 / -4 分鐘</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">搜刮建築</td><td class="border border-gray-600 p-2">-3 分鐘</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">潛行繞過守軍 (成功/失敗)</td><td class="border border-gray-600 p-2">-3 / -6 分鐘</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">潛行擄走 (成功/失敗)</td><td class="border border-gray-600 p-2">-3 / -6 分鐘</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">深入下一區域</td><td class="border border-gray-600 p-2">-5 分鐘</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">撤退回上一區域</td><td class="border border-gray-600 p-2">-5 分鐘</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">脫離城鎮</td><td class="border border-gray-600 p-2">-5 分鐘 (基礎) - 5 分鐘 (每名俘虜)</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">2. 偵查與潛行</h5>
+                                <p class="text-sm text-gray-400 mb-2"><strong>環境偵查：</strong>消耗時間，在地圖上揭示目標。揭示的目標數量等同於<strong class="text-green-400">你當前隊伍的總人數</strong>（哥布林王 + 夥伴）。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>目標偵查：</strong>對已揭示的目標進行詳細偵查。成功率取決於你隊伍的<strong class="text-yellow-400">智力</strong>與敵方的隱蔽能力。成功則可看到詳細情報，失敗會消耗更多時間。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>潛行擄走：</strong>對已偵查的女性目標使用。成功率取決於你隊伍的<strong class="text-yellow-400">敏捷</strong>與敵方隊伍的警覺性。人數多於對方會受到懲罰，可透過「散開脫逃」技能減免。</p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">3. 建築與搜刮</h5>
+                                <p class="text-sm text-gray-400 mb-2">建築是資源的主要來源。空的建築可以直接搜刮。在內城搜刮建築有一定機率<strong class="text-red-400">驚動巡邏隊</strong>而觸發戰鬥。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>DLC 特殊遭遇：</strong>在精靈部落，某些建築可能是偽裝的<strong class="text-green-400">樹人守衛</strong>；在亞獸人部落，某些看似落單的俘虜可能是<strong class="text-yellow-500">氣味標記假人</strong>，會觸發伏擊！</p>
+                                
+                                <h5 class="font-bold text-md mb-2 text-amber-200">4. 敵人情報</h5>
+                                <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-700">
+                                            <th class="border border-gray-600 p-2">敵人類型</th>
+                                            <th class="border border-gray-600 p-2">主要資源</th>
+                                            <th class="border border-gray-600 p-2">戰利品品質</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="border border-gray-600 p-2">居民 / DLC種族平民</td><td class="border border-gray-600 p-2">食物、木材</td><td class="border border-gray-600 p-2"><span style="color: #ffffff;">普通</span>、<span style="color: #9ca3af;">破舊</span></td></tr>
+                                        <tr><td class="border border-gray-600 p-2">城市守軍 / DLC種族守衛</td><td class="border border-gray-600 p-2">食物、礦石</td><td class="border border-gray-600 p-2"><span style="color: #60a5fa;">稀有</span>、<span style="color: #4ade80;">精良</span></td></tr>
+                                        <tr><td class="border border-gray-600 p-2">王國騎士團</td><td class="border border-gray-600 p-2">無</td><td class="border border-gray-600 p-2"><span style="color: #a78bfa;">史詩</span>、<span style="color: #f97316;">傳說</span></td></tr>
+                                    </tbody>
+                                </table>
+                                
+                                <h5 class="font-bold text-md mb-2 text-amber-200">5. DLC 特殊機制</h5>
+                                <p class="text-sm text-gray-400 mb-2"><strong>精靈部落 (夜→日)：</strong>掠奪開始時為<strong class="text-purple-400">夜晚</strong>，精靈能力較弱。當時間剩餘 50% 時，會變為<strong class="text-yellow-300">白天</strong>，所有精靈單位能力值大幅提升。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>亞獸人部落 (日→夜)：</strong>掠奪開始時為<strong class="text-yellow-300">白天</strong>，亞獸人能力較弱。當時間剩餘 50% 時，會變為<strong class="text-purple-400">夜晚</strong>，所有亞獸人單位能力值大幅提升。</p>
                             </div>
+
                             <div x-show="helpWidget.activeTab === 'combat'">
                                 <h4 class="font-bold text-lg mb-2">戰鬥系統</h4>
-                                <p>這裡是戰鬥系統的說明文字...</p>
+                                <p class="mb-4">戰鬥是回合制的。在你的回合，你可以選擇普通攻擊、使用技能或嘗試潛行脫離。</p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">1. 命中與迴避</h5>
+                                <p class="text-sm text-gray-400 mb-2">每次攻擊都會進行一次「對抗判定」。雙方會根據武器類型對應的屬性，擲出複數的20面骰(d20)。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>判定值</strong> = <code>(d20 擲骰總和) + (武器/防具品質加成)</code></p>
+                                <p class="text-sm text-gray-400 mb-2">攻擊方的<strong class="text-green-400">判定值</strong> > 防守方的<strong class="text-red-400">判定值</strong>，則攻擊命中。</p>
+                                <p class="text-sm text-gray-400 mb-2">擲骰數量取決於對應屬性，公式為：<code>Floor(屬性值 / 20)</code>，最少1顆。</p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">2. 傷害計算</h5>
+                                <p class="text-sm text-gray-400 mb-2">基礎傷害主要來自武器的「材質階級」。最終傷害會受到多種因素加成。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>最終傷害</strong> = <code>(武器傷害 + 裝備附加傷害) × 爆擊修正 × 防禦減免</code></p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>爆擊：</strong>基礎機率 5%，基礎倍率 1.5 倍。可透過「爆擊的」(機率)和「毀滅的」(倍率)詞綴提升。</p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">3. 防禦與格擋</h5>
+                                <p class="text-sm text-gray-400 mb-2"><strong>傷害減免：</strong>主要來自胸甲，直接按百分比減免最終傷害。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>盾牌格擋：</strong>裝備盾牌時，有一定機率格擋攻擊，使該次傷害大幅降低。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>格擋率</strong> = <code>(20 - 盾牌格擋目標值) × 5%</code></p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">4. 戰鬥技能</h5>
+                                <p class="text-sm text-gray-400 mb-2">哥布林王的<strong class="text-yellow-400">智力</strong>會影響戰鬥技能的效果。</p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>最終冷卻</strong> = <code>基礎冷卻 - Floor(總智力 / 20) - 技能修正</code></p>
+                                <p class="text-sm text-gray-400 mb-2"><strong>最終持續</strong> = <code>基礎持續 + Floor(總智力 / 20)</code></p>
+
+                                <h5 class="font-bold text-md mb-2 text-amber-200">5. 關鍵詞綴效果</h5>
+                                <table class="w-full text-left border-collapse table-auto mb-6 text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-700">
+                                            <th class="border border-gray-600 p-2">詞綴</th>
+                                            <th class="border border-gray-600 p-2">戰鬥效果</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td class="border border-gray-600 p-2">吸血的</td><td class="border border-gray-600 p-2">攻擊命中後，有 10% 機率恢復生命。</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">尖刺的</td><td class="border border-gray-600 p-2">被命中後，有 10% 機率對攻擊者反彈傷害。</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">連擊的</td><td class="border border-gray-600 p-2">攻擊命中後，有 5% 機率立即進行一次追加攻擊。</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">穿透的</td><td class="border border-gray-600 p-2">攻擊命中時，有 10% 機率降低目標的傷害減免效果。</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">格擋的</td><td class="border border-gray-600 p-2">被攻擊時，有 5% 機率直接讓該次傷害無效。</td></tr>
+                                        <tr><td class="border border-gray-600 p-2">賭徒的</td><td class="border border-gray-600 p-2">裝備者所有「機率性」詞綴的發動率 +5%。</td></tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
