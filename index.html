@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.80</title>
+    <title>哥布林王國v5.82</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -677,6 +677,15 @@
                                         <p :class="!unit.isAlive() ? 'text-gray-500 line-through' : ''">
                                             <span x-text="unit.name"></span> - HP: <span x-text="unit.currentHp"></span> <span :id="'unit-slash-' + unit.id">/</span>
                                             <span x-text="unit.maxHp"></span>
+                                            <span class="ml-2">
+                                                <template x-for="effect in unit.statusEffects">
+                                                    <span 
+                                                        class="cursor-pointer"
+                                                        x-text="STATUS_EFFECT_ICONS[effect.type]?.icon || '❓'"
+                                                        :title="`${STATUS_EFFECT_ICONS[effect.type]?.description || '未知狀態'} (剩餘 ${effect.duration} 回合)`">
+                                                    </span>
+                                                </template>
+                                            </span>
                                         </p>
                                     </div>
                                 </template>
@@ -690,7 +699,17 @@
                                     <div class="relative" :id="'unit-display-' + unit.id">
                                         <p :class="!unit.isAlive() ? 'text-gray-500 line-through' : ''">
                                             <span x-text="unit.name"></span> (<span x-text="unit.profession"></span>) - HP:
-                                            <span x-text="unit.currentHp"></span> <span :id="'unit-slash-' + unit.id">/</span> <span x-text="unit.maxHp"></span> </p>
+                                            <span x-text="unit.currentHp"></span> <span :id="'unit-slash-' + unit.id">/</span> <span x-text="unit.maxHp"></span>
+                                            <span class="ml-2">
+                                                <template x-for="effect in unit.statusEffects">
+                                                    <span 
+                                                        class="cursor-pointer"
+                                                        x-text="STATUS_EFFECT_ICONS[effect.type]?.icon || '❓'"
+                                                        :title="`${STATUS_EFFECT_ICONS[effect.type]?.description || '未知狀態'} (剩餘 ${effect.duration} 回合)`">
+                                                    </span>
+                                                </template>
+                                            </span>
+                                        </p>
                                     </div>
                                 </template>
                             </div>
@@ -720,6 +739,7 @@
                                 :disabled="!player || !player.isAlive() || combat.isProcessing || combat.playerActionTaken || learnedActiveSkills.length === 0">
                             技能
                         </button>
+                        <button @click="showCombatEnemyInfo()" class="btn btn-secondary">敵方情報</button>
                         <button @click="executePlayerAction('escape')" class="btn btn-secondary" :disabled="!player || !player.isAlive() || combat.isProcessing || combat.playerActionTaken || combat.isReinforcementBattle || combat.isUnescapable">潛行脫離</button>
                     </div>
                 </div>
@@ -1321,7 +1341,7 @@
 
                 <!-- 偵查目標 Modal -->
                 <div class="modal" x-show="modals.scoutInfo.isOpen" x-cloak>
-                    <template x-if="currentRaid && modals.scoutInfo.target">
+                    <template x-if="modals.scoutInfo.target">
                         <div class="modal-content game-container relative p-6 rounded-lg">
                             <h2 class="game-title font-medieval">偵查情報</h2>
 
@@ -1383,16 +1403,20 @@
                             </div>
 
                             <div class="text-right mt-6 pt-4 border-t border-gray-600 space-x-2">
-                                <template x-if="Array.isArray(modals.scoutInfo.target) && modals.scoutInfo.target.length > 0 && selectedTarget && !selectedTarget.isFinalChallenge">
-                                    <button @click="startCombatFromScout(modals.scoutInfo.target)" class="btn btn-danger">攻擊</button>
-                                </template>
+                                <template x-if="!modals.scoutInfo.isCombatView">
+                                    <span>
+                                        <template x-if="Array.isArray(modals.scoutInfo.target) && modals.scoutInfo.target.length > 0 && selectedTarget && !selectedTarget.isFinalChallenge">
+                                            <button @click="startCombatFromScout(modals.scoutInfo.target)" class="btn btn-danger">攻擊</button>
+                                        </template>
 
-                                <template x-if="Array.isArray(modals.scoutInfo.target) && modals.scoutInfo.target.some(e => e.visual) && selectedTarget && !selectedTarget.isFinalChallenge">
-                                    <button @click="executeSneakKidnapFromModal()" class="btn btn-secondary">潛行擄走</button>
-                                </template>
+                                        <template x-if="Array.isArray(modals.scoutInfo.target) && modals.scoutInfo.target.some(e => e.visual) && selectedTarget && !selectedTarget.isFinalChallenge">
+                                            <button @click="executeSneakKidnapFromModal()" class="btn btn-secondary">潛行擄走</button>
+                                        </template>
 
-                                <template x-if="Array.isArray(modals.scoutInfo.target) && modals.scoutInfo.target.length === 0 && selectedTarget && !Array.isArray(selectedTarget) && !selectedTarget.looted">
-                                    <button @click="lootBuildingFromModal()" class="btn btn-primary">搜刮建築</button>
+                                        <template x-if="Array.isArray(modals.scoutInfo.target) && modals.scoutInfo.target.length === 0 && selectedTarget && !Array.isArray(selectedTarget) && !selectedTarget.looted">
+                                            <button @click="lootBuildingFromModal()" class="btn btn-primary">搜刮建築</button>
+                                        </template>
+                                    </span>
                                 </template>
 
                                 <button @click.stop="closeScoutModalAndClearTarget()" class="btn btn-secondary">關閉</button>
