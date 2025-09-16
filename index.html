@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.82</title>
+    <title>哥布林王國v5.83</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -428,14 +428,14 @@
                             </div>
                             <div class="game-container relative p-4 rounded-lg pt-10">
                                 <h2 class="game-title font-medieval">遊戲存檔</h2>
-                                <div class="flex space-x-4">
+                                <input type="file" x-ref="fileInput" @change="handleFileUpload($event)" class="hidden" accept=".txt,application/json">
+
+                                <div class="flex flex-wrap gap-4">
                                     <button @click="saveGame()" class="btn btn-primary">儲存進度</button>
                                     <button x-show="hasSaveFile" @click="loadGame()" class="btn btn-secondary">讀取進度</button>
                                     <button @click="exportGame()" class="btn btn-secondary">輸出存檔</button>
-                                </div>
-                                <div class="mt-4">
-                                    <textarea x-model="importSaveData" rows="4" class="w-full bg-gray-700 border-2 border-gray-600 rounded px-3 py-2" placeholder="請將備份的遊戲存檔貼到這裡..."></textarea>
-                                    <button @click="importGame()" class="btn btn-primary w-full mt-2">匯入存檔</button>
+                                    <button @click="downloadSaveFile()" class="btn btn-secondary">下載存檔 (.txt)</button>
+                                    <button @click="triggerFileInput()" class="btn btn-secondary">匯入存檔 (.txt)</button>
                                 </div>
                             </div>
 
