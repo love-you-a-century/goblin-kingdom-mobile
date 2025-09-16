@@ -1341,9 +1341,17 @@ const gameLogic = {
     calculateCaptiveValue(captive) {
         if (!captive) return 0;
         const hp = captive.calculateMaxHp();
-        // 根據GDD: 俘虜價值 = 該俘虜當前總生命值 × 1.5
+        // 俘虜價值 = 該俘虜當前總生命值 × 1.5
         return Math.floor(hp * 1.5);
     },
+    /**
+     * 執行兩隊之間的綜合能力對抗判定。
+     * 此判定會計算隊伍四圍 (力/敏/智/運) 的平均值，並加上擲骰與人數來決定結果。
+     * 主要用於「目標偵查」和「潛行擄走」。
+     * @param {Unit[]} partyA - 甲方隊伍的單位(Unit)陣列。
+     * @param {Unit[]} partyB - 乙方隊伍的單位(Unit)陣列。
+     * @returns {{partyA_Value: number, partyB_Value: number, partyA_Details: object, partyB_Details: object}} 返回一個包含雙方最終判定值與詳細資訊的物件。
+     */
     performAbilityContest(partyA, partyB) {
         const partyA_Stats = this.getPartyAverageStats(partyA);
         const partyA_DiceCount = Math.max(1, Math.floor(partyA_Stats.average / 20));

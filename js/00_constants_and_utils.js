@@ -499,6 +499,12 @@ function rollDice(diceString) {
 
 // --- 工具 & 常數 ---
 const $ = (selector) => document.querySelector(selector);
+/**
+ * 生成一個介於 min 和 max 之間 (包含兩者) 的隨機整數。
+ * @param {number} min - 隨機範圍的最小值。
+ * @param {number} max - 隨機範圍的最大值。
+ * @returns {number} 產生的隨機整數。
+ */
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const REVENGE_DIFFICULTY_COEFFICIENT = { easy: 0.5, normal: 1, hard: 1.5, hell: 2 };
 const rollPercentage = (percentage) => randomInt(1, 100) <= Math.max(5, Math.min(95, percentage));
@@ -550,7 +556,7 @@ const EQUIPMENT_QUALITIES = {
     uncommon:  { name: '精良', color: '#4ade80', qualityBonus: 2,  affixes: [1, 1] },
     rare:      { name: '稀有', color: '#60a5fa', qualityBonus: 3,  affixes: [2, 2] },
     epic:      { name: '史詩', color: '#a78bfa', qualityBonus: 4,  affixes: [3, 3] },
-    legendary: { name: '傳說', color: '#f97316', qualityBonus: 6,  affixes: [3, 4] },
+    legendary: { name: '傳說', color: '#f97316', qualityBonus: 5,  affixes: [3, 4] },
 };
 
 const EQUIPMENT_MATERIALS = {

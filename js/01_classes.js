@@ -33,8 +33,17 @@ class Equipment {
         return `${prefix}${this.quality.name}的${this.material.name}${this.baseName}`;
     }
 }
-
+/**
+ * 代表遊戲中所有單位 (玩家、夥伴、敵人) 的基礎類別。
+ */
 class Unit {
+    /**
+     * 創建一個新的單位。
+     * @param {string} name - 單位的名稱。
+     * @param {object} stats - 單位的基礎屬性物件，例如 { strength: 10, agility: 5 }。
+     * @param {string} profession - 單位的職業。
+     * @param {string} [race='human'] - (可選) 單位的種族，預設為 'human'。
+     */
     constructor(name, stats, profession, race = 'human') {
         this.id = crypto.randomUUID();
         this.name = name;
