@@ -42,20 +42,6 @@ const combatModule = {
         } else {
             this.logMessage('combat', '等待你的指令...', 'system');
         }
-        if (enemyGroup[0] instanceof SpiralGoddess) {
-            this.startGoddessQnA();
-        }
-    },
-
-    startGoddessQnA() {
-        const goddess = this.combat.enemies[0];
-        if (!goddess) return;
-
-        // 觸發開場問答的對話 (這也解決了您的第二個問題)
-        this.showInBattleDialogue(goddess, 'phase1_start');
-        
-        // 呼叫原本就存在的問答邏輯
-        this.promptGoddessQuestionAndWaitForAnswer();
     },
 
     async showDialogueWithAvatar(title, avatarUrl, content) {
@@ -275,6 +261,19 @@ const combatModule = {
         }
     },
 
+    showCombatEnemyInfo() {
+        const livingEnemies = this.combat.enemies.filter(e => e.isAlive());
+        if (livingEnemies.length === 0) {
+            this.showCustomAlert('戰場上已經沒有敵人了！');
+            return;
+        }
+
+        const modal = this.modals.scoutInfo;
+        modal.target = livingEnemies;
+        modal.isCombatView = true; // 標記為戰鬥內查看
+        modal.isOpen = true;
+    },
+
     async executeTurn(isEnemyFirstStrike = false) {
         if (this.combat.isGoddessQnA) {
             this.combat.isProcessing = false;
@@ -393,6 +392,11 @@ const combatModule = {
             // 邏輯 2: 螺旋女神
             else if (attacker instanceof SpiralGoddess) {
                 if (attacker.phase === 1) {
+                    if (attacker.qnaIndex === 0 && !attacker.phase1_dialogue_shown) {
+                        await this.showDialogueWithAvatar(attacker.name, 'assets/goddess_avatar.png', SPECIAL_BOSSES.spiral_goddess_mother.dialogues.phase1_start);
+                        attacker.phase1_dialogue_shown = true; // 增加一個旗標，確保對話只說一次
+                    }
+    
                     const result = await this.promptGoddessQuestionAndWaitForAnswer();
                     if (!result.finished) {
                         const playerNumericAnswer = parseInt(result.answer.trim());
@@ -625,14 +629,17 @@ const combatModule = {
             defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 20));
         }
 
+        // --- 命中計算採用新的動態加成 ---
         const attackerQualityBonus = attacker.equipment.mainHand?.qualityBonus || 0;
         const attackerRoll = rollDice(`${attackerDiceCount}d20`);
-        const attackerTotal = attackerRoll.total + attackerQualityBonus;
+        const dynamicAttackerBonus = attackerQualityBonus * attackerDiceCount; // 品質加成 * 擲骰數
+        const attackerTotal = attackerRoll.total + dynamicAttackerBonus;
 
         const defenderArmorBonus = currentTarget.equipment.chest?.qualityBonus || 0;
         const defenderShieldBonus = currentTarget.equipment.offHand?.qualityBonus || 0;
         const defenderRoll = rollDice(`${defenderDiceCount}d20`);
-        const defenderTotal = defenderRoll.total + defenderArmorBonus + defenderShieldBonus;
+        const dynamicDefenderBonus = (defenderArmorBonus * defenderDiceCount) + (defenderShieldBonus * defenderDiceCount); // 防具的品質加成同樣乘以擲骰數
+        const defenderTotal = defenderRoll.total + dynamicDefenderBonus;
 
         if (attacker.id === this.player.id || currentTarget.id === this.player.id) {
             const isAllyAttacking = this.combat.allies.some(a => a.id === attacker.id);
@@ -645,9 +652,8 @@ const combatModule = {
             );
         }
         
-        // 修正日誌，不再使用 attackerStatValue，而是使用 attackerDiceCount
-        this.logMessage('combat', `> 攻擊方 (擲 ${attackerDiceCount}d20): ${attackerRoll.total}(擲骰) + ${attackerQualityBonus}(品質) = ${attackerTotal}`, 'info');
-        this.logMessage('combat', `> 防守方 (擲 ${defenderDiceCount}d20): ${defenderRoll.total}(擲骰) + ${defenderArmorBonus}(防具) + ${defenderShieldBonus}(盾牌) = ${defenderTotal}`, 'info');
+        this.logMessage('combat', `> 攻擊方 (擲 ${attackerDiceCount}d20): ${attackerRoll.total}(擲骰) + ${dynamicAttackerBonus}(品質加成) = ${attackerTotal}`, 'info');
+        this.logMessage('combat', `> 防守方 (擲 ${defenderDiceCount}d20): ${defenderRoll.total}(擲骰) + ${dynamicDefenderBonus}(品質加成) = ${defenderTotal}`, 'info');
 
         if (attackerTotal <= defenderTotal) { 
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${currentTarget.name} 閃過了！`, logType === 'player' ? 'enemy' : 'player');
@@ -657,15 +663,26 @@ const combatModule = {
         
         this.logMessage('combat', `攻擊命中！`, 'success');
 
-        let damage;
+        // --- 傷害計算加入新的浮動傷害 ---
+        let baseDamage;
+        let floatingDamage = 0; // 初始化浮動傷害為 0
+
         if (overrideDamage !== null) {
-            // 當使用技能傷害時，直接賦值即可
-            damage = overrideDamage;
+            // 如果是技能傷害，則直接使用技能傷害值，不計算浮動傷害
+            baseDamage = overrideDamage;
         } else {
-            // 如果是普通攻擊，則正常計算武器傷害
-            damage = attacker.calculateDamage(this.isStarving);
-            damage += (attacker.equipment.chest?.stats.attackBonus || 0) + (attacker.equipment.offHand?.stats.attackBonus || 0);
+            // 如果是普通攻擊，先計算基礎傷害
+            baseDamage = attacker.calculateDamage(this.isStarving);
+            
+            // 如果武器品質加成 > 0，則計算浮動傷害
+            if (attackerQualityBonus > 0) {
+                const damageRoll = rollDice(`${attackerDiceCount}d20`);
+                floatingDamage = attackerQualityBonus * damageRoll.total;
+                this.logMessage('combat', `> 品質加成造成了浮動傷害: ${attackerQualityBonus}(品質) × ${damageRoll.total}(擲骰) = ${floatingDamage} 點`, 'crit');
+            }
         }
+
+        let damage = baseDamage + floatingDamage;
 
         let attackerGamblerBonus = 0;
         let critAffixCount = 0;
