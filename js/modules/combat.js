@@ -548,56 +548,87 @@ const combatModule = {
             this.logMessage('combat', `${attacker.name} 使用 [${weaponType}] 攻擊 ${currentTarget.name}！`, logType);
         }
 
-        let attackerStatValue = 0;
-        let defenderStatValue = 0;
+        let attackerDiceCount = 0;
+        let defenderDiceCount = 0;
 
-        // 根據武器類型決定用於判定的能力值
-        switch (weaponType) {
-            // 新的多能力武器
-            case '短刀':
-                attackerStatValue = attacker.getAverageStat(['agility', 'intelligence'], this.isStarving, this);
-                defenderStatValue = currentTarget.getAverageStat(['agility', 'intelligence'], this.isStarving, this);
-                break;
-            case '拐棍':
-                attackerStatValue = attacker.getAverageStat(['strength', 'intelligence'], this.isStarving, this);
-                defenderStatValue = currentTarget.getAverageStat(['strength', 'intelligence'], this.isStarving, this);
-                break;
-            case '彎刀':
-                attackerStatValue = attacker.getAverageStat(['strength', 'agility'], this.isStarving, this);
-                defenderStatValue = currentTarget.getAverageStat(['strength', 'agility'], this.isStarving, this);
-                break;
-            case '長鞭':
-                attackerStatValue = attacker.getAverageStat(['intelligence', 'luck'], this.isStarving, this);
-                defenderStatValue = currentTarget.getAverageStat(['intelligence', 'luck'], this.isStarving, this);
-                break;
-            case '爪':
-                attackerStatValue = attacker.getAverageStat(['agility', 'luck'], this.isStarving, this);
-                defenderStatValue = currentTarget.getAverageStat(['agility', 'luck'], this.isStarving, this);
-                break;
-            case '斧頭':
-                attackerStatValue = attacker.getAverageStat(['strength', 'luck'], this.isStarving, this);
-                defenderStatValue = currentTarget.getAverageStat(['strength', 'luck'], this.isStarving, this);
-                break;
-            case '投石索':
-                attackerStatValue = attacker.getAverageStat(['agility', 'intelligence', 'luck'], this.isStarving, this);
-                defenderStatValue = currentTarget.getAverageStat(['agility', 'intelligence', 'luck'], this.isStarving, this);
-                break;
-
-            // 原有的單一能力武器
-            default:
-                const singleStatMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence' };
-                const judgementStat = singleStatMap[weaponType] || 'strength';
-                attackerStatValue = attacker.getTotalStat(judgementStat, this.isStarving, this);
-                defenderStatValue = currentTarget.getTotalStat(judgementStat, this.isStarving, this);
-                break;
+        if (weaponType === '徒手') {
+            let attackerStatsToAverage = ['strength', 'agility', 'intelligence', 'luck'];
+            if (attacker.visual) {
+                attackerStatsToAverage.push('charisma');
+            }
+            const attackerAvgStat = attacker.getAverageStat(attackerStatsToAverage, this.isStarving, this);
+            attackerDiceCount = Math.max(1, Math.floor(attackerAvgStat / 20 / 2));
+            
+            const defenderWeapon = currentTarget.equipment.mainHand;
+            if (defenderWeapon) {
+                const defenderWeaponType = defenderWeapon.baseName;
+                let defenderStat;
+                switch (defenderWeaponType) {
+                    case '短刀': case '彎刀': case '爪': case '斧頭': case '投石索':
+                        defenderStat = currentTarget.getAverageStat(['strength', 'agility'], this.isStarving, this);
+                        break;
+                    default:
+                        const singleStatMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence' };
+                        defenderStat = currentTarget.getTotalStat(singleStatMap[defenderWeaponType] || 'strength', this.isStarving, this);
+                        break;
+                }
+                defenderDiceCount = Math.max(1, Math.floor(defenderStat / 20));
+            } else {
+                let defenderStatsToAverage = ['strength', 'agility', 'intelligence', 'luck'];
+                if (currentTarget.visual) {
+                    defenderStatsToAverage.push('charisma');
+                }
+                const defenderAvgStat = currentTarget.getAverageStat(defenderStatsToAverage, this.isStarving, this);
+                defenderDiceCount = Math.max(1, Math.floor(defenderAvgStat / 20 / 2));
+            }
+        } 
+        else {
+            let attackerStatValue = 0;
+            let defenderStatValue = 0;
+            switch (weaponType) {
+                case '短刀':
+                    attackerStatValue = attacker.getAverageStat(['agility', 'intelligence'], this.isStarving, this);
+                    defenderStatValue = currentTarget.getAverageStat(['agility', 'intelligence'], this.isStarving, this);
+                    break;
+                case '拐棍':
+                    attackerStatValue = attacker.getAverageStat(['strength', 'intelligence'], this.isStarving, this);
+                    defenderStatValue = currentTarget.getAverageStat(['strength', 'intelligence'], this.isStarving, this);
+                    break;
+                case '彎刀':
+                    attackerStatValue = attacker.getAverageStat(['strength', 'agility'], this.isStarving, this);
+                    defenderStatValue = currentTarget.getAverageStat(['strength', 'agility'], this.isStarving, this);
+                    break;
+                case '長鞭':
+                    attackerStatValue = attacker.getAverageStat(['intelligence', 'luck'], this.isStarving, this);
+                    defenderStatValue = currentTarget.getAverageStat(['intelligence', 'luck'], this.isStarving, this);
+                    break;
+                case '爪':
+                    attackerStatValue = attacker.getAverageStat(['agility', 'luck'], this.isStarving, this);
+                    defenderStatValue = currentTarget.getAverageStat(['agility', 'luck'], this.isStarving, this);
+                    break;
+                case '斧頭':
+                    attackerStatValue = attacker.getAverageStat(['strength', 'luck'], this.isStarving, this);
+                    defenderStatValue = currentTarget.getAverageStat(['strength', 'luck'], this.isStarving, this);
+                    break;
+                case '投石索':
+                    attackerStatValue = attacker.getAverageStat(['agility', 'intelligence', 'luck'], this.isStarving, this);
+                    defenderStatValue = currentTarget.getAverageStat(['agility', 'intelligence', 'luck'], this.isStarving, this);
+                    break;
+                default:
+                    const singleStatMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence' };
+                    const judgementStat = singleStatMap[weaponType] || 'strength';
+                    attackerStatValue = attacker.getTotalStat(judgementStat, this.isStarving, this);
+                    defenderStatValue = currentTarget.getTotalStat(judgementStat, this.isStarving, this);
+                    break;
+            }
+            attackerDiceCount = Math.max(1, Math.floor(attackerStatValue / 20));
+            defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 20));
         }
 
-        const attackerDiceCount = Math.max(1, Math.floor(attackerStatValue / 20));
         const attackerQualityBonus = attacker.equipment.mainHand?.qualityBonus || 0;
         const attackerRoll = rollDice(`${attackerDiceCount}d20`);
         const attackerTotal = attackerRoll.total + attackerQualityBonus;
 
-        const defenderDiceCount = Math.max(1, Math.floor(defenderStatValue / 20));
         const defenderArmorBonus = currentTarget.equipment.chest?.qualityBonus || 0;
         const defenderShieldBonus = currentTarget.equipment.offHand?.qualityBonus || 0;
         const defenderRoll = rollDice(`${defenderDiceCount}d20`);
@@ -614,8 +645,9 @@ const combatModule = {
             );
         }
         
-        this.logMessage('combat', `> 攻擊方 (判定值 ${Math.round(attackerStatValue)}): ${attackerRoll.total}(擲骰) + ${attackerQualityBonus}(品質) = ${attackerTotal}`, 'info');
-        this.logMessage('combat', `> 防守方 (判定值 ${Math.round(defenderStatValue)}): ${defenderRoll.total}(擲骰) + ${defenderArmorBonus}(防具) + ${defenderShieldBonus}(盾牌) = ${defenderTotal}`, 'info');
+        // 修正日誌，不再使用 attackerStatValue，而是使用 attackerDiceCount
+        this.logMessage('combat', `> 攻擊方 (擲 ${attackerDiceCount}d20): ${attackerRoll.total}(擲骰) + ${attackerQualityBonus}(品質) = ${attackerTotal}`, 'info');
+        this.logMessage('combat', `> 防守方 (擲 ${defenderDiceCount}d20): ${defenderRoll.total}(擲骰) + ${defenderArmorBonus}(防具) + ${defenderShieldBonus}(盾牌) = ${defenderTotal}`, 'info');
 
         if (attackerTotal <= defenderTotal) { 
             this.logMessage('combat', `${attacker.name} 的攻擊被 ${currentTarget.name} 閃過了！`, logType === 'player' ? 'enemy' : 'player');
