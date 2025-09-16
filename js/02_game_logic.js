@@ -562,7 +562,7 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.82 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.83 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -986,37 +986,68 @@ const gameLogic = {
             this.showCustomAlert(`讀取存檔失敗！檔案可能已損毀。錯誤訊息: ${e.message}`);
         }
     },
-    importGame() {// 匯入存檔方法
-        if (!this.importSaveData) {
-            this.showCustomAlert('請先貼上有效的存檔代碼！');
+    importGame(saveDataString) { // 函式現在接收一個參數
+        if (!saveDataString) {
+            this.showCustomAlert('請選擇有效的存檔檔案！');
             return;
         }
 
         try {
-            // 嘗試解析玩家貼上的 JSON 字串
-            const parsedData = JSON.parse(this.importSaveData);
+            // 使用傳入的參數來解析
+            const parsedData = JSON.parse(saveDataString);
 
-            // 檢查存檔資料的有效性，確保它是遊戲的存檔格式
             if (parsedData && parsedData.player && parsedData.day) {
-                // 將解析後的資料存回 Local Storage
-                localStorage.setItem('goblinKingSaveFile', this.importSaveData);
+                // 使用傳入的參數來儲存
+                localStorage.setItem('goblinKingSaveFile', saveDataString);
                 this.showCustomAlert('存檔匯入成功！遊戲將自動重新載入...');
 
-                // 清空輸入框並重新載入遊戲，以應用新存檔
-                this.importSaveData = '';
+                // 清空輸入框的程式碼已不再需要
                 setTimeout(() => {
-                    window.location.reload(); // 重新載入頁面
+                    window.location.reload();
                 }, 1500);
 
             } else {
-                // 如果解析失敗或資料格式不對，給予提示
-                this.showCustomAlert('無效的存檔代碼，請檢查格式是否正確！');
+                this.showCustomAlert('無效的存檔檔案，請檢查內容是否正確！');
             }
         } catch (e) {
-            // 如果 JSON.parse 出錯，說明格式有問題
             console.error('匯入存檔失敗:', e);
-            this.showCustomAlert('存檔代碼格式錯誤！請確認是完整的 JSON 字串。');
+            this.showCustomAlert('存檔檔案格式錯誤！請確認是有效的遊戲存檔。');
         }
+    },
+    // 這個函式由新的「匯入存檔」按鈕觸發
+    triggerFileInput() {
+        // 模擬點擊我們在 HTML 中隱藏的那個 input 元素
+        this.$refs.fileInput.click();
+    },
+
+    // 當玩家選擇了檔案後，這個函式會被 input 的 @change 事件觸發
+    handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            return; // 如果玩家取消了選擇，就什麼都不做
+        }
+
+        // 使用 FileReader API 來讀取檔案內容
+        const reader = new FileReader();
+
+        // 定義檔案成功讀取後要執行的動作
+        reader.onload = (e) => {
+            const content = e.target.result;
+            // 呼叫我們修改過的 importGame 函式，並把檔案內容傳進去
+            this.importGame(content);
+        };
+
+        // 定義如果讀取出錯時的動作
+        reader.onerror = (e) => {
+            console.error("檔案讀取錯誤:", e);
+            this.showCustomAlert("讀取存檔檔案時發生錯誤！");
+        };
+
+        // 命令 reader 開始以文字格式讀取檔案
+        reader.readAsText(file);
+
+        // 清空 input 的值，這樣玩家下次還可以選擇同一個檔案
+        event.target.value = '';
     },
     exportGame() {
         const saveData = localStorage.getItem('goblinKingSaveFile');
@@ -1033,6 +1064,38 @@ const gameLogic = {
         this.$nextTick(() => {
             this.$refs.export_save_data.select();
         });
+    },
+    downloadSaveFile() {
+        // 1. 從 localStorage 讀取存檔資料
+        const saveData = localStorage.getItem('goblinKingSaveFile');
+        if (!saveData) {
+            this.showCustomAlert('沒有找到存檔，請先儲存遊戲。');
+            return;
+        }
+
+        // 2. 將存檔字串轉換為 Blob 物件 (一個文字檔案)
+        const blob = new Blob([saveData], { type: 'text/plain;charset=utf-8' });
+
+        // 3. 建立一個暫時的 URL 指向這個 Blob 物件
+        const url = URL.createObjectURL(blob);
+
+        // 4. 建立一個隱藏的 <a> 連結元素
+        const link = document.createElement('a');
+        link.href = url;
+
+        // 5. 產生一個對玩家友善的檔名 (例如：GoblinKingdom_Save_哥布林王_20250917.txt)
+        const playerName = this.player ? this.player.name : 'GoblinKing';
+        const date = new Date();
+        const dateString = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}`;
+        link.download = `GoblinKingdom_Save_${playerName}_${dateString}.txt`;
+
+        // 6. 將連結加入到頁面中，模擬點擊，然後再移除它
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // 7. 釋放剛剛建立的暫時 URL，避免記憶體洩漏
+        URL.revokeObjectURL(url);
     },
     copySaveToClipboard() {
         // 這個函式由新 modal 中的按鈕觸發

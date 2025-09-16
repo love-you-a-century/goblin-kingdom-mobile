@@ -525,7 +525,11 @@ class Human extends Unit {
 
     getBaseMaxHp(isStarving = false) {
         let total = (this.stats.strength || 0) + (this.stats.agility || 0) + (this.stats.intelligence || 0) + (this.stats.luck || 0);
-        let baseHp = total * 4;
+        let hpMultiplier = 4;
+        if (this.race === 'elf' || this.race === 'beastkin') {
+            hpMultiplier = 5; // 如果是精靈或亞獸人，則為 *5
+        }
+        let baseHp = total * hpMultiplier;
         return Math.max(1, baseHp);
     }
 
@@ -632,6 +636,15 @@ class ApostleMaiden extends FemaleHuman {
         };
         this.maxHp = this.calculateMaxHp();
         this.currentHp = this.maxHp;
+    }
+    
+    updateHp() {
+        const oldMaxHp = this.maxHp;
+        this.maxHp = this.calculateMaxHp();
+        const hpPercentage = oldMaxHp > 0 ? this.currentHp / oldMaxHp : 1;
+        this.currentHp = Math.round(this.maxHp * hpPercentage);
+        if (this.currentHp > this.maxHp) this.currentHp = this.maxHp;
+        this.currentHp = Math.max(0, this.currentHp);
     }
 
     getTotalStat(stat, isStarving = false) {
