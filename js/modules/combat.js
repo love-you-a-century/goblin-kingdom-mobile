@@ -636,7 +636,13 @@ const combatModule = {
         const attackerTotal = attackerRoll.total + dynamicAttackerBonus;
 
         const defenderArmorBonus = currentTarget.equipment.chest?.qualityBonus || 0;
-        const defenderShieldBonus = currentTarget.equipment.offHand?.qualityBonus || 0;
+        let defenderShieldBonus = 0; // 預設盾牌品質加成為 0
+
+        // 只有在防守方「裝備了主手武器」的情況下，副手盾牌的品質加成才生效
+        if (currentTarget.equipment.mainHand && currentTarget.equipment.offHand?.baseName === '盾') {
+            defenderShieldBonus = currentTarget.equipment.offHand.qualityBonus || 0;
+        }
+        
         const defenderRoll = rollDice(`${defenderDiceCount}d20`);
         const dynamicDefenderBonus = (defenderArmorBonus * defenderDiceCount) + (defenderShieldBonus * defenderDiceCount); // 防具的品質加成同樣乘以擲骰數
         const defenderTotal = defenderRoll.total + dynamicDefenderBonus;

@@ -250,7 +250,8 @@ const itemModule = {
                 this.showCustomAlert(`裝備 ${mainHandWeapon.name} 時無法使用副手裝備！`);
                 return;
             }
-            if (!mainHandWeapon) {
+            // 只有在想裝備的副手物品「不是」盾牌時，才需要檢查主手是否有武器
+            if (itemToEquip.baseName !== '盾' && !mainHandWeapon) {
                 this.showCustomAlert('必須先裝備主手武器，才能裝備副手武器！');
                 return;
             }
