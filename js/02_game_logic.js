@@ -1744,14 +1744,17 @@ const gameLogic = {
             // 2. 根據職業分配武器和副手
             switch (enemy.profession) {
                 case '士兵':
-                    createAndEquip('mainHand', '劍');
                     if (rollPercentage(50)) {
-                        createAndEquip('offHand', '劍');
+                        // 50% 機率裝備雙手劍
+                        createAndEquip('mainHand', '雙手劍');
                     } else {
-                        createAndEquip('offHand', '盾');
+                        // 50% 機率裝備雙劍
+                        createAndEquip('mainHand', '劍');
+                        createAndEquip('offHand', '劍');
                     }
                     break;
                 case '盾兵':
+                    createAndEquip('mainHand', '劍');
                     createAndEquip('offHand', '盾');
                     break;
                 case '槍兵':
