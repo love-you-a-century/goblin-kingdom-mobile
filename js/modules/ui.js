@@ -131,7 +131,7 @@ const uiModule = {
                     message = '地牢已滿，無法新增俘虜！';
                     success = false;
                 } else {
-                    const princessStats = { strength: 20, agility: 20, intelligence: 20, luck: 20, charisma: randomInt(150, 200) };
+                    const princessStats = { strength: 20, agility: 20, intelligence: 20, luck: 20, charisma: randomInt(140, 200) };
                     const princess = new FemaleHuman(FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)], princessStats, '公主', generateVisuals(), null);
                     this.captives.push(princess);
                     message = `一位名叫 ${princess.name} 的公主出現在你的地牢中！`;

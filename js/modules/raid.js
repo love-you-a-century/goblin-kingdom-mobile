@@ -322,7 +322,7 @@ const raidModule = {
             const knightStatRange = cityConfig.knightStats;
 
             // 產生公主
-            const princessStats = { strength: 40, agility: 40, intelligence: 40, luck: 40, charisma: randomInt(250, 300) };
+            const princessStats = { strength: 20, agility: 20, intelligence: 20, luck: 20, charisma: randomInt(140, 200) };
             const princess = new FemaleHuman(
                 FEMALE_NAMES[randomInt(0, FEMALE_NAMES.length - 1)],
                 princessStats, '公主', generateVisuals(), difficulty
@@ -829,7 +829,7 @@ const raidModule = {
             hell:   { '士兵': 6, '盾兵': 4, '槍兵': 4, '弓兵': 2, '騎士': 2, '法師': 1, '祭司': 1 }
         };
         const knightStatRanges = {
-            easy: [65, 120], normal: [120, 190], hard: [190, 280], hell: [280, 360]
+            easy: [140, 160], normal: [160, 200], hard: [200, 260], hell: [260, 340]
         };
         const composition = squadComposition[difficulty];
         const statRange = knightStatRanges[difficulty];
