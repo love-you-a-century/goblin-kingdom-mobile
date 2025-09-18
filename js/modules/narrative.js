@@ -397,7 +397,7 @@ const narrativeModule = {
 
             const result = await response.json();
 
-            // 【修改】這是最關鍵的部分
+            // 這是最關鍵的部分
             // 如果 API 回應沒有候選內容 (通常是因為安全阻擋)，我們回傳 null
             if (!result.candidates || result.candidates.length === 0) {
                 console.warn("API returned no candidates, likely due to safety filters.", result.promptFeedback);

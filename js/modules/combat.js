@@ -66,6 +66,19 @@ const combatModule = {
 
     // 結束戰鬥
     endCombat(victory) {
+        // **【核心修改：步驟 A】在所有邏輯開始前，先處理所有戰敗單位**
+        if (this.currentRaid) {
+            // 1. 找出本次戰鬥中「所有」被擊敗的敵人 ID
+            const allDefeatedEnemyIds = this.combat.enemies
+                .filter(e => !e.isAlive())
+                .map(e => e.id);
+
+            // 2. 立刻將他們從地圖資料中移除
+            if (allDefeatedEnemyIds.length > 0) {
+                allDefeatedEnemyIds.forEach(id => this.removeUnitFromRaidZone(id));
+            }
+        }
+    
         let specialBossDefeated = false;
         this.clearAllCombatStatusEffects();
         const wasApostleBattle = this.combat.currentEnemyGroup.some(e => e instanceof ApostleMaiden);
@@ -117,33 +130,21 @@ const combatModule = {
                 this.logMessage('tribe', `你在絕對的神力面前化為了塵埃...`, 'enemy');
             }
         }
-
-        // 將通用俘虜邏輯與 BOSS 戰邏輯互斥
         else {
+             // **【核心修改：步驟 B】現在可以安全地處理俘虜轉化，因為地圖物件已被移除**
             const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
             if (defeatedFemales.length > 0) {
                 const newCaptives = defeatedFemales.map(enemy => {
-                    const newCaptive = new FemaleHuman(
-                        enemy.name,
-                        enemy.stats,
-                        enemy.profession,
-                        enemy.visual,
-                        enemy.originDifficulty
-                    );
-                    newCaptive.maxHp = newCaptive.calculateMaxHp();
-                    newCaptive.currentHp = newCaptive.maxHp;
-                    return newCaptive;
+                    enemy.currentHp = enemy.calculateMaxHp();
+                    enemy.statusEffects = [];
+                    return enemy;
                 });
 
-                // 判斷當前是否在掠奪中
                 if (this.currentRaid) {
-                    // 如果在掠奪中，加入攜帶列表
                     this.currentRaid.carriedCaptives.push(...newCaptives);
                 } else {
-                    // 如果是在部落戰鬥，直接加入總俘虜列表，並檢查容量
                     if ((this.captives.length + newCaptives.length) > this.captiveCapacity) {
                         this.logMessage('tribe', '地牢空間不足，需要決定俘虜的去留...', 'warning');
-                        // 將決策加入佇列，待戰鬥畫面關閉後執行
                         this.pendingDecisions.push({
                             type: 'dungeon',
                             list: [...this.captives, ...newCaptives],
@@ -162,13 +163,11 @@ const combatModule = {
             return;
         }
 
-        // 執行勝利後的回呼函式 (例如：觸發 DLC 提示)
         if (victory && typeof this.combat.onVictoryCallback === 'function') {
             this.combat.onVictoryCallback();
         }
 
         if (!specialBossDefeated) {
-
             if (this.currentRaid && this.raidTimeExpired) {
                 this.raidTimeExpired = false;
                 if (victory) {
@@ -194,46 +193,13 @@ const combatModule = {
             if (!this.currentRaid) {
                 if (victory) {
                     this.logMessage('tribe', '你成功擊退了來襲的敵人！', 'success');
-                    const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
-                    if (defeatedFemales.length > 0) {
-                        if ((this.dungeonCaptives.length + defeatedFemales.length) > this.dungeonCapacity) { 
-                            this.logMessage('tribe', '地牢空間不足...', 'warning');
-                            this.pendingDecisions.push({
-                                type: 'dungeon',
-                                list: [...this.dungeonCaptives, ...defeatedFemales],
-                                limit: this.dungeonCapacity, 
-                                context: { postBattleBirths: this.postBattleBirths }
-                            });
-                        } else {
-                            this.captives.push(...defeatedFemales);
-                            this.logMessage('tribe', `你俘虜了 ${defeatedFemales.length} 名戰敗的敵人。`, 'info');
-                        }
-                    }
-                    this.finishCombatCleanup(true);
-
                 } else {
                     this.logMessage('tribe', '你在部落保衛戰中失敗了！', 'enemy');
                     this.removeAllCaptives('rescued');
                 }
                 this.combat.isDlcEncounterBattle = false;
+                this.finishCombatCleanup(true);
                 return;
-            }
-
-            const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
-            if (defeatedFemales.length > 0) {
-                const newCaptives = defeatedFemales.map(enemy => {
-                    const newCaptive = new FemaleHuman(
-                        enemy.name,
-                        enemy.stats,
-                        enemy.profession,
-                        enemy.visual,
-                        enemy.originDifficulty
-                    );
-                    newCaptive.maxHp = newCaptive.calculateMaxHp();
-                    newCaptive.currentHp = newCaptive.maxHp;
-                    return newCaptive;
-                });
-                this.currentRaid.carriedCaptives.push(...newCaptives);
             }
 
             if (this.player && !this.player.isAlive()) {
@@ -1043,7 +1009,10 @@ const combatModule = {
                 if (currentTarget.id !== this.player.id) this.handlePartnerDeath(currentTarget.id);
             } else {
                 this.gainResourcesFromEnemy(currentTarget);
-                this.handleLootDrop(currentTarget);
+                // **只有在敵人「不是」可俘虜單位 (FemaleHuman) 時，才觸發隨機掉落**
+                if (!(currentTarget instanceof FemaleHuman)) {
+                    this.handleLootDrop(currentTarget);
+                }
             }
         }
 

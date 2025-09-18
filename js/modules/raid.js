@@ -58,18 +58,35 @@ const raidModule = {
 
     generateCity(difficulty) {
         const config = {
+            // --- 人類 ---
             easy: { time: 300, zones: ['外城', '內城'], pop: [10, 15], guards: [5, 10], knightStats: [65, 120] },
             normal: { time: 240, zones: ['外城', '內城A', '內城B'], pop: [15, 25], guards: [10, 15], knightStats: [120, 190] },
             hard: { time: 180, zones: ['外城', '內城A', '內城B', '內城C'], pop: [25, 30], guards: [15, 20], knightStats: [190, 280] },
             hell: { time: 120, zones: ['外城', '內城A', '內城B', '內城C', '王城'], pop: [35, 40], guards: [20, 25], knightStats: [280, 360] },
-            dlc_elf_normal: { time: 240, zones: ['森林外圍', '林中空地', '古樹聖殿'], pop: [20, 25], guards: [10, 15], knightStats: [120, 190] },
-            dlc_beastkin_normal: { time: 240, zones: ['平原邊境', '狩獵營地', '酋長帳篷'], pop: [20, 25], guards: [10, 15], knightStats: [120, 190] },
+            // --- 精靈 ---
+            dlc_elf_easy: { time: 300, zones: ['森林外圍', '林中空地'], pop: [15, 20], guards: [5, 10], knightStats: [140, 160] },
+            dlc_elf_normal: { time: 240, zones: ['森林外圍', '林中空地', '古樹聖殿'], pop: [20, 25], guards: [10, 15], knightStats: [160, 200] },
+            dlc_elf_hard: { time: 180, zones: ['森林外圍', '林中空地', '古樹聖殿', '月神祭壇'], pop: [25, 30], guards: [15, 20], knightStats: [200, 260] },
+            dlc_elf_hell: { time: 120, zones: ['森林外圍', '林中空地', '古樹聖殿', '月神祭壇', '世界樹之心'], pop: [30, 35], guards: [20, 25], knightStats: [260, 340] },
+            // --- 亞獸人 ---
+            dlc_beastkin_easy: { time: 300, zones: ['平原邊境', '狩獵營地'], pop: [15, 20], guards: [5, 10], knightStats: [140, 160] },
+            dlc_beastkin_normal: { time: 240, zones: ['平原邊境', '狩獵營地', '酋長帳篷'], pop: [20, 25], guards: [10, 15], knightStats: [160, 200] },
+            dlc_beastkin_hard: { time: 180, zones: ['平原邊境', '狩獵營地', '酋長帳篷', '先祖之地'], pop: [25, 30], guards: [15, 20], knightStats: [200, 260] },
+            dlc_beastkin_hell: { time: 120, zones: ['平原邊境', '狩獵營地', '酋長帳篷', '先祖之地', '萬獸王座'], pop: [30, 35], guards: [20, 25], knightStats: [260, 340] },
         };
         const cityConfig = config[difficulty];
         const nameConfig = { 
             ...CITY_NAMES,
+            // --- 精靈部落名稱 ---
+            dlc_elf_easy: { prefixes: ['銀月', '翠葉', '微光', '迷霧'], suffix: '森林' },
             dlc_elf_normal: { prefixes: ['銀月', '翠葉', '微光', '迷霧'], suffix: '森林' },
-            dlc_beastkin_normal: { prefixes: ['咆哮', '血蹄', '風剪', '巨岩'], suffix: '平原' }
+            dlc_elf_hard: { prefixes: ['銀月', '翠葉', '微光', '迷霧'], suffix: '森林' },
+            dlc_elf_hell: { prefixes: ['銀月', '翠葉', '微光', '迷霧'], suffix: '森林' },
+            // --- 亞獸人部落名稱 ---
+            dlc_beastkin_easy: { prefixes: ['咆哮', '血蹄', '風剪', '巨岩'], suffix: '平原' },
+            dlc_beastkin_normal: { prefixes: ['咆哮', '血蹄', '風剪', '巨岩'], suffix: '平原' },
+            dlc_beastkin_hard: { prefixes: ['咆哮', '血蹄', '風剪', '巨岩'], suffix: '平原' },
+            dlc_beastkin_hell: { prefixes: ['咆哮', '血蹄', '風剪', '巨岩'], suffix: '平原' }
         };
         const locationName = nameConfig[difficulty].prefixes[randomInt(0, nameConfig[difficulty].prefixes.length - 1)] + nameConfig[difficulty].suffix;
 
@@ -866,10 +883,11 @@ const raidModule = {
             this.currentRaid.timeRemaining -= 3;
             this.logMessage('raid', `潛行成功！你將 ${femalesInGroup.map(f => f.name).join('、')} 全部擄走！(-3 分鐘)`, 'success');
             femalesInGroup.forEach(femaleUnit => {
-                const newCaptive = new FemaleHuman(femaleUnit.name, femaleUnit.stats, femaleUnit.profession, femaleUnit.visual, femaleUnit.originDifficulty);
-                newCaptive.maxHp = newCaptive.calculateMaxHp();
-                newCaptive.currentHp = newCaptive.maxHp;
-                this.addCaptiveToCarry(newCaptive);
+                // 直接轉化該單位，而不是建立新的
+                femaleUnit.currentHp = femaleUnit.calculateMaxHp(); // 恢復生命值
+                femaleUnit.statusEffects = []; // 清除戰鬥狀態
+                
+                this.addCaptiveToCarry(femaleUnit); // 將轉化後的原物件加入
                 this.gainResourcesFromEnemy(femaleUnit);
                 this.removeUnitFromRaidZone(femaleUnit.id);
             });
