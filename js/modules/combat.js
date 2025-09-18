@@ -852,12 +852,17 @@ const combatModule = {
                     let summonedEnemies = [];
                     let newAllies = [];
                     let dialogueEvents = [];
+                    // **【核心修改 A】宣告並初始化旗標變數**
+                    let apostleIsPresent = false;
+                    let centuryIsPresent = false;
 
                     // --- 3. 執行召喚與強化 ---
                     captivesToSummon.forEach(c => {
                         let summoned;
                         // 特殊處理：世紀的分身
                         if (c.name === '世紀的分身') {
+                            // **【核心修改 B】補上設定旗標的邏輯**
+                            centuryIsPresent = true; 
                             summoned = new FemaleHuman(c.name, c.stats, c.profession, c.visual);
                             Object.assign(summoned, JSON.parse(JSON.stringify(c)));
                             summoned.name = '超越世紀的惡魔';
@@ -1173,10 +1178,10 @@ const combatModule = {
             hell:   { knights: { '士兵': 3, '盾兵': 2, '槍兵': 2, '弓兵': 1, '騎士': 1, '法師': 1, '祭司': 1 }, residents: 7 }
         };
         const knightStatRanges = {
-            easy: [65, 120], normal: [120, 190], hard: [190, 280], hell: [280, 360]
+            easy: [140, 160], normal: [160, 200], hard: [200, 260], hell: [260, 340]
         };
         const residentStatRanges = {
-            easy: [20, 20], normal: [20, 40], hard: [40, 80], hell: [80, 140]
+            easy: [20, 40], normal: [40, 80], hard: [80, 140], hell: [140, 220]
         };
 
         const composition = squadCompositions[difficulty];
