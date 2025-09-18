@@ -562,7 +562,7 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.83 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.84 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -1970,9 +1970,7 @@ const gameLogic = {
     finishCombatCleanup(returnToTribe = false) {
         this.resetAllSkillCooldowns();
 
-        if (this.currentRaid) {
-            const defeatedEnemyIds = this.combat.enemies.filter(e => !e.isAlive()).map(e => e.id);
-            defeatedEnemyIds.forEach(id => this.removeUnitFromRaidZone(id));
+        if (this.currentRaid) {// 移除敵人的邏輯已移至 endCombat() 中，這裡只保留更新建築文字的功能
             this.updateBuildingScoutText();
         }
 
@@ -1990,8 +1988,7 @@ const gameLogic = {
 
     importSaveData: '', // 新增一個屬性來儲存匯入的文字
 
-    assignToDispatch(partnerId, task) {
-        // 直接呼叫權威的指派函式
+    assignToDispatch(partnerId, task) { // 直接呼叫權威的指派函式
         this.assignPartner(partnerId, task);
     },
 
@@ -2132,7 +2129,6 @@ const gameLogic = {
             { task: 'hunting', chance: this.dispatch.hunting.length, race: 'beastkin', unlockedFlag: 'beastkin_tribe_unlocked' }
         ];
         for (const encounter of dispatchTasks) {
-            if (events.length > 0) break;
             if (encounter.chance > 0 && !this.dlc[encounter.unlockedFlag] && true) {
                 let enemyUnit, tribeName, alertMessage;
                 if (encounter.race === 'elf') {
