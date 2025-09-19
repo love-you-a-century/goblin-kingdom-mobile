@@ -34,10 +34,22 @@ const uiModule = {
 
     updateMerchantDialogue() {
         if (this.merchant.goods.length === 0) {
-            this.merchant.dialogue = "「哎呀...這麼想我嗎？會有下次的」";
+            this.merchant.dialogue = this.NPCS.century.dialogues.no_goods;
         } else {
-            this.merchant.dialogue = "「嘿嘿嘿...哥布林王...今天有什麼「好貨」？買點好東西嗎？」";
+            this.merchant.dialogue = this.NPCS.century.dialogues.standard;
         }
+    },
+
+    getAdaArmoryDialogue() {
+        if (this.flags.adaStatus !== 'friendly') {
+            return ''; // 如果埃達不在，不顯示任何對話
+        }
+        // 如果保底計數器已經到了9，就顯示提示對話
+        if (this.flags.adaCraftingCounter === 9) {
+            return this.NPCS.ada.dialogues.armory_pity_close;
+        }
+        // 否則，顯示常規問候語
+        return this.NPCS.ada.dialogues.armory_greeting;
     },
 
     executeTrade() {
@@ -64,12 +76,11 @@ const uiModule = {
         this.merchant.selectedCaptiveIds = [];
 
         if (this.merchant.goods.length === 0) {
-            // 當商品被買完時，觸發新的對話和提早離開的邏輯
-            this.merchant.dialogue = "「哎呀...這麼快就掃光了？明天我就先走一步補貨了，期待下次見面...」";
-            this.merchant.stayDuration = 1; // 將停留時間設為1，讓她隔天離開
+            this.merchant.dialogue = this.NPCS.century.dialogues.sold_out;
+            this.merchant.stayDuration = 1; 
             this.logMessage('tribe', '你買光了世紀的所有商品，她決定明天提早離開。', 'system');
         } else {
-            this.merchant.dialogue = "「眼光不錯，這裝備肯定能成為助力！」";
+            this.merchant.dialogue = this.NPCS.century.dialogues.successful_trade;
             clearTimeout(this.merchantDialogueTimeout);
             this.merchantDialogueTimeout = setTimeout(() => {
                 this.updateMerchantDialogue();

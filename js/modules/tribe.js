@@ -78,6 +78,12 @@ const tribeModule = {
         this.resources.wood -= cost.wood;
         this.resources.stone -= cost.stone;
         building.level++;
+        // **檢查是否為首次建造兵工廠**
+        if (type === 'armory' && building.level === 1 && !this.flags.adaEncountered) {
+            // 使用 setTimeout 確保建造日誌先顯示，再觸發事件
+            setTimeout(() => this.triggerAdaEncounter(), 500);
+        }
+
         this.logMessage('tribe', `${building.name}${building.level === 1 ? '建造完成' : `升級至 ${building.level} 級`}！`, 'success');
     },
 

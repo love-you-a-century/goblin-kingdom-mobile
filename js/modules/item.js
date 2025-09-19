@@ -121,13 +121,28 @@ const itemModule = {
         this.resources.wood -= cost.wood;
         this.resources.stone -= cost.stone;
 
-        const roll = randomInt(1, 100);
         let qualityKey = 'worn';
-        if (roll <= 5) qualityKey = 'legendary';
-        else if (roll <= 15) qualityKey = 'epic';
-        else if (roll <= 32) qualityKey = 'rare';
-        else if (roll <= 58) qualityKey = 'uncommon';
-        else if (roll <= 93) qualityKey = 'common';
+
+        // **全新的埃達保底機制**加上 !this.flags.adaIsPregnant 判斷
+        if (this.flags.adaStatus === 'friendly' && !this.flags.adaIsPregnant) {
+            this.flags.adaCraftingCounter++;
+            this.logMessage('tribe', `埃達的製作計數：${this.flags.adaCraftingCounter} / 10。`, 'info');
+            if (this.flags.adaCraftingCounter >= 10) {
+                this.logMessage('tribe', `在埃達的祝福下，爐火中誕生了一件傳說級的傑作！`, 'crit');
+                qualityKey = 'legendary';
+                this.flags.adaCraftingCounter = 0;
+            }
+        }
+
+        // 如果沒有觸發保底，則執行正常的隨機品質判定
+        if (qualityKey === 'worn') {
+            const roll = randomInt(1, 100);
+            if (roll <= 5) qualityKey = 'legendary';
+            else if (roll <= 15) qualityKey = 'epic';
+            else if (roll <= 32) qualityKey = 'rare';
+            else if (roll <= 58) qualityKey = 'uncommon';
+            else if (roll <= 93) qualityKey = 'common';
+        }
 
         const newItem = this.createEquipment(materialKey, qualityKey, typeName);
 

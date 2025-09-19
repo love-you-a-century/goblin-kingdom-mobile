@@ -28,6 +28,14 @@ const combatModule = {
 
         this.combat.allies = (alliesOverride || combatAllies).filter(u => u.isAlive());
         this.combat.enemies = enemyGroup.filter(u => u.isAlive());
+        // **將戰鬥物件參考賦予給場上的特殊 BOSS**
+        this.combat.enemies.forEach(enemy => {
+            if (enemy instanceof ArmoryGolemBoss) {
+                enemy.combatContext = this.combat;
+                // 【修改】在此處手動觸發一次初始狀態更新
+                enemy.updateDynamicStats(); 
+            }
+        });
         this.combat.currentEnemyGroup = enemyGroup;
         this.combat.turn = 1;
         this.combat.isProcessing = false;
@@ -64,9 +72,59 @@ const combatModule = {
         });
     },
 
-    // 結束戰鬥
     endCombat(victory) {
-        // **【核心修改：步驟 A】在所有邏輯開始前，先處理所有戰敗單位**
+        const wasAdaBattle = this.combat.enemies.some(e => e instanceof ArmoryGolemBoss);
+        const wasDefeatedByAda = !victory && wasAdaBattle;
+
+        if (wasDefeatedByAda) {
+            this.handleAdaDefeat();
+            return;
+        }
+
+        if (victory && wasAdaBattle) {
+            // 在處理勝利獎勵的同時，加入復活邏輯
+            // 1. 復活所有在挑戰中被擊倒的夥伴
+            const challengeAllies = this.combat.allies;
+            challengeAllies.forEach(unit => {
+                if (unit.id !== this.player.id && !unit.isAlive()) {
+                    unit.currentHp = unit.maxHp;
+                }
+            });
+            this.logMessage('tribe', '所有在挑戰中被擊倒的夥伴都已恢復！', 'success');
+
+            // 2. 處理勝利獎勵與計數 (這部分邏輯不變)
+            this.flags.adaVictoryCount++;
+            this.logMessage('tribe', `你成功擊敗了兵工廠魔像！(勝利次數: ${this.flags.adaVictoryCount}/7)`, 'success');
+            this.flags.adaChallengeCooldown = 7;
+
+            this.logMessage('tribe', '作為對你實力的認可，埃達贈送了一件強大的裝備！', 'crit');
+            const availableT7Items = this.craftableTypes.filter(t => !t.requires || this.dlc[t.requires]);
+            const randomItemType = availableT7Items[randomInt(0, availableT7Items.length - 1)];
+            const category = randomItemType.materialCategory;
+            const materialKey = Object.keys(EQUIPMENT_MATERIALS).find(key => {
+                const mat = EQUIPMENT_MATERIALS[key];
+                return mat.tier === 7 && mat.category === category;
+            });
+
+            if (materialKey) {
+                const rewardItem = this.createEquipment(materialKey, 'legendary', randomItemType.baseName);
+                this.player.inventory.push(rewardItem);
+                this.showCustomAlert(`戰鬥勝利！\n埃達贈送給你：[${rewardItem.name}]`);
+                this.logMessage('tribe', `你獲得了傳說裝備：[${rewardItem.name}]！`, 'success');
+            }
+
+            // 檢查是否達成7次勝利並觸發特殊對話
+            if (this.flags.adaVictoryCount === 7 && !this.flags.adaIsBreedable) {
+                this.flags.adaIsBreedable = true;
+                this.logMessage('tribe', '在第7次被你擊敗後，埃達的眼神似乎發生了變化...', 'system');
+                // 呼叫新的對話函式
+                setTimeout(() => this.triggerAdaConqueredDialogue(), 500);
+            } else if (this.flags.adaVictoryCount < 7) {
+                this.showCustomAlert(`戰鬥勝利！\n你再次證明了你的實力。 (進度: ${this.flags.adaVictoryCount}/7)`);
+            }
+        }
+
+        // **在所有邏輯開始前，先處理所有戰敗單位**
         if (this.currentRaid) {
             // 1. 找出本次戰鬥中「所有」被擊敗的敵人 ID
             const allDefeatedEnemyIds = this.combat.enemies
@@ -78,7 +136,7 @@ const combatModule = {
                 allDefeatedEnemyIds.forEach(id => this.removeUnitFromRaidZone(id));
             }
         }
-    
+
         let specialBossDefeated = false;
         this.clearAllCombatStatusEffects();
         const wasApostleBattle = this.combat.currentEnemyGroup.some(e => e instanceof ApostleMaiden);
@@ -131,7 +189,7 @@ const combatModule = {
             }
         }
         else {
-             // **【核心修改：步驟 B】現在可以安全地處理俘虜轉化，因為地圖物件已被移除**
+            // **【步驟 B】現在可以安全地處理俘虜轉化，因為地圖物件已被移除**
             const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
             if (defeatedFemales.length > 0) {
                 const newCaptives = defeatedFemales.map(enemy => {
@@ -225,6 +283,119 @@ const combatModule = {
                 }
             }
         }
+    },
+
+    handleNarrativeChoice(actionName) {
+        // 根據傳入的動作名稱，呼叫對應的函式
+        if (typeof this[actionName] === 'function') {
+            this[actionName]();
+        } else {
+            console.error(`敘事選項錯誤：找不到名為 "${actionName}" 的函式。`);
+        }
+        // 執行完畢後清空選項
+        this.modals.narrative.choices = [];
+    },
+
+    triggerAdaEncounter(isPostDefeat = false) {
+        this.flags.adaEncountered = true;
+        const modal = this.modals.narrative;
+        const adaData = this.NPCS.ada;
+
+        // 檢查 NPC 資料是否正常，避免錯誤
+        if (!adaData || !adaData.dialogues) {
+            console.error("埃達的 NPC 資料遺失或不完整！");
+            return;
+        }
+
+        modal.isOpen = true;
+        modal.title = `與 ${adaData.name} 的相遇`;
+        modal.type = "tutorial";
+        modal.isLoading = false;
+        modal.isAwaitingConfirmation = false;
+        modal.avatarUrl = 'assets/ada_avatar.png';
+        modal.choices = [];
+        modal.confirmText = ''; // 重置按鈕文字
+
+        if (isPostDefeat) {
+            // --- 戰敗後續路線 ---
+            modal.isChoicePrompt = false;
+            // 使用正確的對話索引: 'post_defeat_intro'
+            modal.content = `<p class="text-lg leading-relaxed">${adaData.dialogues.post_defeat_intro}</p>`;
+            // 明確設定按鈕的文字
+            modal.confirmText = '好好說明';
+            // 按下按鈕後，會執行和平交涉的函式
+            modal.onConfirm = () => this.makePeaceWithAda();
+        } else {
+            // --- 首次相遇路線 ---
+            modal.isChoicePrompt = true;
+            // 使用正確的對話索引: 'intro'
+            modal.content = `<p class="text-lg leading-relaxed">${adaData.dialogues.intro}</p>`;
+            // 定義玩家的選項
+            modal.choices = [
+                { text: '1. 襲擊她', action: 'startAdaBattle', class: 'btn-danger' },
+                { text: '2. 禮貌地說明', action: 'makePeaceWithAda', class: 'btn-primary' }
+            ];
+        }
+    },
+
+    startAdaBattle() {
+        const modal = this.modals.narrative;
+        const adaData = this.NPCS.ada;
+        
+        // **在顯示對話的同時，立刻更換對話框的頭像**
+        // **請注意：** "assets/ada_battle.png" 是戰鬥頭像的路徑，請確認路徑和檔名正確
+        modal.avatarUrl = "assets/ada_battle.png"; 
+        
+        modal.content = `<p class="text-lg leading-relaxed">${adaData.dialogues.attack_response}</p>`;
+        modal.isChoicePrompt = false; 
+        modal.confirmText = '開戰！'; 
+        
+        modal.onConfirm = () => {
+            // **替換埃達的戰鬥頭像**
+            // 這裡假設您的戰鬥頭像路徑是 'img/avatars/ada_battle.png'
+            // 如果不同，請替換成您實際的圖片路徑
+            this.NPCS.ada.avatar = "assets/ada_battle.png"; 
+
+            const dispatchedIds = new Set([
+                ...this.dispatch.hunting,
+                ...this.dispatch.logging,
+                ...this.dispatch.mining,
+                ...this.dispatch.watchtower
+            ]);
+            const availablePartners = this.partners.filter(p => !dispatchedIds.has(p.id));
+            const enemyCount = [this.player, ...availablePartners].filter(u => u.isAlive()).length;
+
+            const boss = new ArmoryGolemBoss(enemyCount); 
+            this.combat.isUnescapable = true;
+            this.startCombat([boss], true);
+        };
+    },
+
+    makePeaceWithAda() {
+        this.flags.adaStatus = 'friendly';
+        const modal = this.modals.narrative;
+        const adaData = this.NPCS.ada;
+
+        // 確保對話框是開啟狀態，以顯示後續對話
+        modal.isOpen = true; 
+
+        // 1. 更新對話內容
+        modal.content = `<p class="text-lg leading-relaxed">${adaData.dialogues.negotiate_protest}</p>`;
+        
+        // 2. 移除選項按鈕，準備顯示確認按鈕
+        modal.isChoicePrompt = false; 
+        modal.choices = []; // 清空選項
+        modal.confirmText = '太好了！'; // 設定確認按鈕的文字
+
+        // 3. 設定「最終」的確認動作
+        modal.onConfirm = () => {
+            // 這個 onConfirm 會在玩家看完 negotiate_protest 對話後觸發
+            // 它應該關閉對話框，因為這是這段劇情的結尾
+            modal.isOpen = false; 
+            
+            this.logMessage('tribe', `矮人鐵匠「埃達」加入了你的部落！她將協助你管理兵工廠。`, 'success');
+            this.showCustomAlert('埃達加入了部落！\n（兵工廠製作裝備的品質將獲得提升！）');
+        };
     },
 
     showCombatEnemyInfo() {
@@ -435,14 +606,49 @@ const combatModule = {
                     await this.processAttack(attacker, target, false);
                 }
             }
+            else if (attacker instanceof ArmoryGolemBoss) {
+                // **【最終版 AI 邏輯】**
+                const elementSkill = attacker.skills.find(s => s.id === 'golem_active_element');
+                const dwarvesSkill = attacker.skills.find(s => s.id === 'golem_active_dwarves');
+                const smeltingSkill = attacker.skills.find(s => s.id === 'golem_active_smelting');
+                
+                const debuffTypes = ['stat_debuff', 'stun', 'taunt', 'sleep', 'darkness', 'silence', 'masculinized', 'feminized', 'poison', 'bleeding', 'laceration', 'vulnerable'];
+                const playerTeamHasDebuff = this.combat.allies.some(ally => ally.statusEffects.some(effect => debuffTypes.includes(effect.type)));
+
+                let actionTaken = false;
+
+                // 優先級 1: 如果對手有 DEBUFF，優先使用「第五元素」延長
+                if (playerTeamHasDebuff && elementSkill && elementSkill.currentCooldown === 0) {
+                    await this.executeSkill(elementSkill, attacker, this.combat.enemies, currentEnemies);
+                    actionTaken = true;
+                }
+                
+                // 優先級 2: 使用終極大招「七個小矮人」
+                if (!actionTaken && dwarvesSkill && dwarvesSkill.currentCooldown === 0) {
+                    await this.executeSkill(dwarvesSkill, attacker, this.combat.enemies, currentEnemies);
+                    actionTaken = true;
+                }
+
+                // 優先級 3: 使用「高溫熱熔」施加 DEBUFF
+                if (!actionTaken && smeltingSkill && smeltingSkill.currentCooldown === 0) {
+                    await this.executeSkill(smeltingSkill, attacker, this.combat.enemies, currentEnemies);
+                    actionTaken = true;
+                }
+
+                // 最後選項: 普通攻擊
+                if (!actionTaken) {
+                    const target = currentEnemies[randomInt(0, currentEnemies.length - 1)];
+                    await this.processAttack(attacker, target, false);
+                }
+            }
             // 邏輯 4: 其他所有通用單位 (騎士、哥布林夥伴等)
             else {
                 let actionTaken = false;
                 // 優先使用技能
                 if (attacker.skills && attacker.skills.length > 0) {
-                    // 尋找第一個冷卻完畢的技能，而不只是第一個
-                    const skill = attacker.skills.find(s => s.currentCooldown === 0);
-                    if (skill) { // 如果找到了可用的技能
+                    // **告訴 AI 尋找技能時，必須排除掉 type 為 'passive' 的技能**
+                    const skill = attacker.skills.find(s => s.currentCooldown === 0 && s.type !== 'passive');
+                    if (skill) {
                         let shouldUseSkill = false;
                         if (skill.type === 'team_heal') {
                             const allies = isCurrentAttackerAlly ? this.combat.allies.filter(u => u.isAlive()) : this.combat.enemies.filter(u => u.isAlive());
@@ -583,6 +789,10 @@ const combatModule = {
                 case '投石索':
                     attackerStatValue = attacker.getAverageStat(['agility', 'intelligence', 'luck'], this.isStarving, this);
                     defenderStatValue = currentTarget.getAverageStat(['agility', 'intelligence', 'luck'], this.isStarving, this);
+                    break;
+                case '魔像複合武裝':
+                    attackerStatValue = attacker.getAverageStat(['strength', 'agility', 'intelligence', 'luck'], this.isStarving, this);
+                    defenderStatValue = currentTarget.getAverageStat(['strength', 'agility', 'intelligence', 'luck'], this.isStarving, this);
                     break;
                 default:
                     const singleStatMap = { '劍': 'strength', '雙手劍': 'strength', '長槍': 'luck', '弓': 'agility', '法杖': 'intelligence' };
@@ -725,15 +935,24 @@ const combatModule = {
             }
         }
 
-        const shield = currentTarget.equipment.offHand;
-        if (!wasBlockedByAffix && shield && shield.baseName === '盾') {
-            const baseBlockChance = (20 - (shield.stats.blockTarget || 20)) * 5;
+        // **檢查主手或副手，只要有 blockTarget 屬性就進行格擋判定**
+        const blockingItem = currentTarget.equipment.mainHand?.stats.blockTarget ? currentTarget.equipment.mainHand : currentTarget.equipment.offHand;
+        if (!wasBlockedByAffix && blockingItem && blockingItem.stats.blockTarget) {
+            const baseBlockChance = (20 - (blockingItem.stats.blockTarget || 20)) * 5;
             const finalBlockChance = baseBlockChance + defenderGamblerBonus;
             this.logMessage('combat', `> ${currentTarget.name} 進行盾牌格擋: 機率 ${finalBlockChance.toFixed(1)}%`, 'info');
             if (rollPercentage(finalBlockChance)) {
                 damage = Math.floor(damage * 0.75);
                 this.logMessage('combat', `${currentTarget.name} 的盾牌成功格擋了攻擊，傷害大幅降低！`, 'skill');
             }
+        }
+
+        // **計算「脆弱」狀態的增傷效果**
+        const vulnerableStacks = currentTarget.statusEffects.filter(e => e.type === 'vulnerable').length;
+        if (vulnerableStacks > 0) {
+            const damageMultiplier = 1 + (vulnerableStacks * 0.10); // 每層 +10%
+            damage = Math.floor(damage * damageMultiplier);
+            this.logMessage('combat', `> ${currentTarget.name} 身上的 [脆弱] x${vulnerableStacks} 效果使其受到的傷害提升至 ${Math.round(damageMultiplier * 100)}%！`, 'enemy');
         }
 
         let finalDamage = Math.max(0, Math.floor(damage)); 
@@ -1009,12 +1228,16 @@ const combatModule = {
                 }
             }
             this.logMessage('combat', `${currentTarget.name} 被擊敗了！`, 'system');
+
+            // 【新的更新邏輯 - 使用統一函式】
+            this.updateAllDynamicUnitsInCombat();
+            this.logMessage('combat', `戰場上的動態能力已根據存活人數重新計算！`, 'system');
+
             const isTargetAnAlly = this.combat.allies.some(a => a.id === currentTarget.id);
             if (isTargetAnAlly) {
                 if (currentTarget.id !== this.player.id) this.handlePartnerDeath(currentTarget.id);
             } else {
                 this.gainResourcesFromEnemy(currentTarget);
-                // **只有在敵人「不是」可俘虜單位 (FemaleHuman) 時，才觸發隨機掉落**
                 if (!(currentTarget instanceof FemaleHuman)) {
                     this.handleLootDrop(currentTarget);
                 }
@@ -1111,9 +1334,15 @@ const combatModule = {
             this.logMessage('combat', `基於 ${partnerCount} 名夥伴，對敵方全體施加了 ${Math.round(totalDebuff * 100)}% 的全屬性削弱，持續 ${finalDuration} 回合！`, 'skill');
 
             this.combat.enemies.filter(e => e.isAlive()).forEach(enemy => {
+                // **如果敵人擁有「免疫」狀態，則免疫**
+                if (enemy.statusEffects && enemy.statusEffects.some(e => e.type === 'immune')) {
+                    this.logMessage('combat', `${enemy.name} 的 [免疫] 狀態使其免疫了所有負面效果！`, 'enemy');
+                    return; // 跳過此敵人
+                }
+
                 enemy.statusEffects.push({
                     type: 'stat_debuff',
-                    duration: finalDuration + 1, // +1 因為回合結束會立刻減1
+                    duration: finalDuration + 1, 
                     multiplier: totalDebuff
                 });
             });
@@ -1322,27 +1551,50 @@ const combatModule = {
 
     async executeSkill(skill, caster, allies, enemies) {
         this.logMessage('combat', `${caster.name} 施放了 <span class="text-pink-400">[${skill.name}]</span>！`, 'skill');
-        if(caster.skills[0]) caster.skills[0].currentCooldown = skill.cd;
+        
+        const skillInstance = caster.skills.find(s => s.id === skill.id);
+        if (skillInstance) {
+            skillInstance.currentCooldown = skill.baseCooldown;
+        }
 
-        switch (skill.type) {
+        let deathsOccurred = false; // 用於追蹤本次技能是否造成了任何死亡
+
+        switch (skill.id) {
+            // --- 範圍傷害技能的統一處理 ---
             case 'aoe_str':
             case 'aoe_agi':
-                const damageStat = skill.type === 'aoe_str' ? 'strength' : 'agility';
-                // 先計算出這個技能的基礎傷害值
-                const baseSkillDamage = Math.floor(caster.getTotalStat(damageStat, this.isStarving, this) * skill.multiplier);
+            case 'golem_active_smelting': {
+                const isSmelting = skill.id === 'golem_active_smelting';
+                if (isSmelting) this.logMessage('combat', `${caster.name} 的爐心開始發出刺眼的紅光！`, 'skill');
 
-                this.logMessage('combat', `${caster.name} 的 [${skill.name}] 襲向我方全體！`, 'skill');
+                const damageStat = skill.id === 'aoe_str' ? 'strength' : 'agility';
+                const baseSkillDamage = isSmelting 
+                    ? caster.calculateDamage(this.isStarving)
+                    : Math.floor(caster.getTotalStat(damageStat, this.isStarving, this) * skill.multiplier);
+                
+                if (!isSmelting) this.logMessage('combat', `${caster.name} 的 [${skill.name}] 襲向我方全體！`, 'skill');
 
-                // 對每一個目標，都呼叫一次完整的攻擊判定流程
-                for (const target of enemies) {
-                    if (target.isAlive()) {
-                        // 使用 await 確保每個攻擊動畫和日誌都依序出現
-                        await this.processAttack(caster, target, false, baseSkillDamage);
-                        // 加入一個短暫的延遲，讓戰鬥日誌更容易閱讀
-                        await new Promise(res => setTimeout(res, 200)); 
+                const livingEnemies = enemies.filter(e => e.isAlive());
+                for (const target of livingEnemies) {
+                    const wasAlive = target.isAlive();
+                    await this.processAttack(caster, target, false, baseSkillDamage);
+                    if (wasAlive && !target.isAlive()) deathsOccurred = true;
+
+                    // 如果是高溫熱熔，命中後附加脆弱效果
+                    if (isSmelting && target.isAlive()) {
+                        if (target.statusEffects.some(e => e.type === 'immune')) {
+                            this.logMessage('combat', `${target.name} [免疫] 了 [脆弱] 效果！`, 'player');
+                        } else {
+                            target.statusEffects.push({ type: 'vulnerable', duration: 3 + 1 });
+                            this.logMessage('combat', `${target.name} 被高溫灼燒，陷入了 [脆弱] 狀態！`, 'player');
+                        }
                     }
+                    await this.combatDelay(200);
                 }
                 break;
+            }
+
+            // --- 其他技能的處理 (省略未變更的部分) ---
             case 'taunt':
                 caster.statusEffects.push({ type: 'taunt', duration: skill.duration + 1 });
                 this.logMessage('combat', `${caster.name} 吸引了所有人的注意！`, 'info');
@@ -1357,10 +1609,14 @@ const combatModule = {
             case 'king_nuke':
                 const king = enemies.find(e => e.id === this.player.id);
                 if (king && king.isAlive()) {
+                    const wasKingAlive = king.isAlive();
                     const kingDamage = caster.getTotalStat('strength') + caster.getTotalStat('agility');
                     king.currentHp = Math.max(0, king.currentHp - kingDamage);
                     this.logMessage('combat', `[騎士道] 無視了你的夥伴，對哥布林王造成了 ${kingDamage} 點巨大傷害！`, 'enemy');
-                    if (!king.isAlive()) this.logMessage('combat', `${king.name} 被擊敗了！`, 'system');
+                    if (wasKingAlive && !king.isAlive()){
+                        deathsOccurred = true;
+                        this.logMessage('combat', `${king.name} 被擊敗了！`, 'system');
+                    }
                 }
                 break;
             case 'charge_nuke':
@@ -1381,61 +1637,119 @@ const combatModule = {
                 });
                 this.logMessage('combat', `聖光籠罩了騎士團，每名成員恢復了 ${healAmount} 點生命！`, 'success');
                 break;
-
             case 'apostle_clone': {
                 this.logMessage('combat', `${caster.name} 施放了 <span class="text-pink-400">[繁衍的權能]</span>！`, 'skill');
                 const newClone = this.cloneApostle(caster);
                 this.combat.enemies.push(newClone);
-
-                // 重置本體和分身的技能冷卻
                 caster.skills.find(s => s.id === 'apostle_proliferate').currentCooldown = skill.baseCooldown;
                 newClone.skills.find(s => s.id === 'apostle_proliferate').currentCooldown = skill.baseCooldown;
-
                 this.logMessage('combat', `一個新的 ${newClone.name} 出現在戰場上！`, 'enemy');
-
-                // 處理被動「重現的權能」，讓施法者立即再次行動 (進行一次普通攻擊)
                 this.logMessage('combat', `在 [重現的權能] 的影響下，${caster.name} 立即再次行動！`, 'skill');
                 const livingAllies = this.combat.allies.filter(a => a.isAlive());
                 if (livingAllies.length > 0) {
                     const target = livingAllies[randomInt(0, livingAllies.length - 1)];
-                    // 使用 await 確保攻擊動畫播放完畢
                     await this.processAttack(caster, target, false);
                 }
                 break;
             }
-                
-            // 處理「世紀的洪流」技能
-            case 'custom_aoe_5stat': { // 使用大括號建立獨立作用域
+            case 'custom_aoe_5stat': {
                 if (!skill.hasBeenUsed) {
                     await this.showDialogueWithAvatar(caster.name, 'assets/century_transcended_avatar.png', skill.firstUseDialogue);
                     skill.hasBeenUsed = true;
                 }
                 const totalStats = Object.values(caster.stats).reduce((a, b) => a + b, 0);
                 this.logMessage('combat', `${caster.name} 的 [${skill.name}] 釋放出毀滅性的能量！`, 'skill');
-
-                let hitCount = 0; // 新增命中計數器
+                let hitCount = 0;
                 for (const target of enemies) {
                     if (target.isAlive()) {
+                        const wasAlive = target.isAlive();
                         const hitSuccess = await this.processAttack(caster, target, false, totalStats);
-                        if (hitSuccess) {
-                            hitCount++; // 如果命中，計數器+1
-                        }
-                        await new Promise(res => setTimeout(res, 200));
+                        if (wasAlive && !target.isAlive()) deathsOccurred = true;
+                        if (hitSuccess) hitCount++;
+                        await this.combatDelay(200);
                     }
                 }
-
-                // 根據命中數賦予額外行動
                 if (hitCount > 0) {
                     caster.extraActions = (caster.extraActions || 0) + hitCount;
                     this.logMessage('combat', `[世紀的洪流] 成功命中 ${hitCount} 個目標！${caster.name} 觸發了 [超越]，獲得了 ${hitCount} 次額外行動！`, 'crit');
                 }
                 break;   
             }
+            // 【已修正】第五元素
+            case 'golem_active_element': {
+                this.logMessage('combat', `${caster.name} 匯集了四方元素，釋放出純粹的能量！`, 'skill');
+                const skillCharisma = caster.getTotalStat('strength') + caster.getTotalStat('agility') + caster.getTotalStat('intelligence') + caster.getTotalStat('luck');
+                const attackerDiceCount = Math.max(1, Math.floor(skillCharisma / 20));
+                const attackerRoll = rollDice(`${attackerDiceCount}d20`);
+                const attackerTotal = attackerRoll.total + (caster.equipment.mainHand?.qualityBonus || 0) * attackerDiceCount;
+                this.logMessage('combat', `> [第五元素] 進行魅力判定 (擲 ${attackerDiceCount}d20): ${attackerRoll.total} + ${ (caster.equipment.mainHand?.qualityBonus || 0) * attackerDiceCount} = ${attackerTotal}`, 'info');
+
+                for (const target of enemies.filter(e => e.isAlive())) {
+                    const defenderDiceCount = Math.max(1, Math.floor(target.getTotalStat('charisma', this.isStarving, this) / 20));
+                    const defenderRoll = rollDice(`${defenderDiceCount}d20`);
+                    if (attackerTotal > defenderRoll.total) {
+                        this.logMessage('combat', `> 判定成功，能量命中了 ${target.name}！`, 'success');
+                        const wasAlive = target.isAlive();
+                        target.currentHp = Math.max(0, target.currentHp - skillCharisma);
+                        this.logMessage('combat', `[第五元素] 的能量衝擊了 ${target.name}，造成了 ${skillCharisma} 點傷害！`, 'enemy');
+                        showFloatingText(target.id, skillCharisma, 'damage');
+                        if (wasAlive && !target.isAlive()) {
+                            deathsOccurred = true;
+                            this.handlePartnerDeath(target.id); // 直接處理死亡
+                        }
+                        if (target.isAlive()) { // 延長效果
+                            target.statusEffects.forEach(effect => {
+                                if (['stat_debuff', 'vulnerable'].includes(effect.type)) effect.duration += 5;
+                            });
+                        }
+                    } else {
+                        this.logMessage('combat', `> ${target.name} 成功迴避了能量衝擊！`, 'player');
+                        showFloatingText(target.id, 'MISS', 'miss');
+                    }
+                    await this.combatDelay(200);
+                }
+                break;
+            }
+            // 【已優化】七個小矮人
+            case 'golem_active_dwarves': {
+                this.logMessage('combat', `${caster.name} 召喚了傳說中的七矮人兵武！`, 'crit');
+                const t7Weapons = Object.keys(WEAPON_STATS).filter(w => w !== '盾');
+                for (let i = 0; i < 7; i++) {
+                    if (enemies.filter(e => e.isAlive()).length === 0) break; // 如果敵人都死光了就提早結束
+                    const randomWeaponKey = t7Weapons[randomInt(0, t7Weapons.length - 1)];
+                    const weaponDamage = WEAPON_STATS[randomWeaponKey][7];
+                    this.logMessage('combat', `> 第 ${i + 1} 擊 [${randomWeaponKey}] 發動！`, 'skill');
+                    for (const target of enemies.filter(e => e.isAlive())) {
+                        const wasAlive = target.isAlive();
+                        await this.processAttack(caster, target, true, weaponDamage);
+                        if (wasAlive && !target.isAlive()) deathsOccurred = true;
+                    }
+                    await this.combatDelay(300);
+                }
+                break;
+            }
         }
-        await new Promise(res => setTimeout(res, 500));
+
+        // 在 switch-case 區塊之後，加入統一的狀態更新檢查
+        if (deathsOccurred) {
+            this.updateAllDynamicUnitsInCombat();
+            this.logMessage('combat', `戰場上的動態能力已根據存活人數重新計算！`, 'system');
+        }
+
+        await this.combatDelay(500);
     },
 
     handlePartnerDeath(partnerId) {
+        const isAdaBattle = this.combat.enemies.some(e => e instanceof ArmoryGolemBoss);
+
+        if (isAdaBattle) {
+            const partner = this.combat.allies.find(p => p.id === partnerId);
+            if (partner) {
+                this.logMessage('combat', `你的夥伴 ${partner.name} 在挑戰中被擊倒了！`, 'enemy');
+            }
+            return; 
+        }
+
         const partner = this.partners.find(p => p.id === partnerId);
         if (!partner) return;
 
@@ -1443,15 +1757,36 @@ const combatModule = {
         if (this.player && this.player.learnedSkills[skillId]) {
             const skillData = SKILL_TREES.tribe.find(s => s.id === skillId);
             if (rollPercentage(skillData.levels[0].effect.chance * 100)) {
-                partner.currentHp = partner.maxHp;
-                this.logMessage('combat', `在「螺旋的權能」的守護下，${partner.name} 奇蹟般地從死亡邊緣歸來！`, 'crit');
-                return; 
+                const combatPartner = this.combat.allies.find(a => a.id === partnerId);
+                if (combatPartner) {
+                    combatPartner.currentHp = combatPartner.maxHp;
+                    this.logMessage('combat', `在「螺旋的權能」的守護下，${combatPartner.name} 奇蹟般地從死亡邊緣歸來！`, 'crit');
+                    return;
+                }
             }
         }
 
         this.logMessage('combat', `你的夥伴 ${partner.name} 在戰鬥中陣亡了！他將永遠離開你...`, 'enemy');
         this._removePartnerFromAllAssignments(partnerId);
         this.partners = this.partners.filter(p => p.id !== partnerId);
-        this.player.updateHp(this.isStarving);
+    },
+    updateAllDynamicUnitsInCombat() {
+        // 1. 更新魔像的狀態
+        const golem = this.combat.enemies.find(e => e instanceof ArmoryGolemBoss && e.isAlive());
+        if (golem) {
+            golem.updateDynamicStats();
+        }
+
+        // 2. 更新所有存活的我方單位的狀態 (包含玩家)
+        const livingAllies = this.combat.allies.filter(a => a.isAlive());
+        livingAllies.forEach(ally => {
+            if (ally.updateHp) {
+                ally.updateHp(this.isStarving);
+            }
+        });
+        
+        // 強制觸發畫面更新
+        this.combat.enemies = [...this.combat.enemies]; 
+        this.combat.allies = [...this.combat.allies]; 
     },
 };
