@@ -365,13 +365,16 @@ class Player extends Goblin {
     }
 
     getPartyHpBonus(isStarving = false) {
-        if (!this.party || this.party.length === 0) return 0;
-        let total = this.party.reduce((sum, p) => {
+        // 在加總前，先過濾出還活著的夥伴
+        const livingParty = this.party.filter(p => p.isAlive());
+        if (!livingParty || livingParty.length === 0) return 0;
+
+        let total = livingParty.reduce((sum, p) => {
             const partnerStatSum = p.stats.strength + p.stats.agility + p.stats.intelligence + p.stats.luck;
             return sum + partnerStatSum;
         }, 0);
+
         const partyBonus = Math.floor(total * 0.5);
-        
         const hasRootDebuff = this.statusEffects.some(e => e.type === 'root_debuff');
         const hpMultiplier = hasRootDebuff ? 4 : 6;
         let finalBonus = (isStarving ? Math.floor(partyBonus * 0.75) : partyBonus) * hpMultiplier;
@@ -386,12 +389,15 @@ class Player extends Goblin {
         if (!this.party || !stat || stat === 'hp' || stat === 'damage') return 0;
         const skillId = 'tribe_01';
         if (!this.learnedSkills || !this.learnedSkills[skillId]) return 0;
+
         const skillData = SKILL_TREES.combat.find(s => s.id === skillId);
         if (!skillData) return 0;
         const currentLevel = this.learnedSkills[skillId];
         const skillLevelData = skillData.levels[currentLevel - 1];
         if (!skillLevelData) return 0;
-        const totalBonusFromParty = this.party.reduce((sum, p) => sum + (p.stats[stat] || 0), 0);
+        
+        // 在加總前，先過濾出還活著的夥伴
+        const totalBonusFromParty = this.party.filter(p => p.isAlive()).reduce((sum, p) => sum + (p.stats[stat] || 0), 0);
         return Math.floor(totalBonusFromParty * skillLevelData.passive);
     }
 
@@ -689,5 +695,104 @@ class SpiralGoddess extends FemaleHuman {
         };
         this.maxHp = this.calculateMaxHp();
         this.currentHp = this.maxHp;
+    }
+}
+
+class ArmoryGolemBoss extends Human {
+    constructor(combatContext) {
+        const data = SPECIAL_BOSSES.armory_golem;
+        
+        // **【修正】super() 中只傳入最原始的基礎屬性**
+        super(data.name, data.stats, data.profession);
+        
+        this.combatContext = combatContext; 
+        this.baseStats = data.stats; 
+
+        this.statusEffects.push({ type: 'immune', duration: Infinity });
+
+        this.skills = [];
+        if (data.skills) {
+            data.skills.forEach(skillData => {
+                if (skillData.type === 'active') {
+                    const skillCopy = JSON.parse(JSON.stringify(skillData));
+                    skillCopy.currentCooldown = 0;
+                    this.skills.push(skillCopy);
+                }
+            });
+        }
+        
+        // --- 裝備建立邏輯 (維持不變) ---
+        const armament = new Equipment('魔像複合武裝', 'weapon', 'mainHand', 
+            EQUIPMENT_MATERIALS.orichalcum, EQUIPMENT_QUALITIES.legendary, null);
+        armament.stats = {
+            damage: Math.floor(WEAPON_STATS['雙手劍'][7] * 1.5),
+            blockTarget: SHIELD_STATS[7].blockTarget,
+        };
+        armament.affixes = [
+            {...STANDARD_AFFIXES.gambler, key: 'gambler'},
+            {...STANDARD_AFFIXES.vampiric, key: 'vampiric'},
+            {...STANDARD_AFFIXES.blocking, key: 'blocking'},
+            {...STANDARD_AFFIXES.critical_strike, key: 'critical_strike'}
+        ];
+        armament.name = armament.generateName();
+
+        const coreArmor = new Equipment('殞鐵魔像核心', 'armor', 'chest',
+            EQUIPMENT_MATERIALS.orichalcum, EQUIPMENT_QUALITIES.legendary, null);
+        coreArmor.stats = {
+            attackBonus: PLATE_ARMOR_STATS[7].attackBonus,
+            damageReduction: PLATE_ARMOR_STATS[7].damageReduction,
+            allStats: PLATE_ARMOR_STATS[7].allStats
+        };
+        coreArmor.affixes = [
+            {...STANDARD_AFFIXES.gambler, key: 'gambler'},
+            {...STANDARD_AFFIXES.vampiric, key: 'vampiric'},
+            {...STANDARD_AFFIXES.blocking, key: 'blocking'},
+            {...STANDARD_AFFIXES.critical_strike, key: 'critical_strike'}
+        ];
+        coreArmor.name = coreArmor.generateName();
+
+        this.equipment = {
+            mainHand: armament,
+            offHand: null, 
+            chest: coreArmor
+        };
+
+        this.maxHp = 1;
+        this.currentHp = 1;
+    }
+
+    getTotalStat(stat, isStarving = false) {
+        if (!this.stats.hasOwnProperty(stat)) return 0;
+        const enemyCount = this.combatContext ? this.combatContext.allies.filter(u => u.isAlive()).length : 1;
+        const dynamicBaseStat = (this.stats[stat] || 0) * Math.max(1, enemyCount); 
+        const equipmentBonus = this.getEquipmentBonus(stat);
+        return dynamicBaseStat + equipmentBonus;
+    }
+    
+    calculateMaxHp() {
+        const totalStats = this.getTotalStat('strength') + this.getTotalStat('agility') + this.getTotalStat('intelligence') + this.getTotalStat('luck');
+        const equipmentHpBonus = this.getEquipmentHpBonus();
+        return (totalStats * 10) + equipmentHpBonus;
+    }
+
+    updateDynamicStats() {
+        const oldMaxHp = this.maxHp;
+        const newMaxHp = this.calculateMaxHp();
+        if (newMaxHp !== oldMaxHp && oldMaxHp > 0) {
+            const hpPercentage = this.currentHp / oldMaxHp;
+            this.currentHp = Math.round(newMaxHp * hpPercentage);
+        }
+        this.maxHp = newMaxHp;
+        this.currentHp = Math.min(this.currentHp, this.maxHp);
+    }
+    
+    getBaseMaxHp() { return this.calculateMaxHp(); }
+    calculateDamage(isStarving = false) {
+        const totalStats = this.getTotalStat('strength') + this.getTotalStat('agility') + this.getTotalStat('intelligence') + this.getTotalStat('luck');
+        return Math.floor(totalStats / 10);
+    }
+    updateHp() { 
+        // 這個 BOSS 的 HP 更新完全由 updateDynamicStats 控制，所以這裡保持為空
+        return; 
     }
 }

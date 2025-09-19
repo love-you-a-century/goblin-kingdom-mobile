@@ -9,6 +9,49 @@ function filterInventory(inventory, filter) {
 }
 
 const gameLogic = {
+    // --- NPC 靜態資料 ---
+    NPCS: {
+        ada: {
+            name: '埃達',
+            profession: '矮人鐵匠',
+            dialogues: {
+                intro: '「喂！你們這些綠皮是哪來的？這裡早被我當成秘密工坊了！...嗯？等等，腳邊的那些破銅爛鐵...不是我之前練習失敗的作品嗎？怎麼會在這裡？」',
+                attack_response: '「哈！想動手？看來不給你們點顏色瞧瞧是不行的！別小看矮人的工藝！」(兵工廠合體變形成了一個巨大的魔像)',
+                post_defeat_intro: '「你...你這傢伙...居然還能站起來？哥布林有這種能力嗎？好吧...算我倒楣，說吧，你想怎麼樣？」',
+                defeat_dialogue_pre_husband: '「哼，還差得遠呢！7天後再來挑戰吧！想要免錢的哪有那麼容易。」',
+                defeat_dialogue_post_husband: '「就算是丈夫大人，也沒那麼容易免錢的喔！7天後再來挑戰吧！」',
+                negotiate_protest: '「哼，是我先找到這個地方的...你們哥布林的部落...好吧！我讓步！讓我繼續自由使用這個鐵匠鋪，就不計較了。作為交換，可以委託我幫忙製作裝備，我的手藝可不是蓋的！另外要切磋的話也歡迎，打贏，我就免費送你件裝備。」',
+                // **兵工廠對話**
+                armory_greeting: '「要打造點什麼嗎？把材料拿來，剩下的交給我吧！」',
+                armory_pity_close: '「嗯...我感覺的到...下一把絕對是傑作！」'
+            }
+        },
+        century: {
+            name: '世紀',
+            profession: '旅行商人',
+            avatar: 'assets/century_avatar.png',
+            dialogues: {
+                standard: '「嘿嘿嘿...哥布林王...今天有什麼「好貨」？買點好東西嗎？」',
+                sold_out: '「哎呀...這麼快就掃光了？明天我就先走一步補貨了，期待下次見面...」',
+                successful_trade: '「眼光不錯，這裝備肯定能成為助力！」',
+                no_goods: '「唉呀...這麼想我嗎？會有下次的」',
+                valentines: {
+                    1: '「唉...一年之初就要寫日記？真是麻煩死了...不過...如果是記錄你的『有趣』事，我倒是考慮考慮...」',
+                    2: '「哥布林王，聽說今天是個充滿『愛』的日子...有沒有準備什麼能讓我開心的『祭品』？嘿嘿嘿...」',
+                    3: '「嘖...回禮什麼的最麻煩了。不過看在你供品不錯的份上，這個就當作是我賞你的吧！」',
+                    4: '「單身？寂寞？正好，把那些情緒都化為掠奪的動力吧！我這裡正好有好東西能幫你...呵...」',
+                    5: '「送我玫瑰？俗氣。不如送我幾個『好貨』來得實際...你懂的吧？嘿嘿嘿...」',
+                    6: '「想要一個吻嗎？哈哈哈~我開玩笑的~先拿出能讓我滿意的『代價』再說吧...哈」',
+                    7: '「聽說今天是把『戀人』介紹給長輩的日子...要把我介紹給你的哥布林們嗎？沒事...我就開開玩笑，不要給我當真呀!!!」',
+                    8: '「多親近大自然也不錯...你看，你的膚色和森林多搭啊。要不要考慮多抓幾個『精靈』？噢~我都忘了dlc還沒裝呢~」',
+                    9: '「笑一個~(喀擦)謝謝惠顧~奴隸1個~我就開開玩笑嘛~你問我這些東西從哪來的？難道你認為"世紀"只是單純的名子嗎?」',
+                    10: '「來一杯嗎？這可是用上好的『材料』釀造的...喝完之後...可是會很有『精神』的喔？不過你看來不太需要呢~哈哈哈~」',
+                    11: '「電影？這裡好像沒有這種東西，提線木偶倒是有。不過...你的王國崛起史，可更精彩。你問我怎麼知道電影?秘~密~」',
+                    12: '「你問我為什麼穿這樣？噢~對~這裡沒有聖誕節，那你的情人節禮物我就收走啦~開玩笑的啦，哈哈哈~」'
+                }
+            }
+        }
+    },
     // --- 導入所有模組 ---
     ...helpWidgetModule,
     ...combatModule,
@@ -62,6 +105,14 @@ const gameLogic = {
         defeatedApostle: false,
         defeatedGoddess: false,
         merchantIntroduced: false,
+        adaEncountered: false, // 是否已經觸發過埃達事件
+        adaStatus: 'unmet',    // 埃達的狀態: unmet, hostile, friendly
+        lostToAda: false,      // 一個臨時旗標，用於處理戰敗後的流程
+        adaCraftingCounter: 0, // **用於追蹤埃達的製作次數**
+        adaVictoryCount: 0,      // 挑戰埃達成功的次數
+        adaChallengeCooldown: 0, // 挑戰埃達的冷卻時間 (天數)
+        adaIsPregnant: false,    // 埃達是否懷孕
+        adaPregnancyTimer: 0     // 埃達的懷孕倒數計時
     },
     isStarving: false,
     narrativeMemory: '',
@@ -107,7 +158,7 @@ const gameLogic = {
         merchant: { isOpen: false },
         scoutInfo: { isOpen: false, target: null, emptyBuildingMessage: '', isCombatView: false, },
         captiveManagement: { isOpen: false, title: '', list: [], limit: 0, selectedIds: [], type: '', context: null },
-        narrative: { isOpen: false, title: '', content: '', isLoading: false, hasBred: false, context: [], currentCaptives: [], type: '', isAwaitingConfirmation: false },
+        narrative: { isOpen: false, title: '', content: '', isLoading: false, hasBred: false, context: [], currentCaptives: [], type: '', isAwaitingConfirmation: false, isChoicePrompt: false, choices: [], confirmText: '' },
         customAlert: { isOpen: false, message: '', onConfirm: null },
         discardConfirm: { isOpen: false, itemId: null, itemName: '' },
         raidStatus: { isOpen: false, activeTab: 'status', activeFilter: 'all' },
@@ -216,7 +267,7 @@ const gameLogic = {
         { baseName: '弓', type: 'weapon', slot: 'mainHand', materialCategory: 'wood' },
         { baseName: '法杖', type: 'weapon', slot: 'mainHand', materialCategory: 'wood' },
         { baseName: '盾', type: 'weapon', slot: 'offHand', materialCategory: 'metal' },
-        // 【新增】七種新武器 (加上 requires 標籤)
+        // 【DLC】七種新武器 (加上 requires 標籤)
         { baseName: '短刀', type: 'weapon', slot: 'mainHand', materialCategory: 'metal', requires: 'races_of_aetheria' },
         { baseName: '爪', type: 'weapon', slot: 'mainHand', materialCategory: 'metal', requires: 'races_of_aetheria' },
         { baseName: '拐棍', type: 'weapon', slot: 'mainHand', materialCategory: 'wood', requires: 'races_of_aetheria' },
@@ -562,7 +613,7 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.84 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.90 初始化...");
         this.checkForSaveFile();
         this.$watch('screen', (newScreen) => {
             // 當玩家回到部落畫面，且有待辦事項時
@@ -622,6 +673,127 @@ const gameLogic = {
                 this.checkWidgetBounds(this.$refs.helpWidget);
             }
         });
+    },
+    handleAdaDefeat() {
+        this.logMessage('tribe', '你被巨大的魔像擊倒了...它停止了動作，並變回了兵工廠的模樣。', 'system');
+
+        // 在復活玩家的同時，也復活所有參戰的夥伴
+        // 1. 復活所有在挑戰中被擊倒的夥伴
+        const challengeAllies = this.combat.allies;
+        challengeAllies.forEach(unit => {
+            if (!unit.isAlive()) {
+                unit.currentHp = unit.maxHp;
+            }
+        });
+        this.logMessage('tribe', '所有在挑戰中被擊倒的夥伴都已恢復！', 'success');
+
+        // 2. 清理戰鬥狀態
+        this.finishCombatCleanup(true);
+
+        // 3. 玩家滿血復活 (這部分邏輯不變)
+        this.player.updateHp(this.isStarving);
+        this.player.currentHp = this.player.maxHp;
+
+        // 使用更精確的條件來判斷顯示哪段對話
+        if (this.flags.adaStatus === 'friendly') {
+            // 如果埃達已經是夥伴，那麼任何失敗都是「切磋失敗」
+            let dialogueToShow = '';
+            
+            if (this.flags.adaIsBreedable) {
+                // 如果已經解鎖繁衍，顯示 "丈夫大人" 對話
+                dialogueToShow = this.NPCS.ada.dialogues.defeat_dialogue_post_husband;
+            } else {
+                // 如果還沒解鎖繁衍，無論勝利次數是0還是大於0，都顯示 "想要免錢" 對話
+                dialogueToShow = this.NPCS.ada.dialogues.defeat_dialogue_pre_husband;
+            }
+
+            const modal = this.modals.narrative;
+            modal.isOpen = true;
+            modal.title = "切磋結束";
+            modal.type = "tutorial";
+            modal.avatarUrl = 'assets/ada_avatar.png';
+            modal.content = `<p class="text-lg leading-relaxed">${dialogueToShow}</p>`;
+            modal.confirmText = '好吧';
+            modal.onConfirm = () => { modal.isOpen = false; };
+            
+        } else {
+            // 如果埃達還不是夥伴 (狀態為 unmet 或 hostile)，這才是「首次挑戰失敗」，進入和解劇情
+            this.logMessage('tribe', '你恢復了意識，發現自己毫髮無傷。', 'success');
+            setTimeout(() => {
+                this.triggerAdaEncounter(true);
+            }, 500);
+        }
+    },
+    challengeAda() {
+        if (this.flags.adaChallengeCooldown > 0) {
+            this.showCustomAlert(`埃達需要時間準備，請在 ${this.flags.adaChallengeCooldown} 天後再來挑戰。`);
+            return;
+        }
+
+        // 將 startCombat 的呼叫，放在 showCustomAlert 的「確認回呼」中
+        this.showCustomAlert('你向埃達發起了再次挑戰的請求，她欣然同意了！', () => {
+            // 1. 先關閉建設視窗
+            this.modals.construction.isOpen = false;
+            
+            // 2. 準備戰鬥
+            const boss = new ArmoryGolemBoss();
+            this.combat.isUnescapable = true;
+            const challengeParty = [this.player, ...this.player.party];
+
+            // 3. 延遲一小段時間後再開始戰鬥，讓關閉視窗的動畫更流暢
+            setTimeout(() => {
+                // 將 startCombat 的第二個參數 (enemyFirstStrike) 設為 false
+                this.startCombat([boss], false, challengeParty);
+            }, 300); // 延遲300毫秒
+        });
+    },
+    triggerAdaConqueredDialogue() {
+        const modal = this.modals.narrative;
+        const adaData = this.NPCS.ada;
+
+        modal.isOpen = true;
+        modal.title = "來自鐵匠的認可";
+        modal.type = "tutorial"; // 重用教學/對話的版面配置
+        modal.isLoading = false;
+        modal.isAwaitingConfirmation = false;
+        modal.avatarUrl = 'assets/ada_avatar.png'; // 確保顯示埃達的頭像
+
+        // 組合對話內容，並插入玩家名稱
+        const playerName = this.player ? this.player.name : '你';
+        modal.content = `
+            <p class="text-lg leading-relaxed">「那個... ${playerName}，我爸爸說，我們矮人有個傳統，如果有強者可以戰勝自己7次...」</p>
+            <br>
+            <p class="text-lg leading-relaxed">「嗯...不管！你現在就是我丈夫！你...你想冠麻...幹嘛...都可以...」(小聲)</p>
+        `;
+
+        // 設定確認按鈕的行為
+        modal.onConfirm = () => {
+            modal.isOpen = false;
+            this.showCustomAlert('你徹底征服了這位矮人鐵匠的心！\n（已解鎖特殊互動）');
+        };
+    },
+    breedWithAda() {
+        if (this.flags.adaIsPregnant) {
+            this.showCustomAlert("埃達正在專心孕育後代，無法打擾。");
+            return;
+        }
+        // 直接設定懷孕狀態並進入敘事畫面
+        this.flags.adaIsPregnant = true;
+        this.flags.adaPregnancyTimer = 3; // 假設懷孕期為3天
+        this.player.attributePoints++; // 繁衍一樣可以獲得能力點
+        this.totalBreedingCount++;
+        this.logMessage('tribe', `你與埃達進行了繁衍。`, 'success');
+        
+        // 準備繁衍敘事
+        const adaAsCaptive = {
+            name: '埃達',
+            profession: '鐵匠(公主?)',
+            race: 'dwarf', // 可以定義一個新種族
+            visual: { personality: '傲嬌，但順從，因為她深深愛著你', hairColor: '紅棕色', hairStyle: '低馬尾麻花辮', bust: 'E', height: 137, age: 127, clothing: '有著俏麗迷你裙的鐵匠服裝' },
+            breedingCount: this.flags.adaVictoryCount // 可以用勝利次數作為繁衍次數
+        };
+        // 直接呼叫升級後的 startBreedingNarrative 函式並將埃達的資訊作為參數傳遞進去
+        this.startBreedingNarrative([adaAsCaptive]); 
     },
     initializeTribe() {
         if (!this.isNewGame) return;
@@ -723,8 +895,8 @@ const gameLogic = {
         this.rebirth.appearance = this.player.appearance;
 
         // 3. 預設將點數設為最低值 1，其餘為待分配
-        this.rebirth.stats = { strength: 1, agility: 1, intelligence: 1, luck: 1 };
-        
+        this.rebirth.stats = { strength: 1, agility: 1, intelligence: 1, luck: 1 };    
+        // 移除了檢查埃達狀態的舊邏輯，因為新的流程不再需要它了。
         // 4. 切換至重生畫面
         this.screen = 'rebirth';
         this.showCustomAlert('你獲得了重塑自身的機會！');
@@ -740,6 +912,15 @@ const gameLogic = {
         this.player.penisSize = this.rebirth.penisSize;
         this.player.appearance = this.rebirth.appearance;
         this.player.stats = this.rebirth.stats;
+
+        // **如果剛輸給埃達，則返回對話，否則正常返回部落**
+        if (this.flags.lostToAda) {
+            this.flags.lostToAda = false; // 清除臨時旗標
+            // 使用 setTimeout 確保畫面切換後再觸發對話
+            setTimeout(() => {
+                this.triggerAdaEncounter(true); // 以「戰敗後」模式重新觸發事件
+            }, 200);
+        }
 
         // 恢復狀態並返回部落
         this.player.updateHp(this.isStarving);
@@ -836,6 +1017,7 @@ const gameLogic = {
         this.showCustomAlert('遊戲進度已儲存！');
         this.hasSaveFile = true;
     },
+
     loadGame() {
         this.logs = { tribe: [], raid: [], combat: [] };
         const savedData = localStorage.getItem('goblinKingSaveFile');
@@ -850,25 +1032,16 @@ const gameLogic = {
 
             if (!parsedData.player) throw new Error("存檔中缺少玩家資料！");
 
-            // 建立一個強大的「重塑」函式
             const rehydrateUnit = (unitData, UnitClass) => {
                 if (!unitData) return null;
                 let newUnit;
-
-                // 針對騎士團單位，使用不同的建構函式參數
                 if (UnitClass === KnightOrderUnit || UnitClass === FemaleKnightOrderUnit) {
-                    // 讀檔時，我們已有完整的 stats，不需要 totalStatPoints 來重新計算。
-                    // 因此傳入職業(unitType) 和 0 (作為 totalStatPoints 的佔位符) 來安全地建立物件。
                     newUnit = new UnitClass(unitData.profession, 0);
                 } else {
-                    // 其他單位維持原樣
                     newUnit = new UnitClass(unitData.name, unitData.stats || {});
                 }
-                
-                // 2. 將存檔中的屬性安全地複製到新實例上 (這會用存檔中的正確數值覆蓋掉上面建立時的臨時數值)
                 for (const key in unitData) {
                     if (Object.prototype.hasOwnProperty.call(unitData, key)) {
-                        // 確保我們不會用存檔中的舊資料覆蓋掉 Class 的新方法
                         if (typeof newUnit[key] !== 'function') {
                             if (key === 'equipment' && unitData.equipment) {
                                 for (const slot in unitData.equipment) {
@@ -882,7 +1055,6 @@ const gameLogic = {
                         }
                     }
                 }
-                // 確保舊存檔的俘虜也有 breedingCount 屬性
                 if (UnitClass === FemaleHuman || UnitClass === FemaleKnightOrderUnit) {
                     newUnit.breedingCount = unitData.breedingCount || 0;
                 }
@@ -896,31 +1068,22 @@ const gameLogic = {
                 return newItem;
             };
 
-            // --- 使用新的「重塑」函式來讀取所有單位 ---
             this.warehouseInventory = (parsedData.warehouseInventory || []).map(itemData => rehydrateEquipment(itemData));
-            
-            // 為所有夥伴重塑 Goblin 物件
             this.partners = (parsedData.partners || []).map(pData => rehydrateUnit(pData, Goblin));
-
-            // 為所有俘虜重塑對應的 Human 物件
             this.captives = (parsedData.captives || []).map(cData => {
                 if (Object.keys(KNIGHT_ORDER_UNITS).includes(cData.profession)) {
                     return rehydrateUnit(cData, FemaleKnightOrderUnit);
-                } else if (cData.visual) { // 判斷是否為女性
+                } else if (cData.visual) {
                     return rehydrateUnit(cData, FemaleHuman);
                 } else {
                     return rehydrateUnit(cData, MaleHuman);
                 }
             });
 
-            // 為玩家重塑 Player 物件
             this.player = rehydrateUnit(parsedData.player, Player);
-
-            // 為了舊存檔的相容性，如果讀取的玩家資料沒有 redeemedCodes 屬性，就幫他加上
             if (!this.player.redeemedCodes) {
                 this.player.redeemedCodes = [];
             }
-            // --- 後續的讀檔邏輯維持不變 ---
             const partnersMap = new Map(this.partners.map(p => [p.id, p]));
             this.player.party = (parsedData.player.party || [])
                 .map(pData => partnersMap.get(pData.id))
@@ -939,7 +1102,22 @@ const gameLogic = {
             
             this.day = parsedData.day;
             this.totalBreedingCount = parsedData.totalBreedingCount || 0;
-            this.flags = parsedData.flags || { defeatedApostle: false, defeatedGoddess: false };
+            
+            const defaultFlags = { 
+                defeatedApostle: false, defeatedGoddess: false, merchantIntroduced: false, 
+                adaEncountered: false, adaStatus: 'unmet', lostToAda: false, adaCraftingCounter: 0,
+                adaVictoryCount: 0, adaChallengeCooldown: 0, adaIsBreedable: false, 
+                adaIsPregnant: false, adaPregnancyTimer: 0
+            };
+            this.flags = { ...defaultFlags, ...parsedData.flags };
+            
+            // 【修改重點】為了更強的相容性，再次確保所有埃達相關旗標都存在
+            if (this.flags.adaVictoryCount === undefined) this.flags.adaVictoryCount = 0;
+            if (this.flags.adaChallengeCooldown === undefined) this.flags.adaChallengeCooldown = 0;
+            if (this.flags.adaIsBreedable === undefined) this.flags.adaIsBreedable = false;
+            if (this.flags.adaIsPregnant === undefined) this.flags.adaIsPregnant = false;
+            if (this.flags.adaPregnancyTimer === undefined) this.flags.adaPregnancyTimer = 0;
+
             this.year = Math.floor((this.day - 1) / 360) ;
             this.month = Math.floor(((this.day - 1) % 360) / 30) + 1;
             this.currentDate = ((this.day - 1) % 30) + 1;
@@ -948,34 +1126,27 @@ const gameLogic = {
             this.dispatch = { ...defaultDispatch, ...parsedData.dispatch };
             
             this.narrativeMemory = parsedData.narrativeMemory;
-
-            if (parsedData.dlc) {
-                this.dlc = parsedData.dlc;
-            } else {
-                this.dlc = { hells_knights: false };
-            }
+            if (parsedData.dlc) this.dlc = parsedData.dlc;
+            else this.dlc = { hells_knights: false };
 
             this.breedingChargesLeft = parsedData.breedingChargesLeft;
             this.merchant = { ...this.merchant, ...parsedData.merchant };
 
-            this.salvageSaveData(); // 這是原本就有的ID修復函式
-
-            this._patchMissingArmorStats(this); // +++ 新增這一行，用來修補舊鎧甲 +++
+            this.salvageSaveData();
+            this._patchMissingArmorStats(this);
 
             this.player.updateHp(this.isStarving);
             this.partners.forEach(p => p.updateHp(this.isStarving));
-
-            this.cleanupDispatchLists(); // 在讀取完所有資料後，清理一次派遣列表
-
-            if (parsedData.tempStatIncreases) {
-                this.tempStatIncreases = parsedData.tempStatIncreases;
-            } else {
-                this.cancelAttributePoints();
-            }
+            this.cleanupDispatchLists();
+            if (parsedData.tempStatIncreases) this.tempStatIncreases = parsedData.tempStatIncreases;
+            else this.cancelAttributePoints();
 
             if (!this.flags.hasOwnProperty('merchantIntroduced') && this.day >= 9) {
-                // 如果存檔中沒有此旗標，且天數已超過9天，則視為已見過
                 this.flags.merchantIntroduced = true;
+            }
+            if (this.buildings.armory.level > 0 && !this.flags.adaEncountered) {
+                this.logMessage('tribe', '系統偵測到您是舊存檔玩家，將為您補觸發鐵匠相遇事件...', 'system');
+                this.pendingDecisions.push({ type: 'ada_encounter' });
             }
 
             this.screen = 'tribe';
@@ -1270,19 +1441,18 @@ const gameLogic = {
         this.merchant.isPresent = true;
         this.merchant.stayDuration = 1; 
         this.merchant.avatar = eventData.avatar; 
-        this.merchant.dialogue = eventData.dialogue; 
+        this.merchant.dialogue = this.NPCS.century.dialogues.valentines[eventData.month] || this.NPCS.century.dialogues.standard;
 
         this.generateMerchantGoods(true); 
 
-        // --- 改用 narrative modal ---
         const modal = this.modals.narrative;
         modal.isOpen = true;
-        modal.title = eventData.eventName; // 彈窗標題設為節日名稱
-        modal.type = "tutorial";           // 重用教學的版面配置 (左邊頭像，右邊文字)
+        modal.title = eventData.eventName;
+        modal.type = "tutorial";
         modal.isLoading = false;
         modal.isAwaitingConfirmation = false;
-        modal.avatarUrl = eventData.avatar; // 傳入該節日的特殊頭像路徑
-        modal.content = `<p class="text-lg leading-relaxed">${eventData.dialogue}</p>`; // 放入對話內容
+        modal.avatarUrl = this.merchant.avatar; // 使用剛剛設定的頭像
+        modal.content = `<p class="text-lg leading-relaxed">${this.merchant.dialogue}</p>`; 
 
         this.logMessage('tribe', `旅行商人「世紀」因為${eventData.eventName}特別前來拜訪！`, 'success');
     },
@@ -2054,6 +2224,63 @@ const gameLogic = {
         this.currentDate = ((this.day - 1) % 30) + 1;
         this.logMessage('tribe', `--- 第 ${this.year} 年 ${this.month} 月 ${this.currentDate} 日 (總天數: ${this.day}) ---`, 'system');
 
+        if (this.flags.adaChallengeCooldown > 0) this.flags.adaChallengeCooldown--;
+
+        if (this.flags.adaIsPregnant) {
+            this.flags.adaPregnancyTimer--;
+            if (this.flags.adaPregnancyTimer <= 0) {
+                this.flags.adaIsPregnant = false;
+                this.logMessage('tribe', '埃達為你誕下了一位血脈獨特的後代！', 'crit');
+                
+                // 為了套用公式，建立一個代表埃達的"母親"物件
+                const adaAsMother = {
+                    name: '埃達',
+                    profession: '矮人鐵匠',
+                    stats: { strength: 147, agility: 20, intelligence: 147, luck: 47, charisma: 201 }
+                };
+
+                // --- 以下完全複製 giveBirth 函式中的標準新生兒生成公式 ---
+                const pStats = this.player.stats;
+                const mStats = adaAsMother.stats;
+                let newStats = {
+                    strength: Math.floor(((pStats.strength || 0) + (mStats.strength || 0)) / 4 + (mStats.charisma || 0) / 2),
+                    agility: Math.floor(((pStats.agility || 0) + (mStats.agility || 0)) / 4 + (mStats.charisma || 0) / 2),
+                    intelligence: Math.floor(((pStats.intelligence || 0) + (mStats.intelligence || 0)) / 4 + (mStats.charisma || 0) / 2),
+                    luck: Math.floor(((pStats.luck || 0) + (mStats.luck || 0)) / 4 + (mStats.charisma || 0) / 2)
+                };
+
+                // 檢查並應用「優生學」技能
+                const eugenicsSkillId = 'breed_eugenics';
+                if (this.player && this.player.learnedSkills[eugenicsSkillId]) {
+                    const skillLevel = this.player.learnedSkills[eugenicsSkillId];
+                    const skillData = SKILL_TREES.breeding.find(s => s.id === eugenicsSkillId);
+                    if (skillData && Math.random() < skillData.levels[skillLevel - 1].effect.chance) {
+                        const bonusPoints = Math.floor((pStats.strength + pStats.agility + pStats.intelligence + pStats.luck) / 10);
+                        if (bonusPoints > 0) {
+                            this.logMessage('tribe', '在「優生學」的影響下，一名後代獲得了額外的潛力！', 'success');
+                            for (let j = 0; j < bonusPoints; j++) {
+                                newStats[['strength', 'agility', 'intelligence', 'luck'][randomInt(0, 3)]]++;
+                            }
+                        }
+                    }
+                }
+                
+                // 套用標準命名公式
+                const newName = `(${adaAsMother.profession}${adaAsMother.name}之子)哥布林`;
+                const newPartner = new Goblin(newName, newStats);
+                newPartner.updateHp(this.isStarving);
+                
+                // 檢查寢室容量
+                if (this.partners.length >= this.partnerCapacity) {
+                    this.logMessage('tribe', `寢室空間不足，你需要為 ${newPartner.name} 騰出位置！`, 'warning');
+                    this.openPartnerManagementModal([...this.partners, newPartner], this.partnerCapacity, { newborns: [{ mother: adaAsMother, newborn: newPartner }] });
+                } else {
+                    this.partners.push(newPartner);
+                    this.logMessage('tribe', `新的夥伴 [${newPartner.name}] 加入了你的部落！`, 'success');
+                }
+            }
+        }
+
         if (this.player && this.player.tribeSkillCooldowns) {
             for (const skillId in this.player.tribeSkillCooldowns) {
                 if (this.player.tribeSkillCooldowns[skillId] > 0) this.player.tribeSkillCooldowns[skillId]--;
@@ -2304,7 +2531,9 @@ const gameLogic = {
                 <p>很簡單吧？我很期待...嘿嘿嘿...(口水)</p>
             `;
             // 這裡的對話視窗點擊確認後，會自動呼叫 processNextDecision 處理下一個事件
-        }else {
+        } else if (decision.type === 'ada_encounter') {
+            this.triggerAdaEncounter();
+        } else {
             this.openCaptiveManagementModal(decision.type, decision.list, decision.limit, decision.dungeonLimit, decision.context);
         }
     },
