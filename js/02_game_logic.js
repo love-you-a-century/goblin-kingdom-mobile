@@ -2129,16 +2129,19 @@ const gameLogic = {
             { task: 'hunting', chance: this.dispatch.hunting.length, race: 'beastkin', unlockedFlag: 'beastkin_tribe_unlocked' }
         ];
         for (const encounter of dispatchTasks) {
-            if (encounter.chance > 0 && !this.dlc[encounter.unlockedFlag] && true) {
+             // **將 '&& true' 改為機率判斷 **
+            // encounter.chance 就是派遣的哥布林數量，直接作為成功率
+            // 例如：5 位哥布林 = 5% 遭遇機率
+            if (encounter.chance > 0 && !this.dlc[encounter.unlockedFlag] && rollPercentage(encounter.chance)) {
                 let enemyUnit, tribeName, alertMessage;
                 if (encounter.race === 'elf') {
-                    const totalStatPoints = randomInt(120, 190);
+                    const totalStatPoints = randomInt(280, 300);
                     enemyUnit = new MaleHuman('精靈遊俠', distributeStatsWithRatio(totalStatPoints, HIGH_ELF_GUARDS['精靈遊俠'].ratio), '精靈遊俠', 'easy', 'elf');
                     this.equipEnemy(enemyUnit, 'normal');
                     tribeName = '銀月森林';
                     alertMessage = `你的伐木隊在森林深處遭遇了一名警惕的精靈遊俠！`;
                 } else if (encounter.race === 'beastkin') {
-                    const totalStatPoints = randomInt(120, 190);
+                    const totalStatPoints = randomInt(280, 300);
                     enemyUnit = new MaleHuman('亞獸人武鬥家', distributeStatsWithRatio(totalStatPoints, BEASTKIN_CHAMPIONS['亞獸人戰士'].ratio), '亞獸人武鬥家', 'easy', 'beastkin');
                     this.equipEnemy(enemyUnit, 'normal');
                     tribeName = '咆哮平原';
