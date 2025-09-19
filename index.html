@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.84</title>
+    <title>哥布林王國v5.90</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1153,36 +1153,72 @@
                                     <button @click="modals.armory.subTab = 'craft'" :class="{ 'bg-gray-700 text-white': modals.armory.subTab === 'craft' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">製作</button>
                                     <button @click="modals.armory.subTab = 'upgrade'" :class="{ 'bg-gray-700 text-white': modals.armory.subTab === 'upgrade' }" class="flex-1 py-2 px-4 rounded-t-lg text-sm">升級</button>
                                 </div>
-                                <div x-show="modals.armory.subTab === 'craft'">
-                                    <h3 class="text-xl font-bold mb-2">製作裝備</h3>
-                                    <div class="space-y-4">
-                                        <div>
-                                            <label>類型:</label>
-                                            <select x-model="modals.armory.craftingType" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 w-full">
-                                                <template x-for="type in craftableTypes.filter(t => !t.requires || dlc[t.requires])" :key="type.baseName">
-                                                    <option :value="type.baseName" x-text="type.baseName"></option>
-                                                </template>
-                                            </select>
+
+                                <div x-show="modals.armory.subTab === 'craft'" class="flex flex-col h-full">
+                                    <div class="flex-grow overflow-y-auto pr-2">
+                                        <h3 class="text-xl font-bold mb-2">製作裝備</h3>
+
+                                        <div x-show="flags.adaStatus === 'friendly'" class="flex items-start p-4 mb-6 bg-black bg-opacity-20 rounded-lg border border-orange-500/30">
+                                            <img src="assets/ada_avatar.png" alt="埃達的頭像" class="w-24 h-24 rounded-full border-2 border-orange-400 flex-shrink-0">
+                                            <div class="ml-4 flex-grow">
+                                                <h3 class="text-xl font-bold text-orange-300">矮人鐵匠：埃達</h3>
+                                                <p class="mt-2 text-orange-200 italic" x-text="getAdaArmoryDialogue()"></p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label>階級:</label>
-                                            <select x-model.number="modals.armory.craftingTier" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 w-full">
-                                                <template x-for="option in availableCraftingOptions" :key="option.tier">
-                                                    <option :value="option.tier" x-text="`${option.name} (第 ${option.tier} 階)`"></option>
-                                                </template>
-                                            </select>
+                                        
+                                        <div class="space-y-4">
+                                            <div>
+                                                <label>類型:</label>
+                                                <select x-model="modals.armory.craftingType" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 w-full">
+                                                    <template x-for="type in craftableTypes.filter(t => !t.requires || dlc[t.requires])" :key="type.baseName">
+                                                        <option :value="type.baseName" x-text="type.baseName"></option>
+                                                    </template>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label>階級:</label>
+                                                <select x-model.number="modals.armory.craftingTier" class="bg-gray-700 border-2 border-gray-600 rounded px-3 py-2 w-full">
+                                                    <template x-for="option in availableCraftingOptions" :key="option.tier">
+                                                        <option :value="option.tier" x-text="`${option.name} (第 ${option.tier} 階)`"></option>
+                                                    </template>
+                                                </select>
+                                            </div>
+                                            <div x-show="modals.armory.craftingTier > 0">
+                                                <p>
+                                                    花費: 
+                                                    <span class="text-green-400">食物 <span x-text="getCraftingCost().food"></span></span>, 
+                                                    <span class="text-yellow-500">木材 <span x-text="getCraftingCost().wood"></span></span>, 
+                                                    <span class="text-gray-400">礦石 <span x-text="getCraftingCost().stone"></span></span>
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div x-show="modals.armory.craftingTier > 0">
-                                            <p>
-                                                花費: 
-                                                <span class="text-green-400">食物 <span x-text="getCraftingCost().food"></span></span>, 
-                                                <span class="text-yellow-500">木材 <span x-text="getCraftingCost().wood"></span></span>, 
-                                                <span class="text-gray-400">礦石 <span x-text="getCraftingCost().stone"></span></span>
-                                            </p>
-                                        </div>
-                                        <button @click="craftItem()" class="btn btn-primary w-full" :disabled="!canAffordCraft">製作</button>
                                     </div>
+
+                                    <div class="flex-shrink-0 pt-4 mt-4 border-t border-gray-600">
+                                        <div class="flex items-center space-x-2">
+                                            
+                                            <button @click="craftItem()" class="btn btn-primary flex-1" :disabled="!canAffordCraft">製作</button>
+                                            
+                                            <template x-if="flags.adaStatus === 'friendly'">
+                                                <button @click="challengeAda()"
+                                                        class="btn btn-danger flex-1"
+                                                        :disabled="flags.adaChallengeCooldown > 0">
+                                                    <span x-text="flags.adaChallengeCooldown > 0 ? `冷卻中 (${flags.adaChallengeCooldown})` : '挑戰埃達'"></span>
+                                                </button>
+                                            </template>
+
+                                            <template x-if="flags.adaIsBreedable">
+                                                <button @click="breedWithAda()"
+                                                        class="btn btn-success flex-1"
+                                                        :disabled="flags.adaIsPregnant">
+                                                    <span x-text="flags.adaIsPregnant ? `懷孕中 (${flags.adaPregnancyTimer})` : '與埃達繁衍'"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
+
                                 </div>
+
                                 <div x-show="modals.armory.subTab === 'upgrade'">
                                     <h3 class="text-xl font-bold mb-2">升級兵工廠 (等級 <span x-text="buildings.armory.level"></span>)</h3>
                                     <p class="text-sm text-gray-400 mb-4">解鎖可製作的材質等級，並提升裝備分解的資源返還率。</p>
@@ -1350,8 +1386,8 @@
                                     <div class="space-y-4">
                                         <template x-for="unit in modals.scoutInfo.target" :key="unit.id">
                                             <div class="p-3 border border-gray-700 rounded">
-                                                <p class="text-lg font-bold text-amber-200"><span x-text="unit.name"></span> - <span x-text="unit.profession"></span></p>
-                                                <p><strong>生命值:</strong> <span x-text="unit.currentHp"></span> / <span x-text="unit.getBaseMaxHp()"></span><span class="text-blue-400" x-text="formatBonus(unit.calculateMaxHp() - unit.getBaseMaxHp())"></span></p>
+                                                <p class="text-lg font-bold text-amber-200"><span x-text="unit.name"></span> - <span x-text="unit.profession"></span></p>                                               
+                                                <p><strong>生命值:</strong> <span x-text="unit.currentHp"></span> / <span x-text="unit.maxHp"></span></p>                                               
                                                 <div class="mt-2 pt-2 border-t border-gray-600 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                                                     <span>力量: <span x-text="unit.stats.strength"></span><span class="text-xs text-blue-400" x-text="formatBonus(unit.getTotalStat('strength') - unit.stats.strength)"></span></span>
                                                     <span>敏捷: <span x-text="unit.stats.agility"></span><span class="text-xs text-blue-400" x-text="formatBonus(unit.getTotalStat('agility') - unit.stats.agility)"></span></span>
@@ -1622,17 +1658,22 @@
                                     <div class="flex-grow text-left" x-html="modals.narrative.content">
                                     </div>
                                 </div>
+
+                                <div class="text-center mt-6 space-x-4" x-show="modals.narrative.choices.length > 0">
+                                    <template x-for="choice in modals.narrative.choices" :key="choice.text">
+                                        <button :class="['btn', choice.class]" @click="handleNarrativeChoice(choice.action)" x-text="choice.text"></button>
+                                    </template>
+                                </div>
                             </div>
                             
                             <div class="text-center mt-4">
                                 <button 
-                                    x-show="modals.narrative.type === 'tutorial'" 
+                                    x-show="modals.narrative.type === 'tutorial' && !modals.narrative.isChoicePrompt" 
                                     @click="confirmNarrativeModal()" 
                                     class="btn btn-primary">
-                                    <span x-text="modals.narrative.onConfirm ? '迎戰' : '了解'"></span>
+                                    <span x-text="modals.narrative.confirmText || '確認'"></span>
                                 </button>
                             </div>
-
                         </div>
                     </div>
                 </div>
