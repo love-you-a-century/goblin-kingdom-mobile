@@ -1789,5 +1789,4 @@ const combatModule = {
         this.combat.enemies = [...this.combat.enemies]; 
         this.combat.allies = [...this.combat.allies]; 
     },
-
 };

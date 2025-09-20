@@ -3,6 +3,10 @@
 const itemModule = {
     calculateEquipmentValue(item) {
         if (!item) return 0;
+        // 在計算開始前，先檢查免費標記
+        if (item.isFree) {
+            return 0;
+        }
         let baseValue = 0;
         let nativeStatValue = 0;
         let qualityValue = 0;
