@@ -17,7 +17,7 @@ const gameLogic = {
             dialogues: {
                 intro: '「喂！你們這些綠皮是哪來的？這裡早被我當成秘密工坊了！...嗯？等等，腳邊的那些破銅爛鐵...不是我之前練習失敗的作品嗎？怎麼會在這裡？」',
                 attack_response: '「哈！想動手？看來不給你們點顏色瞧瞧是不行的！別小看矮人的工藝！」(兵工廠合體變形成了一個巨大的魔像)',
-                post_defeat_intro: '「你...你這傢伙...居然還能站起來？哥布林有這種能力嗎？好吧...算我倒楣，說吧，你想怎麼樣？」',
+                post_defeat_intro: '(埃達看著你從灰燼中復活)「你...你這傢伙...居然還能站起來？哥布林有這種能力嗎？好吧...算我倒楣，說吧，你想怎麼樣？」',
                 defeat_dialogue_pre_husband: '「哼，還差得遠呢！7天後再來挑戰吧！想要免錢的哪有那麼容易。」',
                 defeat_dialogue_post_husband: '「就算是丈夫大人，也沒那麼容易免錢的喔！7天後再來挑戰吧！」',
                 negotiate_protest: '「哼，是我先找到這個地方的...你們哥布林的部落...好吧！我讓步！讓我繼續自由使用這個鐵匠鋪，就不計較了。作為交換，可以委託我幫忙製作裝備，我的手藝可不是蓋的！另外要切磋的話也歡迎，打贏，我就免費送你件裝備。」',
@@ -512,9 +512,9 @@ const gameLogic = {
         return this.merchant.goods.filter(g => selectedSet.has(g.id));
     },
     get selectedItemsValue() {
-        // --- 過濾掉免費商品 ---
+        // 移除了 .filter(item => !item.isFree)
+        // 現在計算總價時會正確地將免費商品計為 0 元
         let totalValue = this.selectedItems
-            .filter(item => !item.isFree) 
             .reduce((total, item) => total + this.calculateEquipmentValue(item), 0);
 
         const skillId = 'tribe_negotiation';
@@ -590,8 +590,7 @@ const gameLogic = {
         return this.partners.filter(p => !dispatchedIds.has(p.id));
     },
 
-    get availablePartnersForParty() {
-        // 這份清單只會顯示「沒有」被派遣的哥布林
+    get availablePartnersForParty() {// 這份清單只會顯示「沒有」被派遣的哥布林    
         const dispatchedIds = new Set([
             ...this.dispatch.hunting,
             ...this.dispatch.logging,
@@ -599,24 +598,31 @@ const gameLogic = {
         ]);
         return this.partners.filter(p => !dispatchedIds.has(p.id));
     },
-    getDispatchedPartners(task) {
-        // 根據任務類型取得已被派遣的夥伴列表
+    getDispatchedPartners(task) { // 根據任務類型取得已被派遣的夥伴列表   
         const partnerMap = new Map(this.partners.map(p => [p.id, p]));
         return this.dispatch[task].map(id => partnerMap.get(id)).filter(Boolean);
     },
     get filteredRaidInventory() {
-        if (!this.player) return [];
-        // 直接複用現有的 filterInventory 函式
+        if (!this.player) return [];// 直接複用現有的 filterInventory 函式 
         return filterInventory(this.player.inventory, this.modals.raidStatus.activeFilter);
+    },
+    get isAnyModalOpen() {// 只要有任何一個 modal 是開啟的，就回傳 true       
+        return Object.values(this.modals).some(modal => modal.isOpen);
     },
 
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
         this.logMessage('tribe', "哥布林王國v5.90 初始化...");
-        this.checkForSaveFile();
-        this.$watch('screen', (newScreen) => {
-            // 當玩家回到部落畫面，且有待辦事項時
+        this.checkForSaveFile();       
+        this.$watch('isAnyModalOpen', (isNowOpen) => {// 新增一個監聽器它會監控 isAnyModalOpen 的狀態變化
+            // 當 isAnyModalOpen 從 true 變為 false (即所有視窗都關閉時)
+            if (!isNowOpen) {
+                // 就呼叫事件檢查與處理函式
+                this.checkAndProcessDecisions();
+            }
+        });
+        this.$watch('screen', (newScreen) => {// 當玩家回到部落畫面，且有待辦事項時       
             if (newScreen === 'tribe' && this.pendingDecisions.length > 0) {
                 // 使用 setTimeout 確保畫面已完全切換，避免彈窗閃爍
                 setTimeout(() => {
@@ -1386,10 +1392,10 @@ const gameLogic = {
     },
     
     checkAndProcessDecisions() {
-        // 檢查是否在部落畫面，且是否有待辦事項
-        if (this.screen === 'tribe' && this.pendingDecisions.length > 0) {
-            // 延遲執行以確保畫面穩定
-            setTimeout(() => this.processNextDecision(), 100);
+        // 只有當我們在部落畫面，且佇列中有待辦事項，並且沒有任何視窗開啟時，才處理
+        if (this.screen === 'tribe' && this.pendingDecisions.length > 0 && !this.isAnyModalOpen) {
+            // 使用 setTimeout 確保UI完全穩定後再執行
+            setTimeout(() => this.processNextDecision(), 200);
         }
     },
     logMessage(panelKey, message, type = 'system') {
@@ -1436,13 +1442,13 @@ const gameLogic = {
         }
     },
     triggerValentineEvent(eventData) {
-        if (this.merchant.isPresent) return;
-
+        // 移除了 if (this.merchant.isPresent) return; 的判斷  現在無論商人是否在場，都會強制觸發情人節事件
         this.merchant.isPresent = true;
         this.merchant.stayDuration = 1; 
         this.merchant.avatar = eventData.avatar; 
         this.merchant.dialogue = this.NPCS.century.dialogues.valentines[eventData.month] || this.NPCS.century.dialogues.standard;
 
+        // 強制重新生成商品，確保包含免費商品
         this.generateMerchantGoods(true); 
 
         const modal = this.modals.narrative;
@@ -1451,10 +1457,11 @@ const gameLogic = {
         modal.type = "tutorial";
         modal.isLoading = false;
         modal.isAwaitingConfirmation = false;
-        modal.avatarUrl = this.merchant.avatar; // 使用剛剛設定的頭像
+        modal.avatarUrl = this.merchant.avatar;
         modal.content = `<p class="text-lg leading-relaxed">${this.merchant.dialogue}</p>`; 
+        modal.confirmText = '情人節快樂';
 
-        this.logMessage('tribe', `旅行商人「世紀」因為${eventData.eventName}特別前來拜訪！`, 'success');
+        this.logMessage('tribe', `旅行商人「世紀」因為${eventData.eventName}特別前來拜訪！她的商品已更新。`, 'success');
     },
     generateMerchantGoods(isValentine = false) {
         const level = this.buildings.merchantCamp.level;
@@ -2463,7 +2470,18 @@ const gameLogic = {
             return;
         }
 
-        const decision = this.pendingDecisions.shift();
+        // 全新的事件處理流程1. 先「窺視」佇列中的第一個事件，但不將它取出
+        const decision = this.pendingDecisions[0]; 
+        const isBattleEvent = ['revenge_battle', 'dispatch_battle', 'apostle_battle', 'goddess_battle'].includes(decision.type);
+
+        // 2. 如果是戰鬥事件，且有任何視窗正在開啟，則「等待」
+        if (isBattleEvent && this.isAnyModalOpen) {
+            // 不做任何事，等待玩家關閉視窗。在 init() 中設定的監聽器會在視窗關閉後，再次呼叫此函式。
+            return;
+        }
+
+        // 3. 如果檢查通過，才正式將事件從佇列中取出並執行
+        this.pendingDecisions.shift();
         const continueCallback = () => setTimeout(() => this.processNextDecision(), 100);
 
         if (decision.type === 'partner') {
