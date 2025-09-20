@@ -333,7 +333,7 @@ const combatModule = {
             // 定義玩家的選項
             modal.choices = [
                 { text: '1. 襲擊她', action: 'startAdaBattle', class: 'btn-danger' },
-                { text: '2. 禮貌地說明', action: 'makePeaceWithAda', class: 'btn-primary' }
+                { text: '2. 好好說明', action: 'makePeaceWithAda', class: 'btn-primary' }
             ];
         }
     },
@@ -1789,4 +1789,5 @@ const combatModule = {
         this.combat.enemies = [...this.combat.enemies]; 
         this.combat.allies = [...this.combat.allies]; 
     },
+
 };
