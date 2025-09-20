@@ -1639,25 +1639,25 @@
                         
                         <div class="pt-10 flex-grow flex flex-col overflow-hidden">
 
-                            <div class="flex-grow overflow-y-auto p-2">
+                            <div class="flex-grow overflow-y-auto p-4 bg-black bg-opacity-20 rounded">
                                 
-                                <div x-show="modals.narrative.type !== 'tutorial'" class="w-full">
+                                <div x-show="modals.narrative.isLoading" class="loader mx-auto"></div>
+                                
+                                <div x-show="!modals.narrative.isLoading && modals.narrative.type !== 'tutorial'" class="w-full">
                                     <div x-show="modals.narrative.isAwaitingConfirmation" class="text-center">
                                         <p class="mb-4" x-text="modals.narrative.content"></p>
                                         <button x-show="modals.narrative.type === 'birth'" @click="generateBirthNarrative()" class="btn btn-primary">使用 AI 生成誕生故事</button>
                                         <button x-show="modals.narrative.type === 'breeding'" @click="confirmAndStartBreedingNarrative()" class="btn btn-primary">使用 AI 生成繁衍敘事</button>
                                     </div>
-                                    <div x-show="modals.narrative.isLoading" class="loader mx-auto"></div>
-                                    <p x-show="!modals.narrative.isLoading && !modals.narrative.isAwaitingConfirmation" x-html="modals.narrative.content"
+                                    <p x-show="!modals.narrative.isAwaitingConfirmation" x-html="modals.narrative.content"
                                         class="text-lg leading-relaxed whitespace-pre-wrap w-full"></p>
                                 </div>
 
-                                <div x-show="modals.narrative.type === 'tutorial'" class="flex items-start gap-4 w-full">
+                                <div x-show="!modals.narrative.isLoading && modals.narrative.type === 'tutorial'" class="flex items-start gap-4 w-full">
                                     <img :src="modals.narrative.avatarUrl || 'assets/century_avatar.png'" alt="對話者頭像" class="w-24 h-24 rounded-full border-2 border-pink-400 flex-shrink-0">
                                     <div class="flex-grow text-left" x-html="modals.narrative.content">
                                     </div>
                                 </div>
-
                             </div>
 
                             <div class="flex-shrink-0 pt-4 mt-4 border-t border-gray-600">
@@ -1666,7 +1666,6 @@
                                         <button :class="['btn', choice.class, 'w-full']" @click="handleNarrativeChoice(choice.action)" x-text="choice.text"></button>
                                     </template>
                                 </div>
-
                                 <div class="text-center" x-show="!modals.narrative.isChoicePrompt">
                                     <button @click="confirmNarrativeModal()" class="btn btn-primary">
                                         <span x-text="modals.narrative.confirmText || '確認'"></span>
