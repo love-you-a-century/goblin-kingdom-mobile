@@ -144,15 +144,16 @@ const combatModule = {
             specialBossDefeated = true;
             if (victory) {
                 this.logMessage('tribe', `你成功擊敗了螺旋女神的使徒！`, 'success');
-                const captiveApostle = new FemaleHuman(
-                    '使徒 露娜',
-                    { strength: 180, agility: 180, intelligence: 180, luck: 180, charisma: 120 },
-                    '使徒',
-                    SPECIAL_BOSSES.apostle_maiden.visual,
-                    'hell'
-                );
-                this.captives.push(captiveApostle);
-                this.logMessage('tribe', `使徒的分身 [露娜] 被你捕獲，出現在了地牢中！`, 'crit');
+                const captiveApostle = new FemaleHuman('使徒 露娜', { strength: 180, agility: 180, intelligence: 180, luck: 180, charisma: 120 }, '使徒', SPECIAL_BOSSES.apostle_maiden.visual, 'hell');
+                
+                // 在這裡加入容量檢查
+                if (this.captives.length >= this.captiveCapacity) {
+                    this.logMessage('tribe', '地牢空間不足，你需要為使徒 [露娜] 騰出空間！', 'warning');
+                    this.pendingDecisions.push({ type: 'dungeon', list: [...this.captives, captiveApostle], limit: this.captiveCapacity });
+                } else {
+                    this.captives.push(captiveApostle);
+                    this.logMessage('tribe', `使徒的分身 [露娜] 被你捕獲，出現在了地牢中！`, 'crit');
+                }
             } else {
                 this.logMessage('tribe', `你在使徒的無限增殖面前倒下了...`, 'enemy');
                 this.totalBreedingCount = 0;
@@ -168,15 +169,16 @@ const combatModule = {
             specialBossDefeated = true;
             if (victory) {
                 this.logMessage('tribe', `你戰勝了神之試煉，證明了哥布林存在的價值！`, 'success');
-                const captiveGoddess = new FemaleHuman(
-                    '女神 露娜',
-                    SPECIAL_BOSSES.spiral_goddess_mother.captiveFormStats,
-                    '女神',
-                    SPECIAL_BOSSES.spiral_goddess_mother.visual,
-                    'hell'
-                );
-                this.captives.push(captiveGoddess);
-                this.logMessage('tribe', `女神的分身 [露娜] 出現在了你的地牢中，她似乎失去了大部分的力量...`, 'crit');
+                const captiveGoddess = new FemaleHuman('女神 露娜', SPECIAL_BOSSES.spiral_goddess_mother.captiveFormStats, '女神', SPECIAL_BOSSES.spiral_goddess_mother.visual, 'hell');
+                
+                // 在這裡也加入容量檢查
+                if (this.captives.length >= this.captiveCapacity) {
+                    this.logMessage('tribe', '地牢空間不足，你需要為女神 [露娜] 騰出空間！', 'warning');
+                    this.pendingDecisions.push({ type: 'dungeon', list: [...this.captives, captiveGoddess], limit: this.captiveCapacity });
+                } else {
+                    this.captives.push(captiveGoddess);
+                    this.logMessage('tribe', `女神的分身 [露娜] 出現在了你的地牢中，她似乎失去了大部分的力量...`, 'crit');
+                }
 
                 if (!this.flags.defeatedGoddess) {
                     this.flags.defeatedGoddess = true;
@@ -189,7 +191,6 @@ const combatModule = {
             }
         }
         else {
-            // **【步驟 B】現在可以安全地處理俘虜轉化，因為地圖物件已被移除**
             const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
             if (defeatedFemales.length > 0) {
                 const newCaptives = defeatedFemales.map(enemy => {
@@ -197,6 +198,7 @@ const combatModule = {
                     enemy.statusEffects = [];
                     return enemy;
                 });
+
 
                 if (this.currentRaid) {
                     this.currentRaid.carriedCaptives.push(...newCaptives);

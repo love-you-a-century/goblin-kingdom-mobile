@@ -715,18 +715,20 @@ const raidModule = {
         }
         
         const newCaptives = this.currentRaid.carriedCaptives;
-        const currentDungeonCaptives = this.dungeonCaptives;
-
-        if (currentDungeonCaptives.length + newCaptives.length > this.captiveCapacity) {
+        
+        // 將 this.dungeonCaptives.length 改為 this.captives.length現在會用部落中「所有」俘虜的總數來進行判斷
+        if (this.captives.length + newCaptives.length > this.captiveCapacity) {
             
             this.logMessage('tribe', '你帶回的俘虜過多，地牢無法容納！你需要從現有和新增的俘虜中決定去留...', 'warning');
 
+            // 觸發管理介面
             this.openCaptiveManagementModal(
                 'raid_return',
-                [...currentDungeonCaptives, ...newCaptives],
+                [...this.captives, ...newCaptives], // 將現有和新增的俘虜都列出
                 this.captiveCapacity
             );
         } else {
+            // 如果容量足夠，則正常結束掠奪
             this.endRaid(false);
         }
     },
