@@ -186,18 +186,32 @@ const unitManagerModule = {
         const modal = this.modals.captiveManagement;
         const selectedIds = new Set(modal.selectedIds);
 
-        // 修正俘虜計算邏輯，新的俘虜名單，應該只包含從本次管理介面的「總列表」中，被勾選的那些。
         const keptCaptives = modal.list.filter(c => selectedIds.has(c.id));
-        this.captives = keptCaptives; // 直接用篩選後的結果，覆蓋掉舊的俘虜名單
+        
+        keptCaptives.forEach(captive => {
+            if (captive.currentHp <= 0) {
+                captive.currentHp = captive.calculateMaxHp();
+            }
+        });
 
-        if (modal.type === 'raid_return') {
-            // 掠奪返回後的處理
-            this.logMessage('tribe', `你整理了地牢，最終留下了 ${this.captives.length} 名俘虜。`, 'success');
-            this.finalizeRaidReturn();
-        } else if (modal.type === 'dungeon') { 
-            // 部落防衛戰後的處理
-            this.logMessage('tribe', `你整理了地牢，最終留下了 ${this.captives.length} 名俘虜。`, 'success');
-            // 移除錯誤的函式呼叫，此處不需要呼叫任何函式，我們建立的事件系統會在視窗關閉後自動處理下一個事件。
+        // 統一處理不同類型的確認邏輯
+        switch (modal.type) {
+            case 'raid': // 在掠奪中途，攜帶量滿了
+                this.currentRaid.carriedCaptives = keptCaptives;
+                this.logMessage('raid', `你重新選擇了要攜帶的俘虜，當前攜帶 ${this.currentRaid.carriedCaptives.length} 人。`, 'info');
+                // 關閉視窗後，戰鬥已經結束，我們停留在掠奪地圖上
+                this.finishCombatCleanup();
+                break;
+            case 'raid_return': // 從掠奪返回部落，地牢滿了
+                this.captives = keptCaptives;
+                this.logMessage('tribe', `你整理了地牢，最終留下了 ${this.captives.length} 名俘虜。`, 'success');
+                this.finalizeRaidReturn();
+                break;
+            case 'dungeon': // 在部落時，因為各種原因地牢滿了
+                this.captives = keptCaptives;
+                this.logMessage('tribe', `你整理了地牢，最終留下了 ${this.captives.length} 名俘虜。`, 'success');
+                // 關閉視窗後，事件系統會自動處理下一個事件
+                break;
         }
 
         modal.isOpen = false;

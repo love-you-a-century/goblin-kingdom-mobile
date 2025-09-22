@@ -82,8 +82,6 @@ const combatModule = {
         }
 
         if (victory && wasAdaBattle) {
-            // 在處理勝利獎勵的同時，加入復活邏輯
-            // 1. 復活所有在挑戰中被擊倒的夥伴
             const challengeAllies = this.combat.allies;
             challengeAllies.forEach(unit => {
                 if (unit.id !== this.player.id && !unit.isAlive()) {
@@ -91,12 +89,9 @@ const combatModule = {
                 }
             });
             this.logMessage('tribe', '所有在挑戰中被擊倒的夥伴都已恢復！', 'success');
-
-            // 2. 處理勝利獎勵與計數 (這部分邏輯不變)
             this.flags.adaVictoryCount++;
             this.logMessage('tribe', `你成功擊敗了兵工廠魔像！(勝利次數: ${this.flags.adaVictoryCount}/7)`, 'success');
             this.flags.adaChallengeCooldown = 7;
-
             this.logMessage('tribe', '作為對你實力的認可，埃達贈送了一件強大的裝備！', 'crit');
             const availableT7Items = this.craftableTypes.filter(t => !t.requires || this.dlc[t.requires]);
             const randomItemType = availableT7Items[randomInt(0, availableT7Items.length - 1)];
@@ -105,33 +100,23 @@ const combatModule = {
                 const mat = EQUIPMENT_MATERIALS[key];
                 return mat.tier === 7 && mat.category === category;
             });
-
             if (materialKey) {
                 const rewardItem = this.createEquipment(materialKey, 'legendary', randomItemType.baseName);
                 this.player.inventory.push(rewardItem);
                 this.showCustomAlert(`戰鬥勝利！\n埃達贈送給你：[${rewardItem.name}]`);
                 this.logMessage('tribe', `你獲得了傳說裝備：[${rewardItem.name}]！`, 'success');
             }
-
-            // 檢查是否達成7次勝利並觸發特殊對話
             if (this.flags.adaVictoryCount === 7 && !this.flags.adaIsBreedable) {
                 this.flags.adaIsBreedable = true;
                 this.logMessage('tribe', '在第7次被你擊敗後，埃達的眼神似乎發生了變化...', 'system');
-                // 呼叫新的對話函式
                 setTimeout(() => this.triggerAdaConqueredDialogue(), 500);
             } else if (this.flags.adaVictoryCount < 7) {
                 this.showCustomAlert(`戰鬥勝利！\n你再次證明了你的實力。 (進度: ${this.flags.adaVictoryCount}/7)`);
             }
         }
 
-        // **在所有邏輯開始前，先處理所有戰敗單位**
         if (this.currentRaid) {
-            // 1. 找出本次戰鬥中「所有」被擊敗的敵人 ID
-            const allDefeatedEnemyIds = this.combat.enemies
-                .filter(e => !e.isAlive())
-                .map(e => e.id);
-
-            // 2. 立刻將他們從地圖資料中移除
+            const allDefeatedEnemyIds = this.combat.enemies.filter(e => !e.isAlive()).map(e => e.id);
             if (allDefeatedEnemyIds.length > 0) {
                 allDefeatedEnemyIds.forEach(id => this.removeUnitFromRaidZone(id));
             }
@@ -139,21 +124,52 @@ const combatModule = {
 
         let specialBossDefeated = false;
         this.clearAllCombatStatusEffects();
+
+        const handleNewCaptives = (newCaptivesList, isBossReward = false) => {
+            if (newCaptivesList.length === 0) return;
+            
+            // 在掠奪戰中，檢查的是「攜帶量」
+            if (this.currentRaid) {
+                if (this.currentRaid.carriedCaptives.length + newCaptivesList.length > this.carryCapacity) {
+                    this.logMessage('raid', '你的攜帶量已滿，需要決定俘虜的去留...', 'warning');
+                    const combinedList = [...this.currentRaid.carriedCaptives, ...newCaptivesList];
+                    const uniqueCaptivesList = Array.from(new Map(combinedList.map(c => [c.id, c])).values());
+                    // 注意：這裡的 type 是 'raid'
+                    this.pendingDecisions.push({ type: 'raid', list: uniqueCaptivesList, limit: this.carryCapacity });
+                    return; // 將決策推入佇列後直接返回
+                }
+            } else { // 部落保衛戰/BOSS戰，檢查的是「地牢容量」
+                const combinedList = [...this.captives, ...newCaptivesList];
+                const uniqueCaptivesList = Array.from(new Map(combinedList.map(c => [c.id, c])).values());
+                if (uniqueCaptivesList.length > this.captiveCapacity) {
+                    const bossName = isBossReward ? ` ${newCaptivesList[0].name}` : '';
+                    this.logMessage('tribe', `地牢空間不足，你需要為新的俘虜${bossName}騰出空間！`, 'warning');
+                    this.pendingDecisions.push({ type: 'dungeon', list: uniqueCaptivesList, limit: this.captiveCapacity });
+                    return; // 將決策推入佇列後直接返回
+                }
+            }
+
+            // 如果容量足夠，則直接處理
+            newCaptivesList.forEach(c => c.currentHp = c.calculateMaxHp());
+            if (this.currentRaid) {
+                this.currentRaid.carriedCaptives.push(...newCaptivesList);
+                this.logMessage('raid', `你成功捕獲了 ${newCaptivesList.length} 名敵人！`, 'success');
+            } else {
+                this.captives.push(...newCaptivesList);
+                const message = isBossReward
+                    ? `${newCaptivesList[0].name} 被你捕獲，出現在了地牢中！`
+                    : `你成功俘虜了 ${newCaptivesList.length} 名來襲的敵人！`;
+                this.logMessage('tribe', message, isBossReward ? 'crit' : 'success');
+            }
+        };
+
         const wasApostleBattle = this.combat.currentEnemyGroup.some(e => e instanceof ApostleMaiden);
         if (wasApostleBattle) {
             specialBossDefeated = true;
             if (victory) {
                 this.logMessage('tribe', `你成功擊敗了螺旋女神的使徒！`, 'success');
                 const captiveApostle = new FemaleHuman('使徒 露娜', { strength: 180, agility: 180, intelligence: 180, luck: 180, charisma: 120 }, '使徒', SPECIAL_BOSSES.apostle_maiden.visual, 'hell');
-                
-                // 在這裡加入容量檢查
-                if (this.captives.length >= this.captiveCapacity) {
-                    this.logMessage('tribe', '地牢空間不足，你需要為使徒 [露娜] 騰出空間！', 'warning');
-                    this.pendingDecisions.push({ type: 'dungeon', list: [...this.captives, captiveApostle], limit: this.captiveCapacity });
-                } else {
-                    this.captives.push(captiveApostle);
-                    this.logMessage('tribe', `使徒的分身 [露娜] 被你捕獲，出現在了地牢中！`, 'crit');
-                }
+                handleNewCaptives([captiveApostle], true);
             } else {
                 this.logMessage('tribe', `你在使徒的無限增殖面前倒下了...`, 'enemy');
                 this.totalBreedingCount = 0;
@@ -162,24 +178,15 @@ const combatModule = {
             if (!this.flags.defeatedApostle) {
                 this.flags.defeatedApostle = true;
                 this.logMessage('tribe', `你獲得了關鍵物品 [繁衍之證]！繁衍系技能樹已解鎖！`, 'system');
-                this.finishCombatCleanup(true); 
             }
+            this.finishCombatCleanup(true); 
         }
         else if (this.combat.currentEnemyGroup.some(e => e instanceof SpiralGoddess)) {
             specialBossDefeated = true;
             if (victory) {
                 this.logMessage('tribe', `你戰勝了神之試煉，證明了哥布林存在的價值！`, 'success');
                 const captiveGoddess = new FemaleHuman('女神 露娜', SPECIAL_BOSSES.spiral_goddess_mother.captiveFormStats, '女神', SPECIAL_BOSSES.spiral_goddess_mother.visual, 'hell');
-                
-                // 在這裡也加入容量檢查
-                if (this.captives.length >= this.captiveCapacity) {
-                    this.logMessage('tribe', '地牢空間不足，你需要為女神 [露娜] 騰出空間！', 'warning');
-                    this.pendingDecisions.push({ type: 'dungeon', list: [...this.captives, captiveGoddess], limit: this.captiveCapacity });
-                } else {
-                    this.captives.push(captiveGoddess);
-                    this.logMessage('tribe', `女神的分身 [露娜] 出現在了你的地牢中，她似乎失去了大部分的力量...`, 'crit');
-                }
-
+                handleNewCaptives([captiveGoddess], true);
                 if (!this.flags.defeatedGoddess) {
                     this.flags.defeatedGoddess = true;
                     this.logMessage('tribe', `你獲得了關鍵物品 [螺旋的權能]！權能系被動技能已解鎖！`, 'system');
@@ -193,27 +200,17 @@ const combatModule = {
         else {
             const defeatedFemales = this.combat.enemies.filter(e => e instanceof FemaleHuman && !e.isAlive());
             if (defeatedFemales.length > 0) {
+                // 【修改重點】在這裡不再為 newCaptives 恢復生命值
                 const newCaptives = defeatedFemales.map(enemy => {
-                    enemy.currentHp = enemy.calculateMaxHp();
-                    enemy.statusEffects = [];
+                    enemy.statusEffects = []; // 只清除狀態，不回血
                     return enemy;
                 });
-
-
                 if (this.currentRaid) {
+                    // 掠奪戰中，先不回血，帶回部落再處理
                     this.currentRaid.carriedCaptives.push(...newCaptives);
                 } else {
-                    if ((this.captives.length + newCaptives.length) > this.captiveCapacity) {
-                        this.logMessage('tribe', '地牢空間不足，需要決定俘虜的去留...', 'warning');
-                        this.pendingDecisions.push({
-                            type: 'dungeon',
-                            list: [...this.captives, ...newCaptives],
-                            limit: this.captiveCapacity,
-                        });
-                    } else {
-                        this.captives.push(...newCaptives);
-                        this.logMessage('tribe', `你成功俘虜了 ${newCaptives.length} 名來襲的敵人！`, 'success');
-                    }
+                    // 部落保衛戰，直接交給 handleNewCaptives 處理
+                    handleNewCaptives(newCaptives);
                 }
             }
         }
@@ -226,7 +223,6 @@ const combatModule = {
         if (victory && typeof this.combat.onVictoryCallback === 'function') {
             this.combat.onVictoryCallback();
         }
-
         if (!specialBossDefeated) {
             if (this.currentRaid && this.raidTimeExpired) {
                 this.raidTimeExpired = false;

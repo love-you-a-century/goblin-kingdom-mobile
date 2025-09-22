@@ -735,6 +735,10 @@ const raidModule = {
 
     endRaid(wasDefeated = false) {
         if (!wasDefeated) {
+            // 在加入俘虜前，為他們打上捕獲日期的標記
+            this.currentRaid.carriedCaptives.forEach(captive => {
+                captive.captureDay = this.day;
+            });
             this.captives.push(...this.currentRaid.carriedCaptives);
             this.logMessage('tribe', `你帶回了 ${this.currentRaid.carriedCaptives.length} 名俘虜。`, 'player');
         }
@@ -743,8 +747,6 @@ const raidModule = {
         this.selectedTarget = null; 
         
         this.screen = 'tribe';
-
-        // 先過濾掉已陣亡的夥伴，再恢復存活者的生命值
         this.partners = this.partners.filter(p => p.isAlive());
         this.player.currentHp = this.player.maxHp;
         this.partners.forEach(p => p.currentHp = p.maxHp);
