@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哥布林王國v5.90</title>
+    <title>哥布林王國v5.94</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -897,7 +897,7 @@
                                     </div>
 
                                     <div class="space-y-4 max-h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
-                                        <template x-for="captive in filteredCaptives" :key="captive.id">
+                                        <template x-for="(captive, index) in filteredCaptives" :key="captive.id + '-' + index">
                                             <div class="p-3 border rounded" :class="{
                                                 'border-pink-400/50 bg-pink-900/10': captive.isPregnant,
                                                 'border-blue-400/50 bg-blue-900/10': !captive.isPregnant && captive.isMother,
@@ -937,8 +937,9 @@
                                 <div x-show="modals.dungeon.subTab === 'breed'">
                                     <h3 class="text-xl font-bold mb-2">繁衍後代</h3>
                                     <p class="mb-4">選擇要繁衍的對象。每日剩餘次數: <span x-text="breedingChargesLeft"></span> / <span x-text="totalBreedingCharges"></span></p>
-                                    <div class="space-y-2">
-                                        <template x-for="captive in dungeonCaptives" :key="captive.id">
+                                    
+                                    <div class="space-y-2 max-h-96 overflow-y-auto pr-2 border border-gray-700 rounded p-2">
+                                        <template x-for="(captive, index) in dungeonCaptives" :key="captive.id + '-' + index">
                                             <label class="p-3 border border-gray-600 rounded block cursor-pointer hover:bg-gray-700 transition-colors">
                                                 <div class="flex justify-between items-start">
                                                     <div class="flex-grow">
@@ -1940,7 +1941,7 @@
                                 <div>
                                     <h3 class="text-xl font-bold mb-2 text-amber-200">你的貨幣 (俘虜)</h3>
                                     <div class="space-y-2 h-96 overflow-y-auto pr-2">
-                                        <template x-for="captive in dungeonCaptives" :key="captive.id">
+                                        <template x-for="(captive, index) in filteredCaptives" :key="captive.id + '-' + index">
                                             <label class="p-3 border rounded flex items-center justify-between cursor-pointer"
                                                 :class="merchant.selectedCaptiveIds.includes(captive.id) ? 'border-green-400 bg-gray-700' : 'border-gray-600 hover:bg-gray-600'">
                                                 <div>
