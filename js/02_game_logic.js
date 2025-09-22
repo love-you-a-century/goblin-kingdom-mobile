@@ -613,7 +613,7 @@ const gameLogic = {
     // --- 核心生命週期函式 (王國的運轉核心) ---
     init() {
         this.loadApiKey();
-        this.logMessage('tribe', "哥布林王國v5.90 初始化...");
+        this.logMessage('tribe', "哥布林王國v5.94 初始化...");
         this.checkForSaveFile();       
         this.$watch('isAnyModalOpen', (isNowOpen) => {// 新增一個監聽器它會監控 isAnyModalOpen 的狀態變化
             // 當 isAnyModalOpen 從 true 變為 false (即所有視窗都關閉時)
@@ -2412,13 +2412,19 @@ const gameLogic = {
         if (events.length === 0) {
             let pendingRevengeInfo = null;
             const captivesByDifficulty = {};
+            
+            // 在判斷時，加入對 captureDay 的檢查
             this.captives.forEach(c => {
+                // 如果俘虜是今天剛抓回來的，則跳過本次計算
+                if (c.captureDay === this.day) return;
+
                 if (c.profession === '使徒' || c.profession === '女神') return;
                 if (c.originDifficulty) {
                     if (!captivesByDifficulty[c.originDifficulty]) captivesByDifficulty[c.originDifficulty] = 0;
                     captivesByDifficulty[c.originDifficulty]++;
                 }
             });
+
             for (const difficulty in captivesByDifficulty) {
                 if (pendingRevengeInfo) break;
                 const count = captivesByDifficulty[difficulty];
