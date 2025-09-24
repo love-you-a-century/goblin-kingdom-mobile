@@ -170,14 +170,17 @@ const combatModule = {
                 this.logMessage('tribe', `你成功擊敗了螺旋女神的使徒！`, 'success');
                 const captiveApostle = new FemaleHuman('使徒 露娜', { strength: 180, agility: 180, intelligence: 180, luck: 180, charisma: 120 }, '使徒', SPECIAL_BOSSES.apostle_maiden.visual, 'hell');
                 handleNewCaptives([captiveApostle], true);
+
+                // 將旗標設定移至勝利的邏輯區塊內
+                if (!this.flags.defeatedApostle) {
+                    this.flags.defeatedApostle = true;
+                    this.logMessage('tribe', `你獲得了關鍵物品 [繁衍之證]！繁衍系技能樹已解鎖！`, 'system');
+                }
+
             } else {
                 this.logMessage('tribe', `你在使徒的無限增殖面前倒下了...`, 'enemy');
                 this.totalBreedingCount = 0;
                 this.logMessage('tribe', `你對繁衍的渴望似乎減退了。 (總繁衍次數已重置)`, 'system');
-            }
-            if (!this.flags.defeatedApostle) {
-                this.flags.defeatedApostle = true;
-                this.logMessage('tribe', `你獲得了關鍵物品 [繁衍之證]！繁衍系技能樹已解鎖！`, 'system');
             }
             this.finishCombatCleanup(true); 
         }
